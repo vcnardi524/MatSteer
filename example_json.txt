@@ -1,0 +1,79 @@
+[
+  {
+    "example": "electronic IS a list",
+    "id": null,
+    "properties.electronic": null
+  },
+  {
+    "example": "band_gap has value key",
+    "id": "NOMAD_5G0pWDIzbDRHOxkZTY7AME4z7Rk2",
+    "properties.electronic": {
+      "band_gap": [
+        {
+          "index": 0,
+          "value": 0.0,
+          "energy_highest_occupied": 1.159174794699e-18,
+          "energy_lowest_unoccupied": -7.337488330729798e-18,
+          "provenance": {
+            "label": "dos",
+            "dos": "#/run/0/calculation/5/dos_electronic/0/total/0"
+          }
+        }
+      ],
+      "dos_electronic": [
+        {
+          "energies": "#/run/0/calculation/5/dos_electronic/0/energies",
+          "total": [
+            "#/run/0/calculation/5/dos_electronic/0/total/0"
+          ],
+          "spin_polarized": false,
+          "energy_fermi": -7.544707388584288e-18,
+          "band_gap": [
+            {
+              "index": 0,
+              "value": 0.0,
+              "energy_highest_occupied": 1.159174794699e-18,
+              "energy_lowest_unoccupied": -7.337488330729798e-18
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "example": "dos_electronic IS a list",
+    "id": "NOMAD_5G0pWDIzbDRHOxkZTY7AME4z7Rk2",
+    "properties.electronic": {
+      "band_gap": [
+        {
+          "index": 0,
+          "value": 0.0,
+          "energy_highest_occupied": 1.159174794699e-18,
+          "energy_lowest_unoccupied": -7.337488330729798e-18,
+          "provenance": {
+            "label": "dos",
+            "dos": "#/run/0/calculation/5/dos_electronic/0/total/0"
+          }
+        }
+      ],
+      "dos_electronic": [
+        {
+          "energies": "#/run/0/calculation/5/dos_electronic/0/energies",
+          "total": [
+            "#/run/0/calculation/5/dos_electronic/0/total/0"
+          ],
+          "spin_polarized": false,
+          "energy_fermi": -7.544707388584288e-18,
+          "band_gap": [
+            {
+              "index": 0,
+              "value": 0.0,
+              "energy_highest_occupied": 1.159174794699e-18,
+              "energy_lowest_unoccupied": -7.337488330729798e-18
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

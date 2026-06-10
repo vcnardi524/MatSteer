@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"https://nomad-lab.eu/prod/v1/api/v1/entries/-iFR926_z9vecu4g4m4JjMyRWXEW\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s https://nomad-lab.eu/prod/v1/api/v1/entries/-iFR926_z9vecu4g4m4JjMyRWXEW/archive/query -H 'Content-Type: application/json' -X POST -d '{\"required\": {\"results\": {\"material\": \"*\", \"properties\": \"*\"}}}')",
+      "Bash(grep -v \"^$\")"
+    ]
+  }
+}

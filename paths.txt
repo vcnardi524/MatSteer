@@ -1,0 +1,6 @@
+material.symmetry.point_group
+material.symmetry.space_group_symbol
+material.structural_type
+properties.electronic.dos_electronic.spin_polarized
+properties.electronic.dos_electronic.band_gap.energy_lowest_unoccupied
+properties.electronic.dos_electronic.band_gap.energy_highest_occupied

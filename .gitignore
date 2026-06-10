@@ -1,0 +1,36 @@
+# ---- Big data files (kept locally, not versioned) ----
+*.parquet
+*.bak
+*.pkl
+*.pkl.gz
+*.tar.gz
+*.tar
+*.gz
+*.npy
+*.npz
+*.pt
+*.ckpt
+
+# Large data / results directories
+embeddings/
+generated_cifs/
+relaxed/
+predictions/
+validation/
+steering_vectors/
+
+# ---- Virtual environments ----
+*_venv/
+venv/
+.venv/
+
+# ---- Runtime logs & scratch ----
+logs/
+trash/
+
+# ---- Python / OS caches ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.DS_Store
