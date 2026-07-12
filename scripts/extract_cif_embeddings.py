@@ -39,6 +39,11 @@ from crystallm import CIFTokenizer, GPTConfig, GPT
 def load_model(model_dir: str, device: torch.device):
     ckpt = torch.load(os.path.join(model_dir, "ckpt.pt"), map_location=device)
     config = GPTConfig(**ckpt["model_args"])
+    # Disable dropout for inference. The checkpoint ships dropout=0.1, and the functional
+    # SDPA dropout_p (_model.py) is NOT gated by model.eval(), so leaving it on drops ~10%
+    # of attention weights on every forward -> nondeterministic generation. This loader is
+    # inference-only, so force dropout to 0 here (covers SDPA + all nn.Dropout modules).
+    config.dropout = 0.0
     model = GPT(config)
     state_dict = ckpt["model"]
     # strip compile prefix if present
