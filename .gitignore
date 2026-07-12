@@ -19,6 +19,9 @@ predictions/
 validation/
 steering_vectors/
 
+# --- ChemSteer
+ChemSteer/
+
 # ---- Virtual environments ----
 *_venv/
 venv/

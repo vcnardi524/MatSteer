@@ -1,0 +1,200 @@
+space_group,n_materials,n_unique_signatures,top_signature
+C2/m,66266,219,a d i
+P-1,884,150,8i
+C2/c,640,114,e 2f
+Cmcm,5568,103,3c
+Cmmm,61484,96,a b f
+P4/mmm,57287,90,a c e
+I4/mmm,58245,82,a b d
+P2_1/m,1407,82,2e
+Immm,41480,80,a c j
+P6_3/mmc,12573,77,a c d
+R-3m,64648,70,a b c
+Pnma,4840,69,3c
+Cm,63561,61,4a
+Amm2,14306,57,2a 2b
+C2,197,57,a b 3c
+Pmmn,4234,55,a b e
+P1,1577,51,56a
+Cmce,120,50,f
+P2_1/c,894,49,10e
+Pmmm,49663,48,a d f g
+P-3m1,6258,47,a d
+P-6m2,10432,44,a c f
+P2/m,47950,44,a g n
+R-3,202,42,a b 2f
+Pmm2,32218,42,2a 2d
+Pbam,510,41,a c g 2h
+Imma,2129,41,2e
+Pmma,1113,39,e f
+Pm,40287,39,2a 2b
+P6/mmm,5678,37,a d
+Cmc2_1,255,35,3a
+P2/c,124,35,e f 5g
+Fmmm,2522,34,a i
+I4_1/amd,3919,34,a e
+R3m,15943,32,4a
+P4/nmm,1743,32,2c
+P6_3mc,986,32,2b
+Pbcm,767,32,2c 4d
+I4/mcm,2982,31,a h
+P-62m,3445,30,a d f g
+P3m1,18273,30,a b c
+I4/m,1704,29,a h
+Imm2,48690,29,2a 2b
+P4mm,50092,29,2a 2b
+P4/mbm,273,27,a g h
+Fddd,127,27,a 2g
+Pnnm,1868,26,a g
+Fm-3m,23438,26,a b c
+F-43m,191141,26,a b c d
+P6_3/m,144,25,c 2h
+P4_2/mnm,776,24,a f
+P2_1,119,24,5a
+R-3c,331,24,c e
+Pmn2_1,103,23,4a 3b
+I4mm,19233,23,3a
+Fd-3m,3629,22,c e f
+Pm-3m,3375,21,a b d
+Cc,69,21,6a
+Ibam,96,20,a b g 3j
+R3,98,20,6a 10b
+I-4,47,16,a b c g
+Pc,74,16,10a
+P6_3/mcm,3343,16,b d 2g
+Pbcn,96,15,2c 2d
+P-6,52,15,a c f 3j 3k
+I-4m2,51208,15,a b c d
+Ama2,27,15,4b
+Im-3m,2076,14,a c
+Pmc2_1,46,14,2a 2b
+P-3,16,14,a d 3g
+P-4m2,334,14,a b c d 3g j k l
+Cmm2,36573,14,2a 2b
+P2_12_12_1,74,13,9a
+I-42d,64,13,a b d
+P-43m,236,13,c e
+Fmm2,12464,13,3a
+P2,30,12,3a 3b 3c 3d
+C222_1,16,12,2a 2b 2c
+R32,127,12,a c e
+Cmme,850,12,2g
+Pna2_1,114,12,4a
+Fdd2,1385,12,a 2b
+P-31m,194,11,a d k
+Pbca,92,11,8c
+R3c,51,11,3a 5b
+P2_13,822,11,2a
+P4_2/mmc,30,11,a c f
+P4/n,22,11,a c 3g
+P4/mnc,59,10,d e g 3h
+P4/ncc,39,10,b c f 3g
+I-42m,33,10,a b d i
+I4_1/acd,21,10,b 2g
+I-43m,3889,10,a c 2g
+Ima2,55,10,a 2b 3c
+P4_2/nmc,39,10,a 2g
+P-62c,35,9,b f g h
+I4_1/a,30,9,a d f
+P6_322,17,9,a c f i
+Pca2_1,22,9,3a
+P-42_1m,24,9,a c 3e f
+P2_12_12,11,9,a 2b 3c
+P31m,15,9,a b 2c
+P6_3cm,53,8,a b 3c
+Pm-3n,1850,7,a c
+P-31c,10,7,a c f i
+Pnna,34,7,c d 2e
+Pmna,19,7,e g 2h
+P3_121,31,7,a
+P6_3,61,6,a 2b 3c
+P321,13,6,a d e f 3g
+P4_2/ncm,10,6,c h 2i j
+P6_222,13,6,c d j
+C222,15,6,a b i j 3k
+P4_2/m,15,6,c e j k
+I2_13,12,6,2a b
+I4_1md,14,6,3a
+P4_132,56,6,c d
+I-43d,27,6,a b c
+P-6c2,7,6,a c g h k 3l
+Im-3,52,6,a c g
+P4/m,12,6,a c f 3j 2k
+Pa-3,1518,6,a c
+P4_2/n,23,5,a 2g
+P4_12_12,14,5,a 4b
+P6_422,7,5,c d k
+Pcca,6,5,c d 4f
+P4/nbm,13,5,a c d m
+P-4n2,6,5,a 3f g 2i
+P4_2/mbc,13,5,d g 2h
+P3,7,5,a b c 2d
+P31c,5,5,2b 9c
+P4_32_12,6,5,a b
+Cccm,9,5,a k 2l
+Pccn,7,4,a 5e
+P4_332,13,4,a 2c d e
+Ia-3,14,4,b d e
+Aea2,5,4,a 7b
+P4/mcc,13,4,a c m
+P4_1,5,4,5a
+P-42m,11,4,a b m 2n
+P-3c1,9,4,a d f g
+I23,211,4,2c d e
+P-42_1c,23,4,a e
+P312,4,4,a d f l
+Pn-3m,10,4,a b
+P-4c2,8,4,a d e i j
+P-4,4,4,a c g 5h
+Pm-3,5,3,a f g h i j
+Pma2,4,3,a b 4c d
+I4_1,3,3,14b
+I222,3,3,a d h 2i 2j 7k
+P4/nnc,6,3,c d e k
+I4,4,3,4a b 3c
+P4_2/mcm,2,2,a d i o
+Fd-3,2,2,c d e f g
+F-43c,2,2,a b 2e h
+I4_1cd,3,2,6b
+Ibca,5,2,2d e 5f
+F222,8,2,a b c d 2g 2h
+I4_132,6,2,a g h
+I4cm,45,2,a b c d
+P6mm,2,2,3a
+Ccce,3,2,a i
+P4_322,3,2,a b c 2d
+Pnc2,4,2,2a 4c
+Ia-3d,4,2,a f g
+P-43n,2,2,a c d e i
+P4_2nm,2,2,3a 3c
+I422,3,2,a c j
+Fm-3,2,2,c f 2h
+Aem2,2,2,a b 3c
+P3_2,12,2,16a
+P4_2mc,6,2,a c 2e f
+Pba2,4,2,a 5c
+P3_221,3,2,2a 2b 2c
+I2_12_12_1,2,2,2a b c
+Fm-3c,389,2,a b i
+P3_112,2,2,a b 7c
+P4_122,7,2,a b c 2d
+P622,1,1,j 2l m n
+P4_2/nnm,2,1,a b c e f
+Pban,1,1,g 3i j 3m
+I432,1,1,h 2i
+P222_1,1,1,a b 2c 2d 5e
+P3_1,1,1,2a
+Ccc2,1,1,c 2d
+P4_2,1,1,c 5d
+P42_12,1,1,2c d e f 4g
+Pccm,1,1,e g 3q r
+F4_132,1,1,f 2g
+Pnn2,1,1,a b 4c
+P-42c,3,1,b e n
+Pn-3,1,1,e f g h
+I4_122,1,1,a b f
+P4bm,5,1,a b 3c 3d
+P4_2/nbc,1,1,a c j 3k
+I-4c2,5,1,a h i
+P222,1,1,a c d r s 2u
+P-4b2,1,1,a b d 4i

@@ -18,6 +18,15 @@ source CrystaLLM/crystallm_venv/bin/activate
 
 pip install -q "numpy<2"
 
+# WITH_SG=1 (default) includes the space-group header in the prompt;
+# WITH_SG=0 uses composition only (output gets a _nosg suffix).
+SG_FLAG="--with-spacegroup"
+if [ "${WITH_SG:-1}" = "0" ]; then SG_FLAG=""; fi
+
+# USE_CACHE=1 enables KV-cached decoding (generate_cached); default off.
+CACHE_FLAG=""
+if [ "${USE_CACHE:-0}" = "1" ]; then CACHE_FLAG="--use-cache"; fi
+
 python scripts/steer_generate_cif.py \
     --model CrystaLLM/crystallm_v1_large \
     --pkl CrystaLLM/cifs_v1_test.pkl.gz \
@@ -26,5 +35,6 @@ python scripts/steer_generate_cif.py \
     --layer ${LAYER:-14} \
     --n-prompts ${N_PROMPTS:-0} \
     --n-samples 3 \
-    --with-spacegroup \
+    ${SG_FLAG} \
+    ${CACHE_FLAG} \
     --out generated_cifs/

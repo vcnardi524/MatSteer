@@ -1,0 +1,4 @@
+[submodule "CrystaLLM"]
+	path = CrystaLLM
+	url = https://github.com/vcnardi524/CrystaLLM.git
+	branch = kv-cache
