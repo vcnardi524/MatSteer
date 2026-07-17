@@ -105,7 +105,9 @@ def main():
             ax.scatter(coords[mask, 0], coords[mask, 1],
                        c=[cmap(label2int[lbl])],
                        s=6, alpha=0.6, linewidths=0, label=lbl)
-        ax.set_title(f"{method} — Layer {args.layer}")
+        # perplexity is a t-SNE hyperparameter only; it means nothing for PCA
+        detail = f" (perplexity={args.tsne_perplexity:g})" if method == "t-SNE" else ""
+        ax.set_title(f"{method} — Layer {args.layer}{detail}")
         ax.set_xlabel("Component 1")
         ax.set_ylabel("Component 2")
 
@@ -118,7 +120,9 @@ def main():
     plt.tight_layout(rect=[0, 0, 0.85, 1])
 
     fname = args.property.replace("_", "")
-    out = out_dir / f"{fname}_layer{args.layer}.png"
+    # perplexity in the name only when non-default, so existing p=30 plots keep their paths
+    suffix = "" if args.tsne_perplexity == 30 else f"_p{args.tsne_perplexity:g}"
+    out = out_dir / f"{fname}_layer{args.layer}{suffix}.png"
     plt.savefig(out, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"Saved {out}")

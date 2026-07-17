@@ -5,7 +5,7 @@
   3. Build feature sets and save cluster metadata
   4. Sparsify embeddings by cluster-assigned dimensions
   5. Compute subspace bases (SVD) and pairwise epsilon = ||P_k P_i||_op
-  6. Point group and space group enrichment per cluster
+  6. Point group, space group, and space-group+Wyckoff-letter enrichment per cluster
   7. Cluster uniformity check vs random baseline
   8. Save diagnostics and plots to OUTPUT_DIR
 
@@ -71,9 +71,20 @@ def main():
     # Align metadata to embedding order
     df = emb_df.copy()
     for col in ["point_group", "space_group_symbol", "structural_type",
-                "spin_polarized", "band_gap_ev"]:
+                "spin_polarized", "band_gap_ev", "wyckoff_letters"]:
         if col in meta_df.columns:
             df[col] = df["id"].map(meta_df[col])
+
+    # Space group + occupied Wyckoff letters. A letter is only meaningful relative
+    # to its space group ("c" is a different orbit in Pnma than in P6_3/mmc), so the
+    # pair is the finer-grained structural label. NaN in either part -> NaN.
+    if "space_group_symbol" in df.columns and "wyckoff_letters" in df.columns:
+        both = df["space_group_symbol"].notna() & df["wyckoff_letters"].notna()
+        df["sg_wyckoff"] = np.where(
+            both, df["space_group_symbol"].astype(str) + " | " + df["wyckoff_letters"].astype(str), None
+        )
+        print(f"  sg_wyckoff: {int(both.sum()):,} populated, "
+              f"{int((~both).sum()):,} NaN, {df['sg_wyckoff'].nunique():,} distinct")
 
     X = np.vstack(df["embedding"].values)
     n_samples, n_features = X.shape
@@ -250,7 +261,9 @@ def main():
     # -------------------------------
     import seaborn as sns
 
-    for label_col, label_name in [("point_group", "Point group"), ("space_group_symbol", "Space group")]:
+    for label_col, label_name in [("point_group", "Point group"),
+                                  ("space_group_symbol", "Space group"),
+                                  ("sg_wyckoff", "Space group + Wyckoff letters")]:
         if label_col not in df.columns:
             continue
         print(f"\n{'='*50}")
@@ -331,14 +344,25 @@ def main():
         enrichment = []
         for cid, group in df.groupby("cluster"):
             counts = group[label_col].value_counts(dropna=True)
+            n_labeled = int(counts.sum())
             if len(counts) == 0:
-                enrichment.append((cid, "unknown", 0.0))
+                enrichment.append((cid, "unknown", 0.0, 0, len(group)))
                 continue
-            enrichment.append((cid, counts.index[0], counts.iloc[0] / len(group)))
+            # denominator is the LABELLED members, not len(group): value_counts drops
+            # NaN, so dividing by the full cluster size would deflate the fraction in
+            # proportion to missing labels (~28% of materials have no Wyckoff letters).
+            enrichment.append((cid, counts.index[0], counts.iloc[0] / n_labeled,
+                               n_labeled, len(group)))
 
-        enrich_df = pd.DataFrame(enrichment, columns=["cluster_id", f"dominant_{label_col}", "fraction"])
+        enrich_df = pd.DataFrame(enrichment, columns=["cluster_id", f"dominant_{label_col}",
+                                                     "fraction", "n_labeled", "cluster_size"])
         enrich_df.to_csv(os.path.join(OUTPUT_DIR, f"{label_col}_enrichment.csv"), index=False)
-        print(f"\n  Avg dominant {label_name} fraction: {enrich_df['fraction'].mean():.3f}")
+        print(f"\n  Avg dominant {label_name} fraction: {enrich_df['fraction'].mean():.3f}"
+              f"  (over labelled members only)")
+        cov = enrich_df["n_labeled"].sum() / enrich_df["cluster_size"].sum()
+        print(f"  Label coverage: {enrich_df['n_labeled'].sum():,}/{enrich_df['cluster_size'].sum():,}"
+              f" ({cov:.1%});  clusters with <10 labelled: "
+              f"{int((enrich_df['n_labeled'] < 10).sum())}")
 
         plot_histogram(
             enrich_df["fraction"],

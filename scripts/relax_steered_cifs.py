@@ -2,16 +2,18 @@
 """
 Relax steered CIF structures using M3GNet universal potential.
 
-Reads a validation parquet (output of validate_steered_cifs.py), filters to
-valid CIFs, relaxes each structure with M3GNet-PES, and adds a cif_relaxed
-column back to the same parquet. Checkpoints every 100 structures.
+Reads validity flags from a validation parquet (output of
+validate_steered_cifs.py) and the raw CIFs from the matching generated_cifs
+parquet, joins them on (id, sample), skips invalid CIFs, relaxes each valid
+structure with M3GNet-PES, and writes a relaxed CIF store. Resumes from a
+previous partial output; checkpoints periodically.
 
 Usage:
     python scripts/relax_steered_cifs.py \
-        --input validation/steered_test_p5_alpha1.0_layer14.parquet
+        --input steering_results/validation/steered_test_clean_alpha16.0_layer14.parquet
 
 Output:
-    same parquet with added column: cif_relaxed
+    steering_results/relaxed/<input_stem>.parquet with columns: id, sample, cif_relaxed
 """
 import argparse
 import signal
@@ -68,8 +70,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True,
                         help="Validation parquet with is_valid column")
+    parser.add_argument("--cif-source", default=None,
+                        help="Parquet with cif_steered (default: "
+                             "steering_results/generated_cifs/<input_stem>.parquet)")
     parser.add_argument("--out", default=None,
-                        help="Output parquet path (default: relaxed/<stem>.parquet)")
+                        help="Output parquet path (default: steering_results/relaxed/<stem>.parquet)")
     parser.add_argument("--fmax", type=float, default=0.05,
                         help="Force convergence criterion for relaxation (eV/Å)")
     parser.add_argument("--steps", type=int, default=200,
@@ -79,24 +84,34 @@ def main():
     parser.add_argument("--checkpoint-every", type=int, default=10)
     args = parser.parse_args()
 
-    in_path = Path(args.input)
-    out_path = Path(args.out) if args.out else in_path
+    in_path = Path(args.input)          # validation parquet (holds is_valid)
+    out_dir = Path("steering_results/relaxed")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = Path(args.out) if args.out else out_dir / f"{in_path.stem}.parquet"
+    cif_path = Path(args.cif_source) if args.cif_source else \
+        Path("steering_results/generated_cifs") / f"{in_path.stem}.parquet"
 
-    print(f"Loading {in_path} ...")
-    df = pd.read_parquet(in_path)
+    # validation flags + raw CIFs, joined on (id, sample)
+    print(f"Loading validation flags {in_path} ...")
+    val = pd.read_parquet(in_path)
+    if "is_valid" not in val.columns:
+        raise ValueError("input validation parquet must have an is_valid column")
+    print(f"Loading raw CIFs {cif_path} ...")
+    cifs = pd.read_parquet(cif_path, columns=["id", "sample", "cif_steered"])
+    df = val.merge(cifs, on=["id", "sample"], how="left")
 
-    # initialise column if not present
-    if "cif_relaxed" not in df.columns:
+    # resume: pull already-relaxed CIFs from a previous output
+    if out_path.exists():
+        prev = pd.read_parquet(out_path, columns=["id", "sample", "cif_relaxed"])
+        df = df.merge(prev, on=["id", "sample"], how="left")
+    else:
         df["cif_relaxed"] = None
+    n_done = int(df["cif_relaxed"].notna().sum())
+    print(f"  {len(df):,} rows, {n_done:,} already relaxed")
 
-    # resume: skip rows already relaxed
-    done = set(
-        tuple(r) for r in df[df["cif_relaxed"].notna()][["id", "sample"]].values
-    )
-    print(f"  {len(df):,} total rows, {len(done):,} already relaxed")
-
-    to_relax = df[df["is_valid"] == True] if "is_valid" in df.columns else df
-    to_relax = to_relax[to_relax["cif_relaxed"].isna()].reset_index()
+    to_relax = df[(df["is_valid"] == True)
+                  & df["cif_relaxed"].isna()
+                  & df["cif_steered"].notna()].reset_index()
     print(f"  {len(to_relax):,} valid CIFs left to relax")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -147,9 +162,10 @@ def main():
             continue
 
         if n_success % args.checkpoint_every == 0:
-            df.to_parquet(out_path, index=False)
+            df[["id", "sample", "cif_relaxed"]].to_parquet(out_path, index=False)
 
-    df.to_parquet(out_path, index=False)
+    # relaxed CIF store: id/sample/cif_relaxed only (no flags, no raw CIFs)
+    df[["id", "sample", "cif_relaxed"]].to_parquet(out_path, index=False)
     print(f"\nSaved to {out_path}")
     print(f"Success: {n_success:,}  Failed: {n_fail:,}  Timed out: {n_timeout:,}")
     print(f"Total relaxed: {df['cif_relaxed'].notna().sum():,}")

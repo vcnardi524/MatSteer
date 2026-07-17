@@ -2,49 +2,33 @@
 
 Active experiments. See `README.md` for everything completed so far and the
 overall pipeline.
+## consider probing at the layers to see if they are actually encoding information
 
-## 1. Steer all ~10,000 test structures
+## consider different types of steering
 
-So far we have only steered **300 prompts** (3 samples each) at alpha = 11/16/25/40.
-That sample is biased — the 300 prompts are higher-gap than the test-set average
-(and mostly metals in ground truth), which muddies the matched-baseline comparison.
+## consider different generative models
 
-**Goal:** run steered generation over the *full* test split so the steered vs.
-baseline comparison is over the same ~10k prompts the baseline already covers
-(`validation/testset_baseline.parquet`, 10,266 rows, 1 sample each).
+## Known bugs / to fix
 
-**How:** `slurms/steer_generate_cif.slurm` with `N_PROMPTS=0` (0 = all prompts).
-- Pick alpha (likely 16 and 40, the ones already analyzed).
-- 3 samples/prompt → ~30k generations per alpha. The script checkpoints every
-  100 prompts and resumes from `done_ids`, so it survives the 36 h wall clock
-  and can be re-submitted to continue.
-- Then relax (`relax_steered_cifs.slurm`) and predict
-  (`predict_bandgap.slurm`, raw + relaxed) as usual.
+### relax resume trusts stale `relaxed/<stem>.parquet` (data contamination)
+`relax_steered_cifs.py` resumes by merging any existing
+`steering_results/relaxed/<stem>.parquet` on `(id, sample)` and skipping rows that
+already have `cif_relaxed`. It **never checks that the reused `cif_relaxed` was
+produced from the current `cif_steered`.** If a stem is regenerated (generation is
+stochastic at temperature 1.0, so a re-run yields different structures for the same
+prompt), the old relaxed structures no longer correspond to the new `cif_steered`,
+but resume keeps them anyway → contaminated relaxed rows feed wrong structures into
+`predict_bandgap.py`.
 
-**Open question:** at full scale, does steering produce a measurable shift in the
-gap>0 fraction once the prompt set is no longer the biased 300?
+Hit on 2026-07-13: α16 with-SG and α40 with-SG were regenerated to full 30k on
+Jul-12 but still had Jun-2 900-row relaxed files; the relax jobs resumed and reused
+~850 stale relaxed structures each. Fixed immediately by deleting those two relaxed
+files and resubmitting (see below), but the underlying resume logic is still unsafe.
 
-## 2. Steer without the space group in the prompt
-
-The current prompt includes the space-group header (`--with-spacegroup`,
-`PATTERN_COMP_SG`). That strongly conditions the structure and may be fighting the
-steering vector. We want to test steering with a **composition-only** prompt
-(`PATTERN_COMP`, drop `--with-spacegroup`).
-
-**How:** remove `--with-spacegroup` from `slurms/steer_generate_cif.slurm`
-(script already supports it via the `args.with_spacegroup` branch).
-
-**Caveat — output naming collision:** `steer_generate_cif.py` names the output
-`steered_{split}_clean_alpha{alpha}_layer{layer}.parquet` regardless of the
-space-group flag. A no-spacegroup run would overwrite / resume into the existing
-with-spacegroup parquet. **Before running this, add a `_nosg` suffix (or similar)
-to the output path** so the two prompt conditions are kept separate.
-
-**Open question:** does removing the space-group constraint give steering more room
-to shift the band gap?
-
----
+**Fix idea:** guard the resume — only reuse a relaxed row if the source `cif_steered`
+matches (e.g. store a hash of `cif_steered` alongside `cif_relaxed`, or refuse to
+resume when the relaxed file is older than the generated_cifs file for that stem).
 
 ## Backlog / not started
-- Predict alpha = 11/25 relaxed files (already relaxed in `relaxed/`, no
+- Predict alpha = 11/25 relaxed files (already relaxed in `steering_results/relaxed/`, no
   prediction columns yet) to fill in the full alpha sweep table.

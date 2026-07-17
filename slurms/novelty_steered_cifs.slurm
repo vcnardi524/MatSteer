@@ -16,7 +16,7 @@ mkdir -p logs
 source CrystaLLM/crystallm_venv/bin/activate
 pip install -q "numpy<2"
 
-INPUT=${INPUT:-"validation/steered_test_p5_alpha1.0_layer14.parquet"}
+INPUT=${INPUT:-"steering_results/validation/steered_test_clean_alpha16.0_layer14.parquet"}
 BASE=${BASE:-"CrystaLLM/cifs_v1_train.pkl.gz"}
 
 python scripts/novelty_steered_cifs.py \

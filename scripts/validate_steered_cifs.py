@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Validate steered CIFs from a generated_cifs parquet.
+Validate steered CIFs from a steering_results/generated_cifs parquet.
 
 Runs two tiers of checks:
   1. is_sensible  — fast regex check on cell parameters (no structure parsing)
@@ -11,8 +11,8 @@ Output parquet columns:
   space_group_consistent, atom_site_consistent, error
 
 Usage:
-    python validate_steered_cifs.py --input generated_cifs/steered_test_p5_alpha1.0_layer14.parquet
-    python validate_steered_cifs.py --input generated_cifs/steered_test_p5_alpha1.0_layer14.parquet --workers 8
+    python validate_steered_cifs.py --input steering_results/generated_cifs/steered_test_clean_alpha16.0_layer14.parquet
+    python validate_steered_cifs.py --input steering_results/generated_cifs/steered_test_clean_alpha16.0_layer14.parquet --workers 8
 """
 import argparse
 import multiprocessing as mp
@@ -97,7 +97,7 @@ def main():
     args = parser.parse_args()
 
     in_path = Path(args.input)
-    out_dir = Path("validation")
+    out_dir = Path("steering_results/validation")
     out_dir.mkdir(exist_ok=True)
     out_path = Path(args.out) if args.out else out_dir / f"{in_path.stem}.parquet"
 
@@ -112,7 +112,9 @@ def main():
         results = list(tqdm(pool.imap(eval_one, tasks, chunksize=50), total=len(tasks)))
 
     results_df = pd.DataFrame(results).set_index("idx")
-    out_df = df.copy()
+    # flags only, keyed by id/sample — the raw CIF strings stay in
+    # steering_results/generated_cifs and are never copied into the flag files.
+    out_df = df[["id", "sample"]].copy()
     out_df["is_sensible"]           = results_df["is_sensible"].values
     out_df["is_valid"]               = results_df["is_valid"].values
     out_df["bond_length_score"]      = results_df["bond_length_score"].values
