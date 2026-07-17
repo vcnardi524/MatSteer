@@ -18,7 +18,7 @@ Usage:
         --layer 14 \
         --n-samples 3 \
         --with-spacegroup \
-        --out generated_cifs/
+        --out steering_results/generated_cifs/
 """
 import argparse
 import os
@@ -88,10 +88,11 @@ def main():
     parser.add_argument("--steering-file", default=None,
                         help="Path to a single-row clean steering-vector parquet. "
                              "If set, overrides the percentile-based vector.")
-    parser.add_argument("--out", default="generated_cifs")
-    parser.add_argument("--use-cache", action="store_true",
-                        help="Use KV-cached decoding (generate_cached). "
-                             "Verified byte-identical to uncached; ~1.9x faster at batch 1.")
+    parser.add_argument("--out", default="steering_results/generated_cifs")
+    parser.add_argument("--use-cache", action=argparse.BooleanOptionalAction, default=True,
+                        help="Use KV-cached decoding (generate_cached). On by default; "
+                             "verified byte-identical to uncached, ~1.9x faster at batch 1. "
+                             "Pass --no-use-cache to fall back to the uncached path.")
     args = parser.parse_args()
 
     np.random.seed(RANDOM_SEED)
@@ -109,7 +110,8 @@ def main():
     print(f"Clean steering vector: metals<={row['low_thresh_ev']}eV (n={int(row['n_low']):,}) vs "
           f"insulators>={row['high_thresh_ev']}eV (n={int(row['n_high']):,})  "
           f"raw_norm={row['raw_norm']:.2f}")
-    print(f"Alpha={args.alpha}  Layer={args.layer}")
+    print(f"Alpha={args.alpha}  Layer={args.layer}  KV cache={'on' if args.use_cache else 'off'}  "
+          f"dropout={config.dropout}")
 
     data = load_cifs(args.pkl)
 

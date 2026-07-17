@@ -106,28 +106,33 @@ and **drop the space-group constraint** to give steering more room (see `tasks.m
 | Path | Contents |
 |------|----------|
 | `scripts/` | All Python: steering generation, relaxation, band-gap prediction, embedding extraction, plotting, co-clustering. |
-| `slurms/` | SLURM submit scripts (env-var driven: `INPUT`, `OUT`, `SOURCE`, `ALPHA`, `N_PROMPTS`, ...). |
+| `slurms/` | SLURM submit scripts (env-var driven: `INPUT`, `ALPHA`, `N_PROMPTS`, ...). |
 | `steering_vectors/` | `bandgap_layer{1..15}.parquet` — per-layer clean steering vectors. |
-| `generated_cifs/` | Steered generation output. |
-| `relaxed/` | M3GNet-relaxed steered structures (alpha 11/16/25/40). |
-| `validation/` | Steered + baseline parquets; `testset_baseline.parquet` (10,266 rows, 1 sample). |
-| `predictions/` | `bandgap_predictions.parquet` — consolidated long-format predictions. |
+| `steering_results/generated_cifs/` | Raw steered generations — `id, sample, cif_steered`. The source of truth for raw CIFs. |
+| `steering_results/relaxed/` | M3GNet-relaxed CIF store — `id, sample, cif_relaxed` (valid structures only). |
+| `steering_results/validation/` | **Flags only** (no CIF strings): `id, sample` + validity flags; `novelty_<stem>.parquet` adds `is_unique, is_novel`. |
+| `steering_results/bandgap_predictions/` | Per-run predictions — `id, sample, predicted_bandgap_ev_raw, predicted_bandgap_ev`, one file per source stem. |
 | `cocluster_results/` | Co-clustering outputs per layer/K. |
 | `embeddings/`, `plots/`, `logs/` | Embeddings, figures, SLURM logs. |
 
 ### Key scripts
 | Script | Purpose |
 |--------|---------|
-| `steer_generate_cif.py` | Steered CIF generation (hook @ layer, alpha, `--with-spacegroup`, `--n-prompts`). |
-| `relax_steered_cifs.py` | M3GNet-PES relaxation of generated CIFs. |
-| `predict_bandgap.py` | MEGNet band-gap prediction; `--source cif_relaxed` → `predicted_bandgap_ev`, `--source cif_steered` → `predicted_bandgap_ev_raw`. |
+| `steer_generate_cif.py` | Steered CIF generation (hook @ layer, alpha, `--with-spacegroup`, `--n-prompts`) → `generated_cifs/`. |
+| `validate_steered_cifs.py` | Validity checks on raw CIFs → `validation/` (flags only, no CIF strings). |
+| `novelty_steered_cifs.py` | Uniqueness/novelty of valid CIFs (joins CIFs from `generated_cifs/`) → `validation/novelty_<stem>.parquet`. |
+| `relax_steered_cifs.py` | M3GNet-PES relaxation of valid CIFs (joins flags + `generated_cifs/`, skips invalid) → `relaxed/`. |
+| `predict_bandgap.py` | MEGNet band-gap prediction, valid-only. One input at a time: `generated_cifs/<stem>` → `predicted_bandgap_ev_raw`, `relaxed/<stem>` → `predicted_bandgap_ev`; both accumulate in `bandgap_predictions/<stem>.parquet`. |
 | `extract_cif_embeddings.py` | Pull CrystaLLM residual-stream embeddings. |
 | `spec_cocluster_analysis.py` | Spectral co-clustering + subspace-incoherence analysis. |
 
 ### Data conventions
-- `predictions/bandgap_predictions.parquet`: long format — `run`
-  (baseline/alpha16/alpha40), `id`, `sample`, `predicted_bandgap_ev` (relaxed),
-  `predicted_bandgap_ev_raw` (unrelaxed).
+- **CIF strings live in exactly two places**: `generated_cifs/` (`cif_steered`, raw)
+  and `relaxed/` (`cif_relaxed`, relaxed). `validation/` holds flags only. Downstream
+  scripts (novelty, relax, predict) join flags with the CIF source on `(id, sample)`
+  and process `is_valid == True` rows only.
+- `steering_results/bandgap_predictions/<stem>.parquet`: one file per source run —
+  `id`, `sample`, `predicted_bandgap_ev` (relaxed), `predicted_bandgap_ev_raw` (unrelaxed).
 - "best-of-3": per prompt take the **max** predicted gap over samples, then mean
   across prompts.
 

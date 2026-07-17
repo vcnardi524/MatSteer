@@ -23,9 +23,9 @@ pip install -q "numpy<2"
 SG_FLAG="--with-spacegroup"
 if [ "${WITH_SG:-1}" = "0" ]; then SG_FLAG=""; fi
 
-# USE_CACHE=1 enables KV-cached decoding (generate_cached); default off.
-CACHE_FLAG=""
-if [ "${USE_CACHE:-0}" = "1" ]; then CACHE_FLAG="--use-cache"; fi
+# KV-cached decoding (generate_cached) is on by default; USE_CACHE=0 disables it.
+CACHE_FLAG="--use-cache"
+if [ "${USE_CACHE:-1}" = "0" ]; then CACHE_FLAG="--no-use-cache"; fi
 
 python scripts/steer_generate_cif.py \
     --model CrystaLLM/crystallm_v1_large \
@@ -37,4 +37,4 @@ python scripts/steer_generate_cif.py \
     --n-samples 3 \
     ${SG_FLAG} \
     ${CACHE_FLAG} \
-    --out generated_cifs/
+    --out steering_results/generated_cifs/

@@ -3,8 +3,8 @@
 Predict band gap for original (pre-steering) test set CIFs using MEGNet.
 
 Reads CrystaLLM/cifs_v1_test.pkl.gz, predicts band gap for each structure,
-and saves results to validation/testset_bandgap.parquet with columns:
-  id, MEGNet_predicted_bandgap_ev
+and saves results to steering_results/bandgap_predictions/testset_baseline.parquet with columns:
+  id, predicted_bandgap_ev_raw
 
 Usage:
     python scripts/predict_bandgap_testset.py
@@ -39,7 +39,7 @@ def parse_cif(cif: str) -> Structure | None:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", default="CrystaLLM/cifs_v1_test.pkl.gz")
-    parser.add_argument("--out", default="validation/testset_bandgap.parquet")
+    parser.add_argument("--out", default="steering_results/bandgap_predictions/testset_baseline.parquet")
     parser.add_argument("--fidelity", type=int, default=FIDELITY)
     args = parser.parse_args()
 
@@ -54,11 +54,11 @@ def main():
     # Resume from existing output if present
     if out_path.exists():
         df = pd.read_parquet(out_path)
-        done_ids = set(df[df["MEGNet_predicted_bandgap_ev"].notna()]["id"])
+        done_ids = set(df[df["predicted_bandgap_ev_raw"].notna()]["id"])
         print(f"  {len(done_ids):,} already predicted, resuming")
     else:
         df = pd.DataFrame({"id": [d[0] for d in test_data]})
-        df["MEGNet_predicted_bandgap_ev"] = None
+        df["predicted_bandgap_ev_raw"] = None
         done_ids = set()
 
     to_predict = [(id_, cif) for id_, cif in test_data if id_ not in done_ids]
@@ -85,7 +85,7 @@ def main():
             continue
         try:
             bg = model.predict_structure(structure=struct, state_attr=state_attr)
-            df.at[id_to_idx[id_], "MEGNet_predicted_bandgap_ev"] = float(bg)
+            df.at[id_to_idx[id_], "predicted_bandgap_ev_raw"] = float(bg)
             n_success += 1
         except Exception as e:
             if n_fail < 5:
@@ -100,7 +100,7 @@ def main():
     print(f"\nSaved to {out_path}")
     print(f"Success: {n_success:,}  Parse fails: {n_parse_fail:,}  Other fails: {n_fail - n_parse_fail:,}")
 
-    bg = df["MEGNet_predicted_bandgap_ev"].dropna().astype(float)
+    bg = df["predicted_bandgap_ev_raw"].dropna().astype(float)
     print(f"\nTest set band gap stats (eV):")
     print(f"  Mean:   {bg.mean():.3f}")
     print(f"  Median: {bg.median():.3f}")

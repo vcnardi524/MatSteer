@@ -1,6 +1,7 @@
 # ---- Big data files (kept locally, not versioned) ----
 *.parquet
 *.bak
+*.bak[0-9]
 *.pkl
 *.pkl.gz
 *.tar.gz

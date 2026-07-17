@@ -6,23 +6,25 @@ Uniqueness: no two generated structures are the same (within the steered output)
 Novelty:    a unique structure does not exist in the training set.
 
 Follows the same approach as CrystaLLM/bin/check_valid_unique_novel.py but
-reads from our validation parquet (so only valid CIFs are checked) instead
-of a .tar.gz of .cif files.
+reads validity flags from our validation parquet (so only valid CIFs are
+checked) instead of a .tar.gz of .cif files.
 
 Steps:
   1. Load training CIFs → build formula -> [cif_strings] index
-  2. Load validation parquet, filter to is_valid == True
+  2. Load validation flags, join cif_steered from generated_cifs on (id, sample),
+     filter to is_valid == True
   3. Postprocess each valid CIF (replace symmetry operators, remove atom props)
   4. Deduplicate within generated set using StructureMatcher -> unique set
   5. For each unique structure, check against training set -> novel set
   6. Save results parquet + print summary
 
-Output parquet columns (appended to validation parquet):
-  id, sample, ...(existing validation cols)..., is_unique, is_novel
+Output: steering_results/validation/novelty_<input_stem>.parquet
+  columns: id, sample, ...(validation flag cols)..., is_unique, is_novel
+  (flags only — CIF strings are never written here)
 
 Usage:
     python scripts/novelty_steered_cifs.py \\
-        --input validation/steered_test_p5_alpha1.0_layer14.parquet \\
+        --input steering_results/validation/steered_test_clean_alpha16.0_layer14.parquet \\
         --base CrystaLLM/cifs_v1_train.pkl.gz
 """
 import argparse
@@ -93,22 +95,34 @@ def main():
                         help="Validation parquet (output of validate_steered_cifs.py)")
     parser.add_argument("--base", default="CrystaLLM/cifs_v1_train.pkl.gz",
                         help="Training CIFs pkl.gz for novelty check")
+    parser.add_argument("--cif-source", default=None,
+                        help="Parquet with cif_steered (default: "
+                             "steering_results/generated_cifs/<input_stem>.parquet)")
     parser.add_argument("--out", default=None,
-                        help="Output parquet path (default: novelty/<input_stem>.parquet)")
+                        help="Output parquet path "
+                             "(default: steering_results/validation/novelty_<input_stem>.parquet)")
     parser.add_argument("--ltol",       type=float, default=0.2)
     parser.add_argument("--stol",       type=float, default=0.3)
     parser.add_argument("--angle-tol",  type=float, default=5.0)
     args = parser.parse_args()
 
     in_path  = Path(args.input)
-    out_dir  = Path("validation")
+    out_dir  = Path("steering_results/validation")
     out_dir.mkdir(exist_ok=True)
     out_path = Path(args.out) if args.out else out_dir / f"novelty_{in_path.stem}.parquet"
 
-    # --- load valid CIFs ---
+    # --- load validation flags, then join raw CIFs from generated_cifs ---
     print(f"Loading {in_path} ...")
     df = pd.read_parquet(in_path)
-    valid_df = df[df["is_valid"] == True].copy().reset_index(drop=True)
+    df = df.drop(columns=[c for c in ("cif_steered", "cif_relaxed", "cif_original")
+                          if c in df.columns])
+    cif_path = Path(args.cif_source) if args.cif_source else \
+        Path("steering_results/generated_cifs") / f"{in_path.stem}.parquet"
+    print(f"Loading CIFs from {cif_path} ...")
+    cifs = pd.read_parquet(cif_path, columns=["id", "sample", "cif_steered"])
+    df = df.merge(cifs, on=["id", "sample"], how="left")
+
+    valid_df = df[df["is_valid"] == True].copy()   # keep original df index labels for write-back
     print(f"  {len(df):,} total CIFs, {len(valid_df):,} valid")
 
     # initialise output columns on full df
@@ -117,7 +131,7 @@ def main():
 
     if len(valid_df) == 0:
         print("No valid CIFs — nothing to check.")
-        df.to_parquet(out_path, index=False)
+        df.drop(columns=["cif_steered"]).to_parquet(out_path, index=False)
         return
 
     # --- build training index ---
@@ -131,54 +145,47 @@ def main():
     for _, row in tqdm(valid_df.iterrows(), total=len(valid_df)):
         structs.append(parse_structure(row["cif_steered"]))
 
-    valid_df = valid_df.copy()
     valid_df["_struct"] = structs
 
-    # drop rows where parsing failed
-    parsed = valid_df[valid_df["_struct"].notna()].copy().reset_index(drop=True)
+    # drop rows where parsing failed (index labels stay tied to the full df)
+    parsed = valid_df[valid_df["_struct"].notna()].copy()
     print(f"  {len(parsed):,} structures parsed successfully")
 
     # --- uniqueness: deduplicate within generated set ---
     print("Checking uniqueness ...")
-    unique_by_formula: dict[str, list[tuple]] = {}  # formula -> [(struct, orig_idx)]
+    # formula -> [(struct, df_label)]; df_label is the original index into `df`
+    unique_by_formula: dict[str, list[tuple]] = {}
 
-    for i, row in tqdm(parsed.iterrows(), total=len(parsed)):
+    for label, row in tqdm(parsed.iterrows(), total=len(parsed)):
         struct = row["_struct"]
         formula = struct.composition.reduced_formula
 
         if formula not in unique_by_formula:
-            unique_by_formula[formula] = [(struct, i)]
+            unique_by_formula[formula] = [(struct, label)]
         else:
             is_dup = any(
                 matcher.fit(struct, existing)
                 for existing, _ in unique_by_formula[formula]
             )
             if not is_dup:
-                unique_by_formula[formula].append((struct, i))
+                unique_by_formula[formula].append((struct, label))
 
-    unique_structs = [(s, idx) for structs_list in unique_by_formula.values() for s, idx in structs_list]
+    unique_structs = [(s, label) for lst in unique_by_formula.values() for s, label in lst]
     print(f"  {len(unique_structs):,} unique structures out of {len(parsed):,} valid")
 
-    # mark unique in valid_df
-    unique_idxs = {idx for _, idx in unique_structs}
-    for idx in unique_idxs:
-        orig_df_idx = parsed.loc[idx, valid_df.index.name or "index"] if False else parsed.index[idx]
-        # map back to original df row
-        df_row_idx = valid_df.index[idx]
-        df.loc[df_row_idx, "is_unique"] = True
+    # mark unique directly on the full df (labels preserved from the merge)
+    for _, label in unique_structs:
+        df.loc[label, "is_unique"] = True
 
     # --- novelty: check each unique structure against training set ---
     print("Checking novelty ...")
-    novel_count = 0
     novel_by_composition = 0
 
-    for struct, idx in tqdm(unique_structs):
+    for struct, label in tqdm(unique_structs):
         formula = struct.composition.reduced_formula
-        df_row_idx = valid_df.index[idx]
 
         if formula not in base_index:
-            df.loc[df_row_idx, "is_novel"] = True
-            novel_count += 1
+            df.loc[label, "is_novel"] = True
             novel_by_composition += 1
         else:
             is_matched = False
@@ -192,10 +199,10 @@ def main():
                 except Exception:
                     continue
             if not is_matched:
-                df.loc[df_row_idx, "is_novel"] = True
-                novel_count += 1
+                df.loc[label, "is_novel"] = True
 
-    df.to_parquet(out_path, index=False)
+    # flags only — never write CIF strings into the validation file
+    df.drop(columns=["cif_steered"]).to_parquet(out_path, index=False)
     print(f"\nSaved to {out_path}")
 
     n        = len(df)
