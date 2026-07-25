@@ -46,7 +46,7 @@ def run_label(stem: str) -> str:
     if s.startswith("steered_test_"):
         s = s[len("steered_test_"):]
     s = s.replace("clean_", "").replace("_layer14", "")
-    s = re.sub(r"(alpha\d+)\.0(?=_|$)", r"\1", s)  # alpha40.0 -> alpha40
+    s = re.sub(r"(alpha-?\d+)\.0(?=_|$)", r"\1", s)  # alpha40.0 -> alpha40, alpha-16.0 -> alpha-16
     return s
 
 

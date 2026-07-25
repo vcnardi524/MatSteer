@@ -91,7 +91,7 @@ BG_COLS = [
 def run_alpha(run: str):
     if run == "baseline":
         return None
-    m = re.search(r"alpha([0-9.]+)", run)
+    m = re.search(r"alpha(-?[0-9.]+)", run)  # -? so negative alphas (e.g. alpha-16.0) parse
     return float(m.group(1)) if m else None
 
 
