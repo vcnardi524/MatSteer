@@ -29,12 +29,14 @@ if [ "${USE_CACHE:-1}" = "0" ]; then CACHE_FLAG="--no-use-cache"; fi
 
 python scripts/steer_generate_cif.py \
     --model CrystaLLM/crystallm_v1_large \
-    --pkl CrystaLLM/cifs_v1_test.pkl.gz \
+    --pkl ${PKL:-CrystaLLM/cifs_v1_test.pkl.gz} \
     --temperature ${TEMPERATURE:-1.0} \
     --alpha ${ALPHA:-1.0} \
     --layer ${LAYER:-14} \
+    --steering-property ${STEERING_PROPERTY:-bandgap} \
     --n-prompts ${N_PROMPTS:-0} \
-    --n-samples 3 \
+    --n-samples ${N_SAMPLES:-3} \
     ${SG_FLAG} \
     ${CACHE_FLAG} \
-    --out steering_results/generated_cifs/
+    --results-dir steering_results/${STEERING_PROPERTY:-bandgap} \
+    ${OUT:+--out $OUT}

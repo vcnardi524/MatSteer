@@ -31,26 +31,21 @@ BG_COL = "dos_electronic.band_gap"
 SEED = 42
 
 
-def load_embeddings(layer):
-    single = Path(f"embeddings/cif_layer{layer}.parquet")
-    if single.exists():
-        return pd.read_parquet(single, columns=["id", "embedding"])
-    ckpt = Path(f"embeddings/cif_layer{layer}")
-    files = sorted(ckpt.glob("checkpoint_*.parquet")) + sorted(ckpt.glob("batch_*.parquet"))
-    return pd.concat([pd.read_parquet(f, columns=["id", "embedding"]) for f in files],
-                     ignore_index=True)
+from utils import load_embeddings
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--layer", type=int, default=14)
+    ap.add_argument("--dataset", default="v1_all",
+                    help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
     ap.add_argument("--low", type=float, default=0.05)
     ap.add_argument("--high", type=float, default=1.0)
     args = ap.parse_args()
 
     meta = pd.read_parquet("metadata.parquet", columns=["id", BG_COL]).dropna(subset=[BG_COL])
     meta["gap"] = meta[BG_COL].astype(float)
-    emb = load_embeddings(args.layer)
+    emb = load_embeddings(args.layer, dataset=args.dataset)
     df = emb.merge(meta[["id", "gap"]], on="id", how="inner")
 
     metal = df[df["gap"] <= args.low]

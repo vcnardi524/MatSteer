@@ -23,13 +23,15 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import SpectralCoclustering
 from sklearn.preprocessing import StandardScaler
 
+from utils import load_labeled_embeddings
+
 # -------------------------------
 # Configuration
 # -------------------------------
 N_CLUSTERS = int(sys.argv[1])
 name = sys.argv[2]
 LAYER = int(sys.argv[3]) if len(sys.argv) > 3 else 14
-EMBEDDINGS_PATH = f"./embeddings/cif_layer{LAYER}.parquet"
+DATASET = sys.argv[4] if len(sys.argv) > 4 else "v1_all"  # embeddings subdir (v1_all or v1_mp)
 METADATA_PATH = "./metadata.parquet"
 RANDOM_SEED = 1
 OUTPUT_DIR = f"./cocluster_results/{name}/layer{LAYER}/{N_CLUSTERS}_clusters"
@@ -54,26 +56,7 @@ def main():
     # -------------------------------
     # Load and intersect datasets
     # -------------------------------
-    print("Loading embeddings...")
-    emb_df = pd.read_parquet(EMBEDDINGS_PATH, columns=["id", "embedding"])
-    print(f"  Embeddings: {len(emb_df):,} entries")
-
-    print("Loading metadata...")
-    meta_df = pd.read_parquet(METADATA_PATH)
-    print(f"  Metadata:   {len(meta_df):,} entries")
-
-    common_ids = set(emb_df["id"]) & set(meta_df["id"])
-    print(f"  Intersection: {len(common_ids):,} entries")
-
-    emb_df = emb_df[emb_df["id"].isin(common_ids)].reset_index(drop=True)
-    meta_df = meta_df[meta_df["id"].isin(common_ids)].set_index("id")
-
-    # Align metadata to embedding order
-    df = emb_df.copy()
-    for col in ["point_group", "space_group_symbol", "structural_type",
-                "spin_polarized", "band_gap_ev", "wyckoff_letters"]:
-        if col in meta_df.columns:
-            df[col] = df["id"].map(meta_df[col])
+    df = load_labeled_embeddings(LAYER, dataset=DATASET, metadata_path=METADATA_PATH)
 
     # Space group + occupied Wyckoff letters. A letter is only meaningful relative
     # to its space group ("c" is a different orbit in Pnma than in P6_3/mmc), so the

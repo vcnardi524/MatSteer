@@ -39,11 +39,14 @@ def parse_cif(cif: str) -> Structure | None:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", default="CrystaLLM/cifs_v1_test.pkl.gz")
-    parser.add_argument("--out", default="steering_results/bandgap_predictions/testset_baseline.parquet")
+    parser.add_argument("--out", default=None,
+                        help="Default: <results-dir>/property_predictions/testset_baseline.parquet")
+    parser.add_argument("--results-dir", default="steering_results")
     parser.add_argument("--fidelity", type=int, default=FIDELITY)
     args = parser.parse_args()
 
-    out_path = Path(args.out)
+    out_path = Path(args.out) if args.out else \
+        Path(args.results_dir) / "property_predictions" / "testset_baseline.parquet"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     print(f"Loading {args.input} ...")

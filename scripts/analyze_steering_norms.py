@@ -6,7 +6,7 @@ Cross-references three norms that determine whether activation steering can
 actually affect generation:
 
   1. Per-token residual-stream norm   (live model forward; what the hook adds to)
-  2. Mean-pooled embedding norm        (extracted embeddings/cif_layer{N}.parquet)
+  2. Mean-pooled embedding norm        (extracted embeddings/<dataset>/cif_layer{N}.parquet)
   3. Raw mean-difference vector norm   (per band-gap percentile, pre-normalization)
 
 Also quantifies the zero-gap (metal) pile-up that distorts percentile selection.
@@ -35,16 +35,7 @@ PERCENTILES = [5, 10, 15, 20, 25]
 ZERO_EPS = [0.001, 0.01, 0.1, 0.5]  # eV windows around 0 to call "metal"
 
 
-def load_embeddings(layer: int) -> pd.DataFrame:
-    single = Path(f"embeddings/cif_layer{layer}.parquet")
-    if single.exists():
-        return pd.read_parquet(single, columns=["id", "embedding"])
-    ckpt_dir = Path(f"embeddings/cif_layer{layer}")
-    files = sorted(ckpt_dir.glob("checkpoint_*.parquet")) + sorted(ckpt_dir.glob("batch_*.parquet"))
-    if not files:
-        raise FileNotFoundError(f"No embeddings for layer {layer}")
-    return pd.concat([pd.read_parquet(f, columns=["id", "embedding"]) for f in files],
-                     ignore_index=True)
+from utils import load_embeddings
 
 
 def measure_residual_norm(model_dir: str, pkl: str, layer: int, n_cifs: int) -> float:
@@ -81,6 +72,8 @@ def measure_residual_norm(model_dir: str, pkl: str, layer: int, n_cifs: int) -> 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--layer", type=int, default=14)
+    ap.add_argument("--dataset", default="v1_all",
+                    help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
     ap.add_argument("--residual-norm", type=float, default=None,
                     help="Per-token residual norm (skip --with-model and supply directly)")
     ap.add_argument("--with-model", action="store_true",
@@ -104,7 +97,7 @@ def main():
 
     # 2. pooled embedding norms
     print(f"Loading layer-{args.layer} embeddings ...")
-    emb = load_embeddings(args.layer)
+    emb = load_embeddings(args.layer, dataset=args.dataset)
     X = np.vstack(emb["embedding"].values).astype(np.float32)
     pooled = np.linalg.norm(X, axis=1)
     print(f"  {len(emb):,} embeddings, dim={X.shape[1]}, "

@@ -43,19 +43,7 @@ MODE_DEFAULTS = {
 }
 
 
-def load_embeddings(layer: int) -> pd.DataFrame:
-    # prefer consolidated parquet, fall back to checkpoint files
-    single = Path(f"embeddings/cif_layer{layer}.parquet")
-    if single.exists():
-        print(f"Loading {single} ...")
-        return pd.read_parquet(single, columns=["id", "embedding"])
-    ckpt = Path(f"embeddings/cif_layer{layer}")
-    files = sorted(ckpt.glob("checkpoint_*.parquet")) + sorted(ckpt.glob("batch_*.parquet"))
-    if not files:
-        raise FileNotFoundError(f"No embeddings for layer {layer}")
-    print(f"Loading {len(files)} checkpoint files from {ckpt} ...")
-    return pd.concat([pd.read_parquet(f, columns=["id", "embedding"]) for f in files],
-                     ignore_index=True)
+from utils import load_embeddings
 
 
 def uniform_sample_by_value(values: np.ndarray, n: int, bins: int) -> np.ndarray:
@@ -74,7 +62,7 @@ def uniform_sample_by_value(values: np.ndarray, n: int, bins: int) -> np.ndarray
     return sel
 
 
-def load_joined(layer: int) -> pd.DataFrame:
+def load_joined(layer: int, dataset: str = "v1_all") -> pd.DataFrame:
     """Load clean band gaps + embeddings and inner-join on id."""
     print("Loading metadata (clean band gap) ...")
     meta = pd.read_parquet("metadata.parquet", columns=["id", BG_COL])
@@ -82,7 +70,7 @@ def load_joined(layer: int) -> pd.DataFrame:
     meta["band_gap_ev"] = meta[BG_COL].astype(float)
     print(f"  {len(meta):,} entries with clean band gap")
 
-    emb = load_embeddings(layer)
+    emb = load_embeddings(layer, dataset=dataset)
     print(f"  Embeddings: {len(emb):,}")
     df = emb.merge(meta[["id", "band_gap_ev"]], on="id", how="inner")
     print(f"  After join: {len(df):,}")
@@ -201,6 +189,8 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mode", choices=["split", "combined", "both"], default="both")
     ap.add_argument("--layer", type=int, default=14)
+    ap.add_argument("--dataset", default="v1_all",
+                    help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
     ap.add_argument("--n-samples", type=int, default=None,
                     help="Points to sample (per group in split mode, total in "
                          "combined). Default depends on mode.")
@@ -213,7 +203,7 @@ def main():
 
     np.random.seed(RANDOM_SEED)
 
-    df = load_joined(args.layer)
+    df = load_joined(args.layer, dataset=args.dataset)
     out_dir = Path(f"plots/layer{args.layer}")
     out_dir.mkdir(parents=True, exist_ok=True)
 

@@ -22,22 +22,14 @@ from pathlib import Path
 J_TO_EV = 6.2415e18
 
 
-def load_embeddings(layer: int) -> pd.DataFrame:
-    single = Path(f"embeddings/cif_layer{layer}.parquet")
-    if single.exists():
-        print(f"Loading {single} ...")
-        return pd.read_parquet(single, columns=["id", "embedding"])
-    ckpt_dir = Path(f"embeddings/cif_layer{layer}")
-    files = sorted(ckpt_dir.glob("checkpoint_*.parquet")) + sorted(ckpt_dir.glob("batch_*.parquet"))
-    if not files:
-        raise FileNotFoundError(f"No embedding files found for layer {layer}")
-    print(f"Loading {len(files)} checkpoint files from {ckpt_dir} ...")
-    return pd.concat([pd.read_parquet(f, columns=["id", "embedding"]) for f in files], ignore_index=True)
+from utils import load_embeddings
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--layer", type=int, default=14)
+    parser.add_argument("--dataset", default="v1_all",
+                        help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
     args = parser.parse_args()
 
     percentiles = [5, 10, 15, 20, 25]
@@ -51,7 +43,7 @@ def main():
     meta["band_gap_ev"] = (meta["energy_lowest_unoccupied"] - meta["energy_highest_occupied"]) * J_TO_EV
     print(f"  Entries with band gap: {len(meta):,}")
 
-    emb = load_embeddings(args.layer)
+    emb = load_embeddings(args.layer, dataset=args.dataset)
     print(f"  Embeddings: {len(emb):,}")
 
     df = emb.merge(meta[["id", "band_gap_ev"]], on="id", how="inner")

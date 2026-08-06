@@ -82,14 +82,16 @@ def main():
     parser.add_argument("--timeout", type=int, default=120,
                         help="Per-structure timeout in seconds (0 = no timeout)")
     parser.add_argument("--checkpoint-every", type=int, default=10)
+    parser.add_argument("--results-dir", default="steering_results",
+                        help="Base results dir; <results-dir>/{relaxed,generated_cifs}")
     args = parser.parse_args()
 
     in_path = Path(args.input)          # validation parquet (holds is_valid)
-    out_dir = Path("steering_results/relaxed")
+    out_dir = Path(args.results_dir) / "relaxed"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = Path(args.out) if args.out else out_dir / f"{in_path.stem}.parquet"
     cif_path = Path(args.cif_source) if args.cif_source else \
-        Path("steering_results/generated_cifs") / f"{in_path.stem}.parquet"
+        Path(args.results_dir) / "generated_cifs" / f"{in_path.stem}.parquet"
 
     # validation flags + raw CIFs, joined on (id, sample)
     print(f"Loading validation flags {in_path} ...")

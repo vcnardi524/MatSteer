@@ -30,14 +30,7 @@ from sklearn.manifold import TSNE
 PREPARSED = "preparsed_metadata_nomad.parquet"
 
 
-def load_embeddings(layer: int) -> pd.DataFrame:
-    single = Path(f"embeddings/cif_layer{layer}.parquet")
-    if single.exists():
-        return pd.read_parquet(single, columns=["id", "embedding"])
-    d = Path(f"embeddings/cif_layer{layer}")
-    files = sorted(d.glob("checkpoint_*.parquet")) + sorted(d.glob("batch_*.parquet"))
-    return pd.concat([pd.read_parquet(f, columns=["id", "embedding"]) for f in files],
-                     ignore_index=True)
+from utils import load_embeddings
 
 
 def find_wyckoff_sets(results: dict):
@@ -89,6 +82,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sg", default="F-43m")
     ap.add_argument("--layer", type=int, default=14)
+    ap.add_argument("--dataset", default="v1_all",
+                    help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
     ap.add_argument("--n-samples", type=int, default=10000)
     ap.add_argument("--top-n", type=int, default=8)
     ap.add_argument("--tsne-perplexity", type=float, default=30)
@@ -100,7 +95,7 @@ def main():
     ids = meta.loc[meta["space_group_symbol"] == args.sg, "id"]
     print(f"  {args.sg} materials: {len(ids):,}")
 
-    emb = load_embeddings(args.layer)
+    emb = load_embeddings(args.layer, dataset=args.dataset)
     df = emb[emb["id"].isin(set(ids))].reset_index(drop=True)
     print(f"  with embeddings: {len(df):,}")
 

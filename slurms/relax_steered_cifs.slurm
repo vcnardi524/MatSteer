@@ -17,12 +17,14 @@ mkdir -p logs
 # relax_venv: PyTorch 2.4.1+cu121 (supports V100/sm_70) + matgl 4.0.1
 source relax_venv/bin/activate
 
-INPUT=${INPUT:-"steering_results/validation/steered_test_clean_alpha16.0_layer14.parquet"}
+INPUT=${INPUT:-"steering_results/bandgap/validation/steered_test_clean_alpha16.0_layer14.parquet"}
+RESULTS_DIR=${RESULTS_DIR:-steering_results}
 # --input is the validation (flags) file; raw CIFs are read from the matching
-# steering_results/generated_cifs/<stem>, output goes to steering_results/relaxed/<stem>.
+# <results-dir>/generated_cifs/<stem>, output goes to <results-dir>/relaxed/<stem>.
 
 python scripts/relax_steered_cifs.py \
     --input ${INPUT} \
+    --results-dir ${RESULTS_DIR} \
     --fmax 0.05 \
     --steps 500 \
     --timeout 60 \

@@ -94,10 +94,12 @@ def main():
     parser.add_argument("--input", required=True, help="Path to steered parquet file")
     parser.add_argument("--out", default=None, help="Output parquet path (default: validation_<input_stem>.parquet)")
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--results-dir", default="steering_results",
+                        help="Base results dir; output goes to <results-dir>/validation")
     args = parser.parse_args()
 
     in_path = Path(args.input)
-    out_dir = Path("steering_results/validation")
+    out_dir = Path(args.results_dir) / "validation"
     out_dir.mkdir(exist_ok=True)
     out_path = Path(args.out) if args.out else out_dir / f"{in_path.stem}.parquet"
 

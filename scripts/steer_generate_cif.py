@@ -77,6 +77,8 @@ def main():
     parser.add_argument("--alpha", type=float, default=1.0,
                         help="Steering strength (positive = towards high band gap)")
     parser.add_argument("--layer", type=int, default=14)
+    parser.add_argument("--steering-property", default="bandgap",
+                        help="Steering-vector subdir under steering_vectors/ (default: bandgap)")
     parser.add_argument("--n-prompts", type=int, default=0,
                         help="Number of prompts to use (0 = all)")
     parser.add_argument("--n-samples", type=int, default=3)
@@ -88,7 +90,11 @@ def main():
     parser.add_argument("--steering-file", default=None,
                         help="Path to a single-row clean steering-vector parquet. "
                              "If set, overrides the percentile-based vector.")
-    parser.add_argument("--out", default="steering_results/generated_cifs")
+    parser.add_argument("--results-dir", default="steering_results",
+                        help="Base results dir; output goes to <results-dir>/generated_cifs "
+                             "unless --out is given explicitly")
+    parser.add_argument("--out", default=None,
+                        help="Explicit output dir (overrides --results-dir/generated_cifs)")
     parser.add_argument("--use-cache", action=argparse.BooleanOptionalAction, default=True,
                         help="Use KV-cached decoding (generate_cached). On by default; "
                              "verified byte-identical to uncached, ~1.9x faster at batch 1. "
@@ -104,11 +110,20 @@ def main():
     model, config = load_model(args.model, device)
     tokenizer = CIFTokenizer()
 
-    sv_df = pd.read_parquet(f"steering_vectors/bandgap_layer{args.layer}.parquet")
-    row = sv_df.iloc[0]   # single clean metal-vs-insulator vector (no percentiles)
+    sv_path = Path("steering_vectors") / args.steering_property / f"layer{args.layer}.parquet"
+    if not sv_path.exists():
+        # legacy flat location (pre per-property dirs)
+        legacy = Path("steering_vectors") / f"{args.steering_property}_layer{args.layer}.parquet"
+        if not legacy.exists():
+            raise FileNotFoundError(f"No steering vector at {sv_path} or {legacy}")
+        sv_path = legacy
+    sv_df = pd.read_parquet(sv_path)
+    row = sv_df.iloc[0]   # single clean low-vs-high vector (no percentiles)
     steer_vec = np.array(row["steering_vector"], dtype=np.float32)
-    print(f"Clean steering vector: metals<={row['low_thresh_ev']}eV (n={int(row['n_low']):,}) vs "
-          f"insulators>={row['high_thresh_ev']}eV (n={int(row['n_high']):,})  "
+    lo = row.get("low_thresh", row.get("low_thresh_ev"))   # new / legacy column names
+    hi = row.get("high_thresh", row.get("high_thresh_ev"))
+    print(f"Steering vector [{args.steering_property}] {sv_path}: low<={lo} "
+          f"(n={int(row['n_low']):,}) vs high>={hi} (n={int(row['n_high']):,})  "
           f"raw_norm={row['raw_norm']:.2f}")
     print(f"Alpha={args.alpha}  Layer={args.layer}  KV cache={'on' if args.use_cache else 'off'}  "
           f"dropout={config.dropout}")
@@ -131,10 +146,12 @@ def main():
     pkl_stem = Path(args.pkl).stem  # e.g. cifs_v1_test
     split = next((s for s in ("train", "test", "val") if s in pkl_stem), pkl_stem)
 
-    out_dir = Path(args.out)
+    # The property is encoded by the output directory (per-property <results-dir>),
+    # so the filename only carries split/alpha/layer.
+    out_dir = Path(args.out) if args.out else Path(args.results_dir) / "generated_cifs"
     out_dir.mkdir(parents=True, exist_ok=True)
     sg_tag = "" if args.with_spacegroup else "_nosg"
-    out_path = out_dir / f"steered_{split}_clean_alpha{args.alpha}_layer{args.layer}{sg_tag}.parquet"
+    out_path = out_dir / f"steered_{split}_alpha{args.alpha}_layer{args.layer}{sg_tag}.parquet"
 
     # resume: skip already-done ids
     done_ids = set()

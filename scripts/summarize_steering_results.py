@@ -30,8 +30,7 @@ from pathlib import Path
 
 import pandas as pd
 
-VAL_DIR = Path("steering_results/validation")
-DEFAULT_BANDGAP = Path("steering_results/bandgap_all.parquet")
+DEFAULT_RESULTS = "steering_results"
 
 
 def config_stem(path: Path) -> str:
@@ -158,15 +157,22 @@ def bandgap_tables(path: Path, agg: str = "all") -> tuple[pd.DataFrame, pd.DataF
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--val-dir", default=str(VAL_DIR),
-                        help="Dir of validation/novelty parquets")
-    parser.add_argument("--bandgap", nargs="?", const=str(DEFAULT_BANDGAP), default=None,
+    parser.add_argument("--results-dir", default=DEFAULT_RESULTS,
+                        help="Base results dir; defaults derive <results-dir>/validation "
+                             "and <results-dir>/property_all.parquet")
+    parser.add_argument("--val-dir", default=None,
+                        help="Dir of validation/novelty parquets (default: <results-dir>/validation)")
+    parser.add_argument("--bandgap", nargs="?", const="__DEFAULT__", default=None,
                         help="Also summarize band gaps from the combined wide file "
-                             f"(default path: {DEFAULT_BANDGAP})")
+                             "(default: <results-dir>/property_all.parquet)")
     parser.add_argument("--out", default=None,
                         help="Also write the full report to this text file "
-                             "(exact table layout, e.g. steering_results/summary.txt)")
+                             "(e.g. <results-dir>/summary.txt)")
     args = parser.parse_args()
+
+    val_dir = Path(args.val_dir) if args.val_dir else Path(args.results_dir) / "validation"
+    if args.bandgap == "__DEFAULT__":
+        args.bandgap = str(Path(args.results_dir) / "property_all.parquet")
 
     # collect the report as lines so it can go to both stdout and --out
     lines: list[str] = []
@@ -175,7 +181,7 @@ def main():
         lines.append(f"\n=== {title} ===")
         lines.append(body)
 
-    vn = validation_novelty_table(Path(args.val_dir))
+    vn = validation_novelty_table(val_dir)
     section("Validation + Novelty",
             vn.to_string(index=False) if not vn.empty else "(no validation files found)")
 

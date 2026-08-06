@@ -1,0 +1,53 @@
+
+=== Validation + Novelty ===
+                                    config  total  valid valid% sensible% unique unique%(of valid) novel novel%(of unique)
+      steered_test_clean_alpha11.0_layer14    900    849  94.3%    100.0%    347             40.9%   298             85.9%
+      steered_test_clean_alpha16.0_layer14  30858  29498  95.6%    100.0%  11694             39.6% 10141             86.7%
+      steered_test_clean_alpha25.0_layer14    900    844  93.8%    100.0%    350             41.5%   299             85.4%
+      steered_test_clean_alpha40.0_layer14  30858  29116  94.4%    100.0%  11839             40.7% 10272             86.8%
+steered_test_clean_alpha-16.0_layer14_nosg  30858  29332  95.1%    100.0%    n/a               n/a   n/a               n/a
+  steered_test_clean_alpha0.0_layer14_nosg  30858  29459  95.5%    100.0%    n/a               n/a   n/a               n/a
+ steered_test_clean_alpha16.0_layer14_nosg  29100  27717  95.2%    100.0%  17644             63.7%  9203             52.2%
+ steered_test_clean_alpha25.0_layer14_nosg  30858  29457  95.5%    100.0%  18723             63.6%  9774             52.2%
+ steered_test_clean_alpha40.0_layer14_nosg  29100  27346  94.0%    100.0%  17321             63.3%  9230             53.3%
+ steered_test_clean_alpha60.0_layer14_nosg  30858  27417  88.8%    100.0%  17014             62.1%  8756             51.5%
+
+=== Predicted band gap (eV) — with space group in prompt [all samples] ===
+                                unrelaxed             relaxed            
+configuration alpha samples/cif       %>0  mean   std     %>0  mean   std
+     baseline     —           1     13.6% 0.090 0.395   13.9% 0.100 0.421
+      steered    11           3     93.5% 0.154 0.599   93.9% 0.236 0.770
+      steered    16           3     92.9% 0.135 0.514   94.4% 0.163 0.614
+      steered    25           3     93.1% 0.159 0.608   94.0% 0.248 0.816
+      steered    40           3     92.9% 0.125 0.487   94.5% 0.162 0.617
+
+=== Predicted band gap (eV) — without space group in prompt [all samples] ===
+                                unrelaxed             relaxed            
+configuration alpha samples/cif       %>0  mean   std     %>0  mean   std
+     baseline     —           1     13.6% 0.090 0.395   13.9% 0.100 0.421
+      steered   -16           3     93.0% 0.136 0.525       —     —     —
+      steered     0           3     93.1% 0.139 0.527       —     —     —
+      steered    16           3     93.1% 0.136 0.518   94.6% 0.176 0.645
+      steered    25           3     93.0% 0.138 0.523   94.7% 0.179 0.654
+      steered    40           3     93.0% 0.126 0.487   94.6% 0.163 0.615
+      steered    60           3     92.6% 0.107 0.432   94.6% 0.137 0.550
+
+=== Predicted band gap (eV) — with space group in prompt [best-of samples: per-prompt max] ===
+                                unrelaxed             relaxed            
+configuration alpha samples/cif       %>0  mean   std     %>0  mean   std
+     baseline     —           1     13.6% 0.090 0.395   13.9% 0.100 0.421
+      steered    11           3     95.2% 0.209 0.692   94.2% 0.283 0.845
+      steered    16           3     95.0% 0.177 0.594   95.2% 0.187 0.658
+      steered    25           3     95.2% 0.218 0.709   94.9% 0.283 0.873
+      steered    40           3     95.0% 0.175 0.586   95.4% 0.193 0.672
+
+=== Predicted band gap (eV) — without space group in prompt [best-of samples: per-prompt max] ===
+                                unrelaxed             relaxed            
+configuration alpha samples/cif       %>0  mean   std     %>0  mean   std
+     baseline     —           1     13.6% 0.090 0.395   13.9% 0.100 0.421
+      steered   -16           3     97.0% 0.198 0.631       —     —     —
+      steered     0           3     97.0% 0.195 0.617       —     —     —
+      steered    16           3     96.9% 0.196 0.615   96.9% 0.220 0.714
+      steered    25           3     96.9% 0.196 0.617   97.0% 0.218 0.707
+      steered    40           3     96.9% 0.193 0.610   97.1% 0.209 0.687
+      steered    60           3     96.2% 0.163 0.546   96.9% 0.178 0.623

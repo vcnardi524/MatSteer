@@ -104,10 +104,12 @@ def main():
     parser.add_argument("--ltol",       type=float, default=0.2)
     parser.add_argument("--stol",       type=float, default=0.3)
     parser.add_argument("--angle-tol",  type=float, default=5.0)
+    parser.add_argument("--results-dir", default="steering_results",
+                        help="Base results dir; <results-dir>/{validation,generated_cifs}")
     args = parser.parse_args()
 
     in_path  = Path(args.input)
-    out_dir  = Path("steering_results/validation")
+    out_dir  = Path(args.results_dir) / "validation"
     out_dir.mkdir(exist_ok=True)
     out_path = Path(args.out) if args.out else out_dir / f"novelty_{in_path.stem}.parquet"
 
@@ -117,7 +119,7 @@ def main():
     df = df.drop(columns=[c for c in ("cif_steered", "cif_relaxed", "cif_original")
                           if c in df.columns])
     cif_path = Path(args.cif_source) if args.cif_source else \
-        Path("steering_results/generated_cifs") / f"{in_path.stem}.parquet"
+        Path(args.results_dir) / "generated_cifs" / f"{in_path.stem}.parquet"
     print(f"Loading CIFs from {cif_path} ...")
     cifs = pd.read_parquet(cif_path, columns=["id", "sample", "cif_steered"])
     df = df.merge(cifs, on=["id", "sample"], how="left")

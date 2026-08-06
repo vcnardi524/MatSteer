@@ -86,10 +86,12 @@ def main():
     parser.add_argument("--source", default=None,
                         choices=["cif_relaxed", "cif_steered"],
                         help="CIF column to predict from (default: auto-detect from input)")
+    parser.add_argument("--results-dir", default="steering_results",
+                        help="Base results dir; <results-dir>/{property_predictions,validation}")
     args = parser.parse_args()
 
     in_path = Path(args.input)
-    out_dir = Path("steering_results/bandgap_predictions")
+    out_dir = Path(args.results_dir) / "property_predictions"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = Path(args.out) if args.out else out_dir / f"{in_path.stem}.parquet"
 
@@ -114,7 +116,7 @@ def main():
 
     # restrict to valid CIFs via the validation flags (skip invalid)
     val_path = Path(args.validation) if args.validation else \
-        Path("steering_results/validation") / f"{in_path.stem}.parquet"
+        Path(args.results_dir) / "validation" / f"{in_path.stem}.parquet"
     if not val_path.exists():
         raise FileNotFoundError(f"validation flags not found: {val_path} "
                                 "(run validate_steered_cifs.py first, or pass --validation)")

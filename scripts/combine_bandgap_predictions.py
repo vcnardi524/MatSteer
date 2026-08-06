@@ -34,8 +34,7 @@ from functools import reduce
 
 import pandas as pd
 
-DEFAULT_DIR = Path("steering_results/bandgap_predictions")
-DEFAULT_OUT = Path("steering_results/bandgap_all.parquet")
+DEFAULT_RESULTS = "steering_results"
 
 
 def run_label(stem: str) -> str:
@@ -52,16 +51,20 @@ def run_label(stem: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--in-dir", default=str(DEFAULT_DIR),
-                        help="Dir of per-run prediction parquets")
-    parser.add_argument("--out", default=str(DEFAULT_OUT),
-                        help="Combined output parquet")
+    parser.add_argument("--results-dir", default=DEFAULT_RESULTS,
+                        help="Base results dir; defaults derive <results-dir>/property_predictions "
+                             "and <results-dir>/property_all.parquet")
+    parser.add_argument("--in-dir", default=None,
+                        help="Dir of per-run prediction parquets (default: "
+                             "<results-dir>/property_predictions)")
+    parser.add_argument("--out", default=None,
+                        help="Combined output parquet (default: <results-dir>/property_all.parquet)")
     parser.add_argument("--exclude-baseline", action="store_true",
                         help="Skip testset_baseline.parquet (the un-steered baseline)")
     args = parser.parse_args()
 
-    in_dir = Path(args.in_dir)
-    out_path = Path(args.out)
+    in_dir = Path(args.in_dir) if args.in_dir else Path(args.results_dir) / "property_predictions"
+    out_path = Path(args.out) if args.out else Path(args.results_dir) / "property_all.parquet"
     out_resolved = out_path.resolve()
 
     files = sorted(in_dir.glob("*.parquet"))

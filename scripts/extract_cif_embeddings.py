@@ -18,7 +18,9 @@ Usage:
         [--batch-size 16] \
         [--limit 1000]
 
-Outputs: embeddings/cif_layer{N}/batch_XXXXX.parquet for each layer N.
+Outputs: embeddings/<dataset>/cif_layer{N}/checkpoint_XXXXX.parquet for each layer N,
+where <dataset> is --dataset (inferred from the pkl stem if omitted: cifs_v1_mp_prep
+-> v1_mp, else v1_all).
 """
 
 import argparse
@@ -116,10 +118,19 @@ def main():
     parser.add_argument("--checkpoint-every", type=int, default=100,
                         help="Write to disk every N batches (default: 100)")
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--dataset", default=None,
+                        help="Embeddings subdir under embeddings/ to write to. "
+                             "Default: inferred from the pkl stem "
+                             "(cifs_v1_mp_prep -> v1_mp, else v1_all).")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+
+    # which embeddings/<dataset>/ subdir to write to
+    dataset = args.dataset or (
+        "v1_mp" if "mp" in Path(args.pkl).stem.lower().split("_") else "v1_all")
+    print(f"Writing embeddings to embeddings/{dataset}/")
 
     model, config = load_model(args.model, device)
 
@@ -128,7 +139,7 @@ def main():
     assert all(0 <= l < config.n_layer for l in layers), \
         f"Some layers out of range (model has {config.n_layer} layers)"
 
-    out_dirs = {l: Path(f"embeddings/cif_layer{l}") for l in layers}
+    out_dirs = {l: Path(f"embeddings/{dataset}/cif_layer{l}") for l in layers}
     for d in out_dirs.values():
         d.mkdir(parents=True, exist_ok=True)
 
@@ -212,7 +223,7 @@ def main():
 
     for h in hooks:
         h.remove()
-    print(f"\nDone. Outputs in embeddings/cif_layer{{N}}/ for layers {layers}")
+    print(f"\nDone. Outputs in embeddings/{dataset}/cif_layer{{N}}/ for layers {layers}")
 
 
 if __name__ == "__main__":
