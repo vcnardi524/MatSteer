@@ -20,7 +20,7 @@ INPUT=${INPUT:-"steering_results/bandgap/generated_cifs/steered_test_clean_alpha
 WORKERS=${WORKERS:-16}
 RESULTS_DIR=${RESULTS_DIR:-steering_results}
 
-python scripts/validate_steered_cifs.py \
+python scripts/eval/validate_steered_cifs.py \
     --input ${INPUT} \
     --results-dir ${RESULTS_DIR} \
     --workers ${WORKERS}

@@ -9,7 +9,7 @@ t-SNE correspond to distinct Wyckoff-occupation patterns (zincblende `a c`,
 half-Heusler `a b c`, ...).
 
 Usage:
-    python scripts/plot_tsne_f43m_wyckoff.py [--sg F-43m] [--layer 14]
+    python scripts/plots/plot_tsne_f43m_wyckoff.py [--sg F-43m] [--layer 14]
                                              [--n-samples 10000] [--top-n 8]
 """
 import argparse
@@ -30,6 +30,8 @@ from sklearn.manifold import TSNE
 PREPARSED = "preparsed_metadata_nomad.parquet"
 
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
 from utils import load_embeddings
 
 

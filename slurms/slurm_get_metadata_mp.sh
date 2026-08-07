@@ -9,6 +9,6 @@
 source /home/victor_nardi/MatSteer/CrystaLLM/crystallm_venv/bin/activate
 cd /home/victor_nardi/MatSteer
 
-python scripts/get_preparsed_metadata_mp.py \
+python scripts/data/get_preparsed_metadata_mp.py \
     --out preparsed_metadata_mp.parquet \
     --batch-size 1000

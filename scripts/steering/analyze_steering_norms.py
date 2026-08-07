@@ -14,10 +14,10 @@ Also quantifies the zero-gap (metal) pile-up that distorts percentile selection.
 Writes a tidy CSV summarizing all findings.
 
 Usage (analysis only, any env with pandas/numpy):
-    python scripts/analyze_steering_norms.py --layer 14 --residual-norm 164
+    python scripts/steering/analyze_steering_norms.py --layer 14 --residual-norm 164
 
 Usage (also re-measure per-token residual norm; needs crystallm_venv + model):
-    python scripts/analyze_steering_norms.py --layer 14 --with-model \
+    python scripts/steering/analyze_steering_norms.py --layer 14 --with-model \
         --model CrystaLLM/crystallm_v1_large --pkl CrystaLLM/cifs_v1_test.pkl.gz
 
 Output: analysis/steering_norm_analysis_layer{N}.csv
@@ -35,6 +35,8 @@ PERCENTILES = [5, 10, 15, 20, 25]
 ZERO_EPS = [0.001, 0.01, 0.1, 0.5]  # eV windows around 0 to call "metal"
 
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
 from utils import load_embeddings
 
 
@@ -43,7 +45,8 @@ def measure_residual_norm(model_dir: str, pkl: str, layer: int, n_cifs: int) -> 
     import gzip, pickle
     import torch
     sys.path.insert(0, "CrystaLLM")
-    sys.path.insert(0, "scripts")
+    sys.path.insert(0, _os.path.join(
+        _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "embeddings"))
     from crystallm import CIFTokenizer
     from extract_cif_embeddings import load_model
 

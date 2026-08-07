@@ -30,11 +30,11 @@ The model is multi-fidelity with 4 DFT methods:
 
 Usage:
     # unrelaxed gaps (can run while relaxation is still going)
-    python scripts/predict_bandgap.py \
+    python scripts/oneoff/predict_bandgap.py \
         --input steering_results/generated_cifs/steered_test_clean_alpha16.0_layer14.parquet
 
     # relaxed gaps (once relaxation is done)
-    python scripts/predict_bandgap.py \
+    python scripts/oneoff/predict_bandgap.py \
         --input steering_results/relaxed/steered_test_clean_alpha16.0_layer14.parquet
 """
 import argparse

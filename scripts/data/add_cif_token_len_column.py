@@ -12,7 +12,7 @@ so the count matches train.bin exactly. Rows dropped during preprocessing (8 of
 Run inside CrystaLLM/crystallm_venv (needs the crystallm tokenizer).
 
 Usage:
-    python scripts/add_cif_token_len_column.py
+    python scripts/data/add_cif_token_len_column.py
 """
 import gzip
 import os
@@ -24,7 +24,7 @@ from pathlib import Path
 import pandas as pd
 from multiprocessing import Pool
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "CrystaLLM"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "CrystaLLM"))
 from crystallm import CIFTokenizer
 
 PREP = Path("CrystaLLM/cifs_v1_mp_prep.pkl.gz")

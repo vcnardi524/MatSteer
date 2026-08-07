@@ -34,7 +34,7 @@ from pathlib import Path
 import pandas as pd
 import torch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "CrystaLLM"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM"))
 from crystallm import CIFTokenizer, GPTConfig, GPT
 
 

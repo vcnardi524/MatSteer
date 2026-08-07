@@ -70,7 +70,7 @@ factor of 2/4 smaller than what the model ingested; only for P lattices do they 
   is shelved for now (2026-07-27).
 
 ### MP CIF pipeline: cells are already conventional; ~4% exceed block_size (deferred)
-Building CIFs for the MP data (`scripts/build_mp_cifs_tar.py`, from `metadata_mp.parquet`'s
+Building CIFs for the MP data (`scripts/data/build_mp_cifs_tar.py`, from `metadata_mp.parquet`'s
 `structure` column → `CrystaLLM/cifs_v1_mp_orig.tar.gz` → `tar_to_pickle` → `preprocess`
 → `tokenize_cifs`):
 - MP's `SummaryDoc.structure` is the **primitive** cell, but **`CifWriter(s, symprec=0.1)`

@@ -9,7 +9,7 @@
 source /home/victor_nardi/MatSteer/CrystaLLM/crystallm_venv/bin/activate
 cd /home/victor_nardi/MatSteer
 
-python scripts/get_preparsed_metadata.py \
+python scripts/data/get_preparsed_metadata_nomad.py \
     --pkl CrystaLLM/cifs_v1_prep.pkl.gz \
     --out preparsed_metadata_nomad.parquet \
     --batch-size 200 \

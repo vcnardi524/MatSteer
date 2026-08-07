@@ -105,33 +105,35 @@ and **drop the space-group constraint** to give steering more room (see `tasks.m
 
 | Path | Contents |
 |------|----------|
-| `scripts/` | All Python: steering generation, relaxation, band-gap prediction, embedding extraction, plotting, co-clustering. |
+| `scripts/` | All Python, grouped by pipeline stage: `data/` (metadata fetch/parse, CIF building, column adds), `embeddings/` (residual-stream extraction), `steering/` (vector computation, steered generation, probes), `eval/` (validate, relax, predict, novelty, summarize), `analysis/` (co-clustering, symmetry separability), `plots/`, `oneoff/` (retired). `utils.py` and `predictors.py` sit at the top level and are imported by the rest. |
 | `slurms/` | SLURM submit scripts (env-var driven: `INPUT`, `ALPHA`, `N_PROMPTS`, ...). |
 | `steering_vectors/` | `bandgap_layer{1..15}.parquet` — per-layer clean steering vectors. |
 | `steering_results/generated_cifs/` | Raw steered generations — `id, sample, cif_steered`. The source of truth for raw CIFs. |
 | `steering_results/relaxed/` | M3GNet-relaxed CIF store — `id, sample, cif_relaxed` (valid structures only). |
 | `steering_results/validation/` | **Flags only** (no CIF strings): `id, sample` + validity flags; `novelty_<stem>.parquet` adds `is_unique, is_novel`. |
-| `steering_results/bandgap_predictions/` | Per-run predictions — `id, sample, predicted_bandgap_ev_raw, predicted_bandgap_ev`, one file per source stem. |
+| `steering_results/<property>/property_predictions/` | Per-run predictions — `id, sample, <base>_raw, <base>`, one file per source stem. For `band_gap` the base is `predicted_bandgap_ev`. |
 | `cocluster_results/` | Co-clustering outputs per layer/K. |
 | `embeddings/`, `plots/`, `logs/` | Embeddings, figures, SLURM logs. |
 
 ### Key scripts
 | Script | Purpose |
 |--------|---------|
-| `steer_generate_cif.py` | Steered CIF generation (hook @ layer, alpha, `--with-spacegroup`, `--n-prompts`) → `generated_cifs/`. |
-| `validate_steered_cifs.py` | Validity checks on raw CIFs → `validation/` (flags only, no CIF strings). |
-| `novelty_steered_cifs.py` | Uniqueness/novelty of valid CIFs (joins CIFs from `generated_cifs/`) → `validation/novelty_<stem>.parquet`. |
-| `relax_steered_cifs.py` | M3GNet-PES relaxation of valid CIFs (joins flags + `generated_cifs/`, skips invalid) → `relaxed/`. |
-| `predict_bandgap.py` | MEGNet band-gap prediction, valid-only. One input at a time: `generated_cifs/<stem>` → `predicted_bandgap_ev_raw`, `relaxed/<stem>` → `predicted_bandgap_ev`; both accumulate in `bandgap_predictions/<stem>.parquet`. |
-| `extract_cif_embeddings.py` | Pull CrystaLLM residual-stream embeddings. |
-| `spec_cocluster_analysis.py` | Spectral co-clustering + subspace-incoherence analysis. |
+| `steering/compute_steering_vector.py` | Build a steering vector for any scalar property (`--property`, `--low/--high` or `--pct`) → `steering_vectors/<name>/layer{N}.parquet`. |
+| `steering/steer_generate_cif.py` | Steered CIF generation (hook @ layer, alpha, `--steering-property`, `--with-spacegroup`, `--n-prompts`) → `generated_cifs/`. |
+| `eval/validate_steered_cifs.py` | Validity checks on raw CIFs → `validation/` (flags only, no CIF strings). |
+| `eval/novelty_steered_cifs.py` | Uniqueness/novelty of valid CIFs (joins CIFs from `generated_cifs/`) → `validation/novelty_<stem>.parquet`. |
+| `eval/relax_steered_cifs.py` | M3GNet-PES relaxation of valid CIFs (joins flags + `generated_cifs/`, skips invalid) → `relaxed/`. |
+| `eval/compute_predictions.py` | Property prediction for any registered property (`--property`, see `predictors.py`), valid-only. One input at a time: `generated_cifs/<stem>` → `<base>_raw`, `relaxed/<stem>` → `<base>`; both accumulate in `property_predictions/<stem>.parquet`. Replaces the retired `oneoff/predict_bandgap.py`. |
+| `embeddings/extract_cif_embeddings.py` | Pull CrystaLLM residual-stream embeddings. |
+| `analysis/spec_cocluster_analysis.py` | Spectral co-clustering + subspace-incoherence analysis. |
+| `analysis/symmetry_separability.py` | Space-group separability per layer (Exp 1.1) and its composition-controlled version (Exp 1.2). |
 
 ### Data conventions
 - **CIF strings live in exactly two places**: `generated_cifs/` (`cif_steered`, raw)
   and `relaxed/` (`cif_relaxed`, relaxed). `validation/` holds flags only. Downstream
   scripts (novelty, relax, predict) join flags with the CIF source on `(id, sample)`
   and process `is_valid == True` rows only.
-- `steering_results/bandgap_predictions/<stem>.parquet`: one file per source run —
+- `steering_results/<property>/property_predictions/<stem>.parquet`: one file per source run —
   `id`, `sample`, `predicted_bandgap_ev` (relaxed), `predicted_bandgap_ev_raw` (unrelaxed).
 - "best-of-3": per prompt take the **max** predicted gap over samples, then mean
   across prompts.

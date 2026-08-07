@@ -19,7 +19,7 @@ so mean squared L2 is 2 - 2*cos and reporting cosine alone loses nothing.
 Composition key = the NON-REDUCED formula from the `data_` header (e.g.
 `data_Sc4Si2P2`) — the composition the model actually sees. augment_cif rewrites the
 header to the non-reduced formula, and both bin/tokenize_cifs.py:47 and
-scripts/extract_cif_embeddings.py:77 strip `#` comment lines, so it is the only
+scripts/embeddings/extract_cif_embeddings.py:77 strip `#` comment lines, so it is the only
 formula in the token stream.
 
 Every number is computed twice: `raw` cosine, and `centered` (global mean removed
@@ -42,6 +42,8 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
 from utils import load_labeled_embeddings
 
 # -------------------------------
@@ -52,7 +54,10 @@ DATASET = "v1_all"
 METADATA_PATH = "./metadata.parquet"
 PKL_PATH = "./CrystaLLM/cifs_v1_prep.pkl.gz"
 OUTPUT_DIR = "./analysis"
-OUT_CSV = os.path.join(OUTPUT_DIR, "symmetry_separability.csv")
+# Which symmetry label to test: "space_group_symbol" (207 values) or "point_group" (32).
+# Set with e.g. LABEL_COL=point_group python symmetry_separability.py
+LABEL_COL = os.environ.get("LABEL_COL", "space_group_symbol")
+OUT_CSV = os.path.join(OUTPUT_DIR, f"symmetry_separability_{LABEL_COL}.csv")
 RANDOM_SEED = 1
 DATA_RE = re.compile(r"^data_(\S+)", re.M)
 
@@ -101,17 +106,17 @@ def main():
         # Load and intersect datasets
         # -------------------------------
         df = load_labeled_embeddings(layer, dataset=DATASET, metadata_path=METADATA_PATH,
-                                     label_cols=("space_group_symbol",))
+                                     label_cols=(LABEL_COL,))
         df = df.merge(formula_df, on="id", how="inner")
-        df = df[df["space_group_symbol"].notna() & (df["space_group_symbol"] != "")]
+        df = df[df[LABEL_COL].notna() & (df[LABEL_COL] != "")]
         df = df.dropna(subset=["formula"]).reset_index(drop=True)
 
         X = np.vstack(df["embedding"].values)
-        sg, sg_names = pd.factorize(df["space_group_symbol"])
+        label, label_names = pd.factorize(df[LABEL_COL])
         comp = pd.factorize(df["formula"])[0]
-        n_sg = len(sg_names)
+        n_label = len(label_names)
         n_total = len(X)
-        print(f"Data shape: {X.shape}  ({n_sg:,} space groups, {comp.max()+1:,} formulas)")
+        print(f"Data shape: {X.shape}  ({n_label:,} {LABEL_COL}s, {comp.max()+1:,} formulas)")
 
         # -------------------------------
         # Composition-controlled subset (Exp 1.2)
@@ -119,9 +124,9 @@ def main():
         # Compositions seen only once contribute no same-composition pairs at all.
         sub = np.bincount(comp)[comp] >= 2
         comp_s = pd.factorize(comp[sub])[0]
-        sg_s = sg[sub]
+        label_s = label[sub]
         n_comp = comp_s.max() + 1
-        cs = pd.factorize(comp_s.astype(np.int64) * n_sg + sg_s)[0]
+        cs = pd.factorize(comp_s.astype(np.int64) * n_label + label_s)[0]
         n_cs = cs.max() + 1
         print(f"  composition-controlled subset: {int(sub.sum()):,} structures in "
               f"{n_comp:,} multi-entry composition groups")
@@ -134,12 +139,12 @@ def main():
         # symmetry association. Both orderings below group rows by composition
         # identically; the second randomizes order inside each block, so assigning
         # one through the other permutes labels within groups.
-        sg_null = rng.permutation(sg)
+        label_null = rng.permutation(label)
         base = np.argsort(comp_s, kind="stable")
         shuf = np.lexsort((rng.random(len(comp_s)), comp_s))
-        sg_s_null = np.empty_like(sg_s)
-        sg_s_null[base] = sg_s[shuf]
-        cs_null = pd.factorize(comp_s.astype(np.int64) * n_sg + sg_s_null)[0]
+        label_s_null = np.empty_like(label_s)
+        label_s_null[base] = label_s[shuf]
+        cs_null = pd.factorize(comp_s.astype(np.int64) * n_label + label_s_null)[0]
         n_cs_null = cs_null.max() + 1
 
         for center in (False, True):
@@ -161,7 +166,7 @@ def main():
             all_sum = (tot @ tot - n_total) / 2.0
             all_cnt = n_total * (n_total - 1) / 2.0
 
-            sums, cnts = group_pair_sums(Y, sg, n_sg)
+            sums, cnts = group_pair_sums(Y, label, n_label)
             same_sum, same_cnt = sums.sum(), cnts.sum()
             mean_same = same_sum / same_cnt
             mean_diff = (all_sum - same_sum) / (all_cnt - same_cnt)
@@ -172,7 +177,7 @@ def main():
             ok = cnts > 0
             macro_same = (sums[ok] / cnts[ok]).mean()
 
-            null_sums, null_cnts = group_pair_sums(Y, sg_null, n_sg)
+            null_sums, null_cnts = group_pair_sums(Y, label_null, n_label)
             null_same = null_sums.sum() / null_cnts.sum()
             null_diff = (all_sum - null_sums.sum()) / (all_cnt - null_cnts.sum())
             null_ratio = null_same / null_diff
@@ -195,7 +200,8 @@ def main():
             cc_null_ratio = ccn_same / ccn_diff
 
             results.append({
-                "layer": layer, "variant": variant, "n_structures": n_total,
+                "layer": layer, "variant": variant, "label_col": LABEL_COL,
+                "n_structures": n_total,
                 "same_sg_pairs": same_cnt, "diff_sg_pairs": all_cnt - same_cnt,
                 "mean_cos_same_sg": mean_same, "mean_cos_diff_sg": mean_diff,
                 "ratio": ratio, "delta": mean_same - mean_diff,

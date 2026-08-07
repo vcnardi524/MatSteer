@@ -20,10 +20,13 @@ import numpy as np
 import pandas as pd
 import torch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "CrystaLLM"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "CrystaLLM", "bin"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM", "bin"))
 
 from crystallm import CIFTokenizer
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "embeddings"))   # -> extract_cif_embeddings.py
 from make_prompts import PATTERN_COMP_SG, extract_prompt
 from extract_cif_embeddings import load_model, load_cifs
 

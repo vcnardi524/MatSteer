@@ -24,8 +24,8 @@ prompt/sample simply has NaN in its columns.
 Output (default): steering_results/bandgap_all.parquet
 
 Usage:
-    python scripts/combine_bandgap_predictions.py
-    python scripts/combine_bandgap_predictions.py --exclude-baseline
+    python scripts/eval/combine_bandgap_predictions.py
+    python scripts/eval/combine_bandgap_predictions.py --exclude-baseline
 """
 import argparse
 import re

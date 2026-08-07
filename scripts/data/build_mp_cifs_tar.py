@@ -15,8 +15,8 @@ Downstream (unchanged CrystaLLM tooling):
         -o CrystaLLM/cifs_v1_mp_prep.pkl.gz
 
 Usage:
-    python scripts/build_mp_cifs_tar.py
-    python scripts/build_mp_cifs_tar.py --workers 16 --limit 1000   # quick test
+    python scripts/data/build_mp_cifs_tar.py
+    python scripts/data/build_mp_cifs_tar.py --workers 16 --limit 1000   # quick test
 """
 import argparse
 import io

@@ -9,7 +9,7 @@ structure with M3GNet-PES, and writes a relaxed CIF store. Resumes from a
 previous partial output; checkpoints periodically.
 
 Usage:
-    python scripts/relax_steered_cifs.py \
+    python scripts/eval/relax_steered_cifs.py \
         --input steering_results/validation/steered_test_clean_alpha16.0_layer14.parquet
 
 Output:

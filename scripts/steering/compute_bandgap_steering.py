@@ -22,6 +22,8 @@ from pathlib import Path
 J_TO_EV = 6.2415e18
 
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
 from utils import load_embeddings
 
 

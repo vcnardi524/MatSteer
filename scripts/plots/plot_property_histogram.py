@@ -11,13 +11,13 @@ Two panels:
 
 Usage:
     # band gap from the MP metadata
-    python scripts/plot_property_histogram.py --column band_gap
+    python scripts/plots/plot_property_histogram.py --column band_gap
 
     # a first-order property (cell volume)
-    python scripts/plot_property_histogram.py --column volume
+    python scripts/plots/plot_property_histogram.py --column volume
 
     # any other file / column
-    python scripts/plot_property_histogram.py --file metadata.parquet --column density
+    python scripts/plots/plot_property_histogram.py --file metadata.parquet --column density
 """
 import argparse
 from pathlib import Path

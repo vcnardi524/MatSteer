@@ -19,7 +19,7 @@ metadata.parquet is rewritten IN PLACE; a copy is saved to metadata.parquet.bak2
 first (.bak is the Jun-2 pre-bandgap snapshot).
 
 Usage:
-    python scripts/add_wyckoff_letters_column.py
+    python scripts/data/add_wyckoff_letters_column.py
 """
 import json
 import shutil

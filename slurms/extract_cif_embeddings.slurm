@@ -18,7 +18,7 @@ source CrystaLLM/crystallm_venv/bin/activate
 
 pip install -q "numpy<2"
 
-python scripts/extract_cif_embeddings.py \
+python scripts/embeddings/extract_cif_embeddings.py \
     --model CrystaLLM/crystallm_v1_large \
     --pkl CrystaLLM/cifs_v1_prep.pkl.gz \
     --layers 0,1,2,3,4,5,6,7,8,9,10,11,12,13,15 \

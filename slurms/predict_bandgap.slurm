@@ -18,9 +18,12 @@ source megnet_venv/bin/activate
 # Point INPUT at a CIF file: generated_cifs/<stem> for unrelaxed (raw) gaps, or
 # relaxed/<stem> for relaxed gaps. Source column is auto-detected; only valid
 # CIFs (is_valid from validation/<stem>) are predicted. Both accumulate into
-# steering_results/bandgap_predictions/<stem>.parquet.
-INPUT=${INPUT:-"steering_results/generated_cifs/steered_test_clean_alpha16.0_layer14.parquet"}
+# <RESULTS_DIR>/property_predictions/<stem>.parquet.
+RESULTS_DIR=${RESULTS_DIR:-"steering_results/bandgap"}
+INPUT=${INPUT:-"${RESULTS_DIR}/generated_cifs/steered_test_clean_alpha16.0_layer14.parquet"}
 
-python scripts/predict_bandgap.py \
+python scripts/eval/compute_predictions.py \
+    --property band_gap \
     --input ${INPUT} \
+    --results-dir ${RESULTS_DIR} \
     --fidelity 0

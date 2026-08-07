@@ -23,7 +23,7 @@ pip install -q "numpy<2"
 LAYER=${LAYER:-14}
 SG=${SG:-"F-43m"}
 
-python scripts/plot_tsne_f43m_wyckoff.py \
+python scripts/plots/plot_tsne_f43m_wyckoff.py \
     --sg "${SG}" \
     --layer ${LAYER} \
     --n-samples ${N_SAMPLES:-10000} \

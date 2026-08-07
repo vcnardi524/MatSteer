@@ -16,12 +16,12 @@ predict_bandgap.py exactly (combine_bandgap_predictions.py keeps working).
 
 Usage:
     # geometric (no model)
-    python scripts/compute_predictions.py --property density_atomic \
+    python scripts/eval/compute_predictions.py --property density_atomic \
         --input steering_results/density_atomic/generated_cifs/steered_test_alpha40.0_layer14.parquet \
         --results-dir steering_results/density_atomic
 
     # model-based
-    python scripts/compute_predictions.py --property band_gap \
+    python scripts/eval/compute_predictions.py --property band_gap \
         --input steering_results/bandgap/generated_cifs/<stem>.parquet \
         --results-dir steering_results/bandgap
 """
@@ -35,6 +35,8 @@ from tqdm import tqdm
 warnings.filterwarnings("ignore")
 from pymatgen.core import Structure
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
 from predictors import REGISTRY
 
 CHECKPOINT_EVERY = 1000

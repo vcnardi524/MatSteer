@@ -22,7 +22,7 @@ RESULTS_DIR=${RESULTS_DIR:-steering_results}
 # --input is the validation (flags) file; raw CIFs are read from the matching
 # <results-dir>/generated_cifs/<stem>, output goes to <results-dir>/relaxed/<stem>.
 
-python scripts/relax_steered_cifs.py \
+python scripts/eval/relax_steered_cifs.py \
     --input ${INPUT} \
     --results-dir ${RESULTS_DIR} \
     --fmax 0.05 \

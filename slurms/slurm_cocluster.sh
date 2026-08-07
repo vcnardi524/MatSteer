@@ -16,7 +16,7 @@ for LAYER in ${LAYERS}; do
     echo "========================================"
     echo "Starting cocluster K=${N_CLUSTERS} name=${RUN_NAME} layer=${LAYER}"
     echo "========================================"
-    python scripts/spec_cocluster_analysis.py ${N_CLUSTERS} ${RUN_NAME} ${LAYER}
+    python scripts/analysis/spec_cocluster_analysis.py ${N_CLUSTERS} ${RUN_NAME} ${LAYER}
     echo "Finished layer=${LAYER}, clearing memory..."
     sync
 done

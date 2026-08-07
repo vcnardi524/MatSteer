@@ -17,7 +17,7 @@ Two modes (choose with --mode, default both):
             bandgap_combined_layer{N}.png and bandgap_tsne3d_layer{N}.png.
 
 Usage:
-    python scripts/plot_tsne_pca_bandgap.py [--mode both] [--layer 14] \
+    python scripts/plots/plot_tsne_pca_bandgap.py [--mode both] [--layer 14] \
         [--n-samples N] [--bins B] [--vmax 4] [--tsne-perplexity 30]
 """
 import argparse
@@ -43,6 +43,8 @@ MODE_DEFAULTS = {
 }
 
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
 from utils import load_embeddings
 
 

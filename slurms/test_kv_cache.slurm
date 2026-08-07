@@ -15,4 +15,4 @@ mkdir -p logs
 source CrystaLLM/crystallm_venv/bin/activate
 pip install -q "numpy<2"
 
-python scripts/test_kv_cache.py --n-prompts 3 --max-new-tokens 200
+python scripts/steering/test_kv_cache.py --n-prompts 3 --max-new-tokens 200

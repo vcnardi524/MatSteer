@@ -15,4 +15,4 @@ mkdir -p logs
 
 source megnet_venv/bin/activate
 
-python scripts/predict_bandgap_testset.py
+python scripts/eval/predict_bandgap_testset.py

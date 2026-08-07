@@ -27,7 +27,7 @@ if [ "${WITH_SG:-1}" = "0" ]; then SG_FLAG=""; fi
 CACHE_FLAG="--use-cache"
 if [ "${USE_CACHE:-1}" = "0" ]; then CACHE_FLAG="--no-use-cache"; fi
 
-python scripts/steer_generate_cif.py \
+python scripts/steering/steer_generate_cif.py \
     --model CrystaLLM/crystallm_v1_large \
     --pkl ${PKL:-CrystaLLM/cifs_v1_test.pkl.gz} \
     --temperature ${TEMPERATURE:-1.0} \

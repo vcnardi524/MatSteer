@@ -7,7 +7,7 @@ and saves results to steering_results/bandgap_predictions/testset_baseline.parqu
   id, predicted_bandgap_ev_raw
 
 Usage:
-    python scripts/predict_bandgap_testset.py
+    python scripts/eval/predict_bandgap_testset.py
 """
 import argparse
 import gzip

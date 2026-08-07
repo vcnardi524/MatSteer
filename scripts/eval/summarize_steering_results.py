@@ -19,10 +19,10 @@ top, then one row per steered run: configuration, alpha, samples/cif, and
 %>0 / mean / std for both unrelaxed and relaxed gaps.
 
 Usage:
-    python scripts/summarize_steering_results.py
-    python scripts/summarize_steering_results.py --bandgap
-    python scripts/summarize_steering_results.py --bandgap steering_results/bandgap_all.parquet
-    python scripts/summarize_steering_results.py --bandgap --out steering_results/summary.txt
+    python scripts/eval/summarize_steering_results.py
+    python scripts/eval/summarize_steering_results.py --bandgap
+    python scripts/eval/summarize_steering_results.py --bandgap steering_results/bandgap_all.parquet
+    python scripts/eval/summarize_steering_results.py --bandgap --out steering_results/summary.txt
 """
 import argparse
 import re

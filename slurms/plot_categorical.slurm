@@ -26,12 +26,12 @@ PERPLEXITY=${PERPLEXITY:-30}
 
 for LAYER in ${LAYERS}; do
     echo "======== layer ${LAYER}  perplexity ${PERPLEXITY} ========"
-    python scripts/plot_tsne_pca_categorical.py \
+    python scripts/plots/plot_tsne_pca_categorical.py \
         --layer ${LAYER} \
         --property point_group \
         --tsne-perplexity ${PERPLEXITY} \
         --n-samples ${N_SAMPLES:-10000}
-    python scripts/plot_tsne_pca_categorical.py \
+    python scripts/plots/plot_tsne_pca_categorical.py \
         --layer ${LAYER} \
         --property space_group_symbol \
         --top-n 20 \

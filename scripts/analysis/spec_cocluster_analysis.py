@@ -23,6 +23,8 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import SpectralCoclustering
 from sklearn.preprocessing import StandardScaler
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
 from utils import load_labeled_embeddings
 
 # -------------------------------

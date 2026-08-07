@@ -23,7 +23,7 @@ Output: steering_results/validation/novelty_<input_stem>.parquet
   (flags only — CIF strings are never written here)
 
 Usage:
-    python scripts/novelty_steered_cifs.py \\
+    python scripts/eval/novelty_steered_cifs.py \\
         --input steering_results/validation/steered_test_clean_alpha16.0_layer14.parquet \\
         --base CrystaLLM/cifs_v1_train.pkl.gz
 """
