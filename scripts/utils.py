@@ -13,29 +13,39 @@ DEFAULT_METADATA = "metadata.parquet"
 DEFAULT_LABEL_COLS = ("point_group", "space_group_symbol", "structural_type",
                       "spin_polarized", "band_gap_ev", "wyckoff_letters")
 
+# Which CIF text the embeddings were extracted from. The symmetry label is written
+# verbatim into every CIF (_symmetry_space_group_name_H-M and _symmetry_Int_Tables_number),
+# so "full" embeddings cannot be used to ask whether the model *represents* symmetry --
+# a probe just reads the copied token back. "nosym" strips those lines before the forward
+# pass, so symmetry has to be inferred from the cell and coordinates.
+DEFAULT_VARIANT = "full"
+VARIANTS = ("full", "nosym")
 
-def embeddings_paths(layer: int, dataset: str = DEFAULT_DATASET):
-    """Candidate (single_file, checkpoint_dir) for a dataset+layer under embeddings/."""
-    base = EMBEDDINGS_ROOT / dataset
+
+def embeddings_paths(layer: int, dataset: str = DEFAULT_DATASET,
+                     variant: str = DEFAULT_VARIANT):
+    """Candidate (single_file, checkpoint_dir) for a dataset+variant+layer under embeddings/."""
+    base = EMBEDDINGS_ROOT / dataset / variant
     return base / f"cif_layer{layer}.parquet", base / f"cif_layer{layer}"
 
 
 def load_embeddings(layer: int, dataset: str = DEFAULT_DATASET,
-                    columns=("id", "embedding")) -> pd.DataFrame:
-    """Load mean-pooled embeddings for a layer from embeddings/<dataset>/.
+                    columns=("id", "embedding"),
+                    variant: str = DEFAULT_VARIANT) -> pd.DataFrame:
+    """Load mean-pooled embeddings for a layer from embeddings/<dataset>/<variant>/.
 
     Uses the single cif_layer{N}.parquet if present, else concatenates the
     checkpoint_*.parquet / batch_*.parquet shards in cif_layer{N}/. Pass
-    columns=None to read every column.
+    columns=None to read every column. See VARIANTS for what `variant` means.
     """
     cols = list(columns) if columns is not None else None
-    single, ckpt = embeddings_paths(layer, dataset)
+    single, ckpt = embeddings_paths(layer, dataset, variant)
     if single.exists():
         return pd.read_parquet(single, columns=cols)
     files = sorted(ckpt.glob("checkpoint_*.parquet")) + sorted(ckpt.glob("batch_*.parquet"))
     if not files:
         raise FileNotFoundError(
-            f"No embeddings for layer {layer} in dataset '{dataset}': "
+            f"No embeddings for layer {layer} in dataset '{dataset}', variant '{variant}': "
             f"looked for {single} and {ckpt}/checkpoint_*.parquet")
     return pd.concat([pd.read_parquet(f, columns=cols) for f in files], ignore_index=True)
 
@@ -43,7 +53,8 @@ def load_embeddings(layer: int, dataset: str = DEFAULT_DATASET,
 def load_labeled_embeddings(layer: int, dataset: str = DEFAULT_DATASET,
                             metadata_path: str = DEFAULT_METADATA,
                             label_cols=DEFAULT_LABEL_COLS,
-                            verbose: bool = True) -> pd.DataFrame:
+                            verbose: bool = True,
+                            variant: str = DEFAULT_VARIANT) -> pd.DataFrame:
     """Embeddings for a layer, inner-joined with metadata labels on `id`.
 
     Returns a frame of [id, embedding, *label_cols] restricted to ids present in
@@ -54,7 +65,7 @@ def load_labeled_embeddings(layer: int, dataset: str = DEFAULT_DATASET,
     """
     if verbose:
         print("Loading embeddings...")
-    emb_df = load_embeddings(layer, dataset=dataset)
+    emb_df = load_embeddings(layer, dataset=dataset, variant=variant)
     if verbose:
         print(f"  Embeddings: {len(emb_df):,} entries")
         print("Loading metadata...")

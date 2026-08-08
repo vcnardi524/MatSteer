@@ -119,38 +119,4 @@ Two structural facts that shape every steering result:
    KV-cache-aware; validity degrades 95.5%→88.8% across alpha, proving the hook
    fires). The weak band-gap effect is the data prior, not the mechanism.
 
-### Wyckoff info: what each source actually stores
-Neither source gives the full `4c`-style Wyckoff label on its own — they carry
-opposite halves:
 
-- **CrystaLLM CIF**: has `_atom_site_symmetry_multiplicity` (the `4 / 2 / 2`
-  column in the `_atom_site` loop) but NO `_atom_site_Wyckoff_symbol` — the
-  **letter is dropped**. Multiplicity only.
-- **NOMAD metadata** (`preparsed_metadata_nomad.parquet` →
-  `results.material.topology[].symmetry.wyckoff_sets`): has `wyckoff_letter` but
-  NO multiplicity field — multiplicity must be derived as `len(indices)`
-  (verified constant per (space group, letter): 821 pairs, 0 violations).
-
-So to reconstruct `4c` you must either join the two per site, or run
-`SpacegroupAnalyzer(...).get_symmetry_dataset()["wyckoffs"]` (spglib/pymatgen),
-which outputs letter + multiplicity together. The `wyckoff_letters` column added
-to `metadata.parquet` (2026-07-16) is **letters only, sorted+deduped** (71.8%
-coverage); `sg_wyckoff = "<space group> | <letters>"` drives cocluster enrichment.
-
-### How CrystaLLM derives its CIF (not the DB's CIF verbatim)
-`CrystaLLM/bin/preprocess.py` → `augment_cif()` takes a raw structural CIF and
-rebuilds a standardized, augmented one via `crystallm/_utils.py`:
-1. `replace_data_formula_with_nonreduced_formula` — `data_` header → full
-   (non-reduced) formula, e.g. `data_Sc4Si2P2`.
-2. `semisymmetrize_cif` — collapses the symmetry-op loop to a single
-   `1 'x, y, z'` and writes ALL atoms in the cell explicitly (P1-style). This is
-   why the header can say `I4/mmm` (#139) while `_symmetry_equiv_pos` lists only
-   the identity.
-3. `add_atomic_props_block` — injects `_atom_type_electronegativity`,
-   `_atom_type_radius`, `_atom_type_ionic_radius` (NOT in the CIF spec; tokenizer
-   comment says so). Rationale: model should learn composition→atomic-props first.
-4. `round_numbers` — fixed decimal places.
-
-`bin/download.py` only fetches a pre-packaged file from a URL; the raw API→CIF
-collection step happened upstream (CrystaLLM authors), before this repo's
-preprocessing.

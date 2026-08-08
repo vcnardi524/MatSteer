@@ -18,11 +18,18 @@ source CrystaLLM/crystallm_venv/bin/activate
 
 pip install -q "numpy<2"
 
-# Dataset (v1_mp) is inferred from the pkl stem, so embeddings land in embeddings/v1_mp/.
+# Dataset (v1_mp) is inferred from the pkl stem, so embeddings land in
+# embeddings/v1_mp/$VARIANT/. See slurms/extract_cif_embeddings.slurm for what the
+# variants mean. Submit nosym with:
+#   sbatch --export=ALL,VARIANT=nosym slurms/extract_mp_embeddings.slurm
 # Resumable: re-running skips ids already checkpointed per layer.
+VARIANT=${VARIANT:-full}
+echo "Extracting variant: $VARIANT"
+
 python scripts/embeddings/extract_cif_embeddings.py \
     --model CrystaLLM/crystallm_v1_large \
     --pkl CrystaLLM/cifs_v1_mp_prep.pkl.gz \
+    --variant "$VARIANT" \
     --layers 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 \
     --batch-size 32 \
     --checkpoint-every 200

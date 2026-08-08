@@ -18,9 +18,18 @@ Usage:
         [--batch-size 16] \
         [--limit 1000]
 
-Outputs: embeddings/<dataset>/cif_layer{N}/checkpoint_XXXXX.parquet for each layer N,
-where <dataset> is --dataset (inferred from the pkl stem if omitted: cifs_v1_mp_prep
--> v1_mp, else v1_all).
+Outputs: embeddings/<dataset>/<variant>/cif_layer{N}/checkpoint_XXXXX.parquet for each
+layer N, where <dataset> is --dataset (inferred from the pkl stem if omitted:
+cifs_v1_mp_prep -> v1_mp, else v1_all) and <variant> is --variant:
+
+    full   CIFs exactly as stored (default)
+    nosym  the two lines that state the symmetry outright are removed first:
+             _symmetry_space_group_name_H-M   P4/mmm
+             _symmetry_Int_Tables_number      123
+           Needed because those lines put the label directly in the input, so a probe
+           on `full` embeddings recovers the space group by reading a copied token
+           rather than by finding a learned representation. With them gone the model
+           only has the cell parameters and coordinates to go on.
 """
 
 import argparse
@@ -72,11 +81,37 @@ def load_cifs(pkl_path: str, limit: int = None):
 
 
 def preprocess_cif(cif: str) -> str:
-    """Strip comment lines, empty lines, and pymatgen metadata — matching tokenize_cifs.py."""
+    """Strip comment lines, empty lines, and pymatgen metadata — matching tokenize_cifs.py.
+
+    Not optional: bin/tokenize_cifs.py:92 runs this before building train.bin, so the
+    model only ever saw stripped CIFs. cifs_v1_prep.pkl.gz is "prep" in a different
+    sense (semisymmetrize + atomic props + rounding, bin/preprocess.py:51-53) and still
+    carries the '# MP Entry mp-1217888 ...' / '# generated using pymatgen' header. Feeding
+    that in adds ~17% more tokens than training ever had (400 vs 343 tokens/CIF), which
+    tokenize to <unk> plus the material id spelled out digit by digit -- and mean pooling
+    mixes all of it into every embedding.
+    """
     lines = cif.split("\n")
     cleaned = [l.strip() for l in lines if l.strip() and not l.strip().startswith("#") and "pymatgen" not in l]
     cleaned.append("\n")
     return "\n".join(cleaned)
+
+
+# The two keys that name the symmetry outright. Both are dropped for --variant nosym;
+# either one alone would leave the label fully recoverable.
+SYMMETRY_KEYS = ("_symmetry_space_group_name_H-M", "_symmetry_Int_Tables_number")
+
+
+def strip_symmetry(cif: str) -> str:
+    """Remove the lines stating the space group, leaving cell and coordinates intact.
+
+    Note what is deliberately NOT removed: _symmetry_equiv_pos_as_xyz (already collapsed
+    to a single 'x, y, z' by the CrystaLLM preprocessing) and
+    _atom_site_symmetry_multiplicity, which leaks the Wyckoff signature but is part of
+    the structure description rather than a restatement of the space group.
+    """
+    return "\n".join(l for l in cif.split("\n")
+                     if not l.strip().startswith(SYMMETRY_KEYS))
 
 
 def tokenize_batch(cif_strings, tokenizer: CIFTokenizer, block_size: int, device: torch.device):
@@ -122,6 +157,10 @@ def main():
                         help="Embeddings subdir under embeddings/ to write to. "
                              "Default: inferred from the pkl stem "
                              "(cifs_v1_mp_prep -> v1_mp, else v1_all).")
+    parser.add_argument("--variant", default="full", choices=["full", "nosym"],
+                        help="full: CIFs as-is. nosym: drop the _symmetry_space_group_name_H-M "
+                             "and _symmetry_Int_Tables_number lines first, so the space group "
+                             "is not handed to the model verbatim (default: full).")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -130,7 +169,7 @@ def main():
     # which embeddings/<dataset>/ subdir to write to
     dataset = args.dataset or (
         "v1_mp" if "mp" in Path(args.pkl).stem.lower().split("_") else "v1_all")
-    print(f"Writing embeddings to embeddings/{dataset}/")
+    print(f"Writing embeddings to embeddings/{dataset}/{args.variant}/")
 
     model, config = load_model(args.model, device)
 
@@ -139,7 +178,7 @@ def main():
     assert all(0 <= l < config.n_layer for l in layers), \
         f"Some layers out of range (model has {config.n_layer} layers)"
 
-    out_dirs = {l: Path(f"embeddings/{dataset}/cif_layer{l}") for l in layers}
+    out_dirs = {l: Path(f"embeddings/{dataset}/{args.variant}/cif_layer{l}") for l in layers}
     for d in out_dirs.values():
         d.mkdir(parents=True, exist_ok=True)
 
@@ -182,7 +221,10 @@ def main():
     for i in range(0, total, args.batch_size):
         batch = data[i: i + args.batch_size]
         ids = [entry[0] for entry in batch]
-        cifs = [entry[1] for entry in batch]
+        # preprocess_cif first so strip_symmetry sees stripped/normalized lines.
+        cifs = [preprocess_cif(entry[1]) for entry in batch]
+        if args.variant == "nosym":
+            cifs = [strip_symmetry(c) for c in cifs]
 
         try:
             input_ids, lengths = tokenize_batch(cifs, tokenizer, config.block_size, device)
@@ -223,7 +265,7 @@ def main():
 
     for h in hooks:
         h.remove()
-    print(f"\nDone. Outputs in embeddings/{dataset}/cif_layer{{N}}/ for layers {layers}")
+    print(f"\nDone. Outputs in embeddings/{dataset}/{args.variant}/cif_layer{{N}}/ for layers {layers}")
 
 
 if __name__ == "__main__":

@@ -127,8 +127,18 @@ and **drop the space-group constraint** to give steering more room (see `tasks.m
 | `embeddings/extract_cif_embeddings.py` | Pull CrystaLLM residual-stream embeddings. |
 | `analysis/spec_cocluster_analysis.py` | Spectral co-clustering + subspace-incoherence analysis. |
 | `analysis/symmetry_separability.py` | Space-group separability per layer (Exp 1.1) and its composition-controlled version (Exp 1.2). |
+| `plots/plot_tsne_pca_group_bandgap.py` | PCA + t-SNE for a SINGLE space group (`--sg`) or point group (`--pg`), coloured by the clean band gap. `--list-groups` shows what's available. |
 
 ### Data conventions
+- **Ground-truth band gap = `metadata.parquet:dos_electronic.band_gap`** (eV, 582,596
+  non-null), from NOMAD `results.properties.electronic.dos_electronic.band_gap[0].value`.
+  `electronic.band_gap` is the same numbers (identical non-null set, correlation 1.0).
+  **Not** `energy_lowest_unoccupied - energy_highest_occupied` — those are raw Joules and
+  their difference is the corrupt LUMO-HOMO gap still used by the legacy
+  `steering/compute_bandgap_steering.py`, `steering/analyze_steering_norms.py` and
+  `analysis/bandgap_percentile_stats.py`. Note `utils.py:DEFAULT_LABEL_COLS` asks for
+  `band_gap_ev`, which does not exist in `metadata.parquet` and is silently dropped, so
+  `load_labeled_embeddings` never returns a gap — join it yourself.
 - **CIF strings live in exactly two places**: `generated_cifs/` (`cif_steered`, raw)
   and `relaxed/` (`cif_relaxed`, relaxed). `validation/` holds flags only. Downstream
   scripts (novelty, relax, predict) join flags with the CIF source on `(id, sample)`

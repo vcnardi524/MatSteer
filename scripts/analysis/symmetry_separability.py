@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
   1. Load formulas from the CIF `data_` headers (cifs_v1_prep.pkl.gz)
-  2. Load CIF embeddings per layer, intersected with metadata.parquet space groups
-  3. Exp 1.1: mean pairwise cosine for pairs sharing a space group vs pairs not
-     sharing one -> ratio per layer (shows where space-group separability peaks)
+  2. Load CIF embeddings per layer, intersected with the metadata.parquet symmetry
+     label chosen by LABEL_COL (space_group_symbol or point_group)
+  3. Exp 1.1: mean pairwise cosine for pairs sharing that label vs pairs not sharing
+     it -> ratio per layer (shows where symmetry separability peaks)
   4. Exp 1.2: the same ratio restricted to pairs with the SAME composition, which
      isolates symmetry from the model just knowing the chemistry
   5. Label-permutation null for both, so a ratio can be read against its noise floor
-  6. Save the per-layer table to OUT_CSV
+  6. Save the per-layer table to OUT_CSV and the per-layer line graphs to OUT_PNG
 
 No N x N matrix and no subsampling: for unit-norm rows,
     sum_{i<j} x_i . x_j = (||sum_i x_i||^2 - N) / 2
-so each pair mean is an exact closed form over group sums at O(N*D) cost. Same-SG
-pairs come from per-space-group sums; "different-SG" is (all pairs - same-SG pairs).
+so each pair mean is an exact closed form over group sums at O(N*D) cost. Same-label
+pairs come from per-label sums; "different-label" is (all pairs - same-label pairs).
 Exp 1.2 applies the identity within each composition group. Rows are unit-normalized,
 so mean squared L2 is 2 - 2*cos and reporting cosine alone loses nothing.
 
@@ -28,8 +29,9 @@ cosines all sit near ~1 and ratios compress toward 1.0 whether or not signal exi
 centered is the interpretable one.
 
 Usage:
-    python symmetry_separability.py                 # all 16 layers
-    python symmetry_separability.py 0 5 10 14
+    python symmetry_separability.py                    # all 16 layers, space group
+    python symmetry_separability.py 0 5 10 14          # a subset of layers
+    LABEL_COL=point_group python symmetry_separability.py    # point group instead
 """
 
 import gzip
@@ -41,6 +43,9 @@ import sys
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
@@ -58,6 +63,8 @@ OUTPUT_DIR = "./analysis"
 # Set with e.g. LABEL_COL=point_group python symmetry_separability.py
 LABEL_COL = os.environ.get("LABEL_COL", "space_group_symbol")
 OUT_CSV = os.path.join(OUTPUT_DIR, f"symmetry_separability_{LABEL_COL}.csv")
+OUT_PNG = os.path.join(OUTPUT_DIR, f"symmetry_separability_{LABEL_COL}.png")
+OUT_PNG_CENTERED = os.path.join(OUTPUT_DIR, f"symmetry_separability_{LABEL_COL}_centered.png")
 RANDOM_SEED = 1
 DATA_RE = re.compile(r"^data_(\S+)", re.M)
 
@@ -77,6 +84,69 @@ def group_pair_sums(X, codes, n_groups):
     counts = np.bincount(codes, minlength=n_groups).astype(np.float64)
     sums = (np.einsum("ij,ij->i", S, S) - counts) / 2.0
     return sums, counts * (counts - 1) / 2.0
+
+
+def plot_results(out, png_path=OUT_PNG, variants=("centered", "raw")):
+    """One line graph, layer on x, every ratio and mean cosine on the same axes.
+
+    Style code: colour = which quantity, solid+dots = centered, faded thin = raw,
+    dotted = that quantity's permutation null. Pass variants=("centered",) to drop
+    the raw curves, which carry no signal and just stack on top of each other at 1.0.
+
+    The Exp 1.1 ratio is the one series that cannot share the axis: after centering,
+    mean_cos_diff sits at ~-0.01, so same/diff blows up to -25..-9. It is drawn but
+    falls outside YLIM by construction -- read `delta` (same - diff) instead, which is
+    on-scale and is the statistic that means something once the data are centered.
+    """
+    # label_col was added when the script was generalized to point groups; the first
+    # space-group CSV predates it, so fall back rather than fail on the older file.
+    label_col = out["label_col"].iloc[0] if "label_col" in out else LABEL_COL
+    YLIM = (-0.1, 2.0)
+
+    # (column, colour, legend label). Nulls are the dotted twin of their ratio.
+    series = [
+        ("mean_cos_same_sg",    "C0", "-",  f"1.1 mean cos, same {label_col}"),
+        ("mean_cos_diff_sg",    "C0", "--", f"1.1 mean cos, diff {label_col}"),
+        ("ratio",               "C1", "-",  "1.1 ratio (off-scale when centered)"),
+        ("null_ratio",          "C1", ":",  "1.1 ratio, permuted-label null"),
+        ("delta",               "C4", "-",  "1.1 delta (same - diff)"),
+        ("cc_mean_cos_same_sg", "C2", "-",  f"1.2 mean cos, same formula + same {label_col}"),
+        ("cc_mean_cos_diff_sg", "C2", "--", f"1.2 mean cos, same formula + diff {label_col}"),
+        ("cc_ratio",            "C3", "-",  "1.2 ratio"),
+        ("cc_null_ratio",       "C3", ":",  "1.2 ratio, permuted-label null"),
+        ("cc_delta",            "C5", "-",  "1.2 delta (same - diff)"),
+    ]
+
+    fig, ax = plt.subplots(figsize=(13, 8))
+    for variant in variants:
+        d = out[out["variant"] == variant].sort_values("layer")
+        if len(d) == 0:
+            continue
+        centered = variant == "centered"
+        for col, colour, style, name in series:
+            ax.plot(d["layer"], d[col], style, color=colour,
+                    marker="o" if centered else None, markersize=4,
+                    linewidth=1.8 if centered else 1.0,
+                    alpha=1.0 if centered else 0.30,
+                    label=name if len(variants) == 1 else f"{name} [{variant}]")
+
+    ax.axhline(1.0, color="grey", linewidth=0.8)   # ratio of 1.0 = no separation
+    ax.axhline(0.0, color="grey", linewidth=0.8)   # delta of 0 = no separation
+    ax.set_xlim(out["layer"].min(), out["layer"].max())
+    ax.set_ylim(*YLIM)
+    ax.set_xticks(sorted(out["layer"].unique()))
+    ax.set_xlabel("transformer block (output of h[layer])")
+    ax.set_ylabel("cosine / ratio")
+    subtitle = ("centered embeddings" if len(variants) == 1 else
+                "bold = centered embeddings, faded = raw (raw is inert: everything sits at ~1.0)")
+    ax.set_title(f"Symmetry separability by layer — {label_col}\n{subtitle}")
+    ax.grid(alpha=0.25)
+    # Below the axes: 20 series need the room, and the top-left corner holds real data.
+    ax.legend(fontsize=7, ncol=3, loc="upper center", bbox_to_anchor=(0.5, -0.08))
+    fig.tight_layout()
+    fig.savefig(png_path, dpi=150)
+    plt.close(fig)
+    print(f"Saved plot to {png_path}")
 
 
 def main():
@@ -134,7 +204,7 @@ def main():
         # -------------------------------
         # Permuted labels for the null
         # -------------------------------
-        # 1.1 shuffles space group globally. 1.2 must shuffle it *within* each
+        # 1.1 shuffles the label globally. 1.2 must shuffle it *within* each
         # composition group, so the null holds chemistry fixed and only breaks the
         # symmetry association. Both orderings below group rows by composition
         # identically; the second randomizes order inside each block, so assigning
@@ -160,7 +230,7 @@ def main():
             Y_s = Y[sub]
 
             # -------------------------------
-            # Exp 1.1: same space group vs different space group
+            # Exp 1.1: same symmetry label vs different label
             # -------------------------------
             tot = Y.astype(np.float64).sum(axis=0)
             all_sum = (tot @ tot - n_total) / 2.0
@@ -228,6 +298,8 @@ def main():
     out = pd.DataFrame(results)
     out.to_csv(OUT_CSV, index=False)
     print(f"\nSaved {len(out)} rows to {OUT_CSV}")
+    plot_results(out)
+    plot_results(out, OUT_PNG_CENTERED, variants=("centered",))
 
     for variant in ["raw", "centered"]:
         d = out[out["variant"] == variant]
