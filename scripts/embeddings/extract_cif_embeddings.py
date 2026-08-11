@@ -200,6 +200,18 @@ def main():
     # filter to entries not yet done (use layer 0 as reference)
     ref_done = done_ids_per_layer[layers[0]]
     data = [(id_, cif) for id_, cif in data if id_ not in ref_done]
+
+    # Batch similar-length CIFs together. Lengths are median 317 tokens but reach 4126,
+    # so in file order one long CIF pads its whole batch up to its length: 2.33x more
+    # compute than the real tokens need. Sorting drops that to ~1.04x. Raw string length
+    # is the sort key (corr 0.998 with token count) to avoid a full tokenization pass.
+    #
+    # Safe to reorder: each (id, cif) pair moves together and ids are written alongside
+    # their own embeddings, so rows stay correctly paired; every downstream consumer
+    # joins on id rather than row position. Results are unchanged, not just close --
+    # attention is causal and padding sits at the end, so real tokens never attend to it,
+    # and mean_pool masks it out.
+    data.sort(key=lambda entry: len(entry[1]))
     total = len(data)
     print(f"Extracting {len(layers)} layers for {total:,} remaining entries, batch size {args.batch_size} ...")
     print(f"Layers: {layers}")
