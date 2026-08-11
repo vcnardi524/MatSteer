@@ -79,11 +79,14 @@ if PARTITION is None:
     raise SystemExit("Set PARTITION=all|train|val|test, e.g. "
                      "PARTITION=test python symmetry_probe.py")
 OUTPUT_DIR = str(analysis_dir(DATASET, VARIANT, PARTITION))
-OUT_CSV = os.path.join(OUTPUT_DIR, "symmetry_probe.csv")
 # space_group_symbol (207 classes), point_group (32), wyckoff_letters (750, and
 # 461k rows are null so that label loses ~28% of the data).
 LABEL_COLS = os.environ.get(
     "LABEL_COLS", "space_group_symbol,point_group,wyckoff_letters").split(",")
+
+# Label(s) in the filename, matching symmetry_separability.py. A fixed name silently
+# overwrote a completed point-group run with a later space-group one.
+OUT_CSV = os.path.join(OUTPUT_DIR, f"symmetry_probe_{'-'.join(LABEL_COLS)}.csv")
 # rows kept per layer; lbfgs on 1.6M x 1024 x 750 classes is not tractable.
 # Lower it (SAMPLE_SIZE=5000) for a quick smoke test.
 SAMPLE_SIZE = int(os.environ.get("SAMPLE_SIZE", 150_000))
