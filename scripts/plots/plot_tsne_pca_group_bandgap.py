@@ -30,7 +30,7 @@ single 18 eV outlier would otherwise flatten everything else to one colour.
 
 OUTPUT
 ------
-plots/layer{N}/bandgap_tsne_pca_{sg|pg}_{group}.png — a 2x2 grid:
+analysis/<dataset>/<variant>/<partition>/plots/layer{N}/bandgap_tsne_pca_{sg|pg}_{group}.png — a 2x2 grid:
     PC1-2 and PC3-4 coloured by gap, t-SNE coloured by gap, and t-SNE with a binary
     metal / non-metal colouring (same t-SNE embedding, just recoloured — the binary
     panel is the one that stays readable when the gaps are this zero-inflated).
@@ -57,7 +57,7 @@ from sklearn.neighbors import NearestNeighbors
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
-from utils import load_embeddings
+from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir
 
 METADATA_PATH = "metadata.parquet"
 # The clean gap in eV. NOT the LUMO-HOMO difference -- see the module docstring.
@@ -66,7 +66,7 @@ CMAP = "plasma"
 
 
 def load_group(group_col: str, group: str, layer: int, dataset: str,
-               bg_col: str) -> pd.DataFrame:
+               bg_col: str, variant: str, partition: str) -> pd.DataFrame:
     """Embeddings for one symmetry group, joined to the clean band gap (eV)."""
     print(f"Band-gap column: {bg_col}  (eV, clean -- not LUMO-HOMO)")
     meta = pd.read_parquet(METADATA_PATH, columns=["id", group_col, bg_col])
@@ -82,7 +82,8 @@ def load_group(group_col: str, group: str, layer: int, dataset: str,
     if meta.empty:
         raise SystemExit(f"Every {group} entry has a null {bg_col} -- nothing to plot.")
 
-    emb = load_embeddings(layer, dataset=dataset)
+    emb = load_embeddings(layer, dataset=dataset, variant=variant)
+    emb = filter_partition(emb, partition)
     df = emb.merge(meta[["id", "band_gap_ev"]], on="id", how="inner")
     print(f"  with layer-{layer} embeddings: {len(df):,}")
     if len(df) < 10:
@@ -137,9 +138,8 @@ def main():
     g.add_argument("--sg", help="space_group_symbol to restrict to, e.g. F-43m")
     g.add_argument("--pg", help="point_group to restrict to, e.g. m-3m")
     ap.add_argument("--layer", type=int, default=14)
-    ap.add_argument("--dataset", default="v1_all",
-                    help="Embeddings subdir under embeddings/ (v1_all or v1_mp). "
-                         "v1_mp has no symmetry metadata -- use v1_all.")
+    add_partition_args(ap)   # --dataset / --variant / --partition
+    #   note: v1_mp has no symmetry metadata -- use v1_all here
     ap.add_argument("--bg-col", default=DEFAULT_BG_COL,
                     choices=["dos_electronic.band_gap", "electronic.band_gap"],
                     help="Clean band-gap column in eV (the two are identical)")
@@ -174,7 +174,8 @@ def main():
     group_col, group = (("space_group_symbol", args.sg) if args.sg
                         else ("point_group", args.pg))
 
-    df = load_group(group_col, group, args.layer, args.dataset, args.bg_col)
+    df = load_group(group_col, group, args.layer, args.dataset, args.bg_col,
+                    args.variant, args.partition)
     df = sample(df, args.sample_mode, args.n_samples, args.metal_max)
 
     X = np.vstack(df["embedding"].values)
@@ -235,8 +236,8 @@ def main():
         y=1.00, fontsize=13)
     fig.tight_layout()
 
-    out_dir = Path(f"plots/layer{args.layer}")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = analysis_dir(args.dataset, args.variant, args.partition,
+                           subdir=f"plots/layer{args.layer}")
     tag = "sg" if args.sg else "pg"
     safe = group.replace("/", "_").replace("-", "m")
     out = out_dir / f"bandgap_tsne_pca_{tag}_{safe}.png"

@@ -39,6 +39,11 @@ Usage:
     python symmetry_probe.py                 # layer 5, all three labels
     python symmetry_probe.py 0 5 10 14       # a subset of layers
     LABEL_COLS=space_group_symbol python symmetry_probe.py    # one label only
+    PARTITION=test VARIANT=nosym python symmetry_probe.py    # held-out, symmetry stripped
+
+PARTITION (all|train|val|test) is required; DATASET (v1_all|v1_mp) and VARIANT
+(full|nosym) default to v1_all/full. Output lands in
+analysis/<DATASET>/<VARIANT>/<PARTITION>/.
 """
 
 import gzip
@@ -56,16 +61,24 @@ from sklearn.preprocessing import StandardScaler
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_labeled_embeddings
+from utils import load_labeled_embeddings, filter_partition, analysis_dir
 
 # -------------------------------
 # Configuration
 # -------------------------------
 LAYERS = [int(a) for a in sys.argv[1:]] or [5]
-DATASET = "v1_all"
 METADATA_PATH = "./metadata.parquet"
 PKL_PATH = "./CrystaLLM/cifs_v1_prep.pkl.gz"
-OUTPUT_DIR = "./analysis"
+# Which embeddings to read and which slice of CrystaLLM's split to run on. PARTITION has
+# no default on purpose: 89.6% of the labelled structures are in the model's own training
+# set, so a silent default would quietly measure memorization.
+DATASET = os.environ.get("DATASET", "v1_all")
+VARIANT = os.environ.get("VARIANT", "full")
+PARTITION = os.environ.get("PARTITION")
+if PARTITION is None:
+    raise SystemExit("Set PARTITION=all|train|val|test, e.g. "
+                     "PARTITION=test python symmetry_probe.py")
+OUTPUT_DIR = str(analysis_dir(DATASET, VARIANT, PARTITION))
 OUT_CSV = os.path.join(OUTPUT_DIR, "symmetry_probe.csv")
 # space_group_symbol (207 classes), point_group (32), wyckoff_letters (750, and
 # 461k rows are null so that label loses ~28% of the data).
@@ -81,7 +94,6 @@ RANDOM_SEED = 1
 DATA_RE = re.compile(r"^data_(\S+)", re.M)
 ELEMENT_RE = re.compile(r"([A-Z][a-z]?)(\d*)")
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def composition_matrix(formulas):
@@ -144,7 +156,8 @@ def main():
         # Load and intersect datasets
         # -------------------------------
         df = load_labeled_embeddings(layer, dataset=DATASET, metadata_path=METADATA_PATH,
-                                     label_cols=tuple(LABEL_COLS))
+                                     label_cols=tuple(LABEL_COLS), variant=VARIANT)
+        df = filter_partition(df, PARTITION)
         df = df.merge(formula_df, on="id", how="inner")
         df = df.dropna(subset=["formula"]).reset_index(drop=True)
 

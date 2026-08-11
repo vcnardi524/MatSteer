@@ -45,7 +45,7 @@ MODE_DEFAULTS = {
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_embeddings
+from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir
 
 
 def uniform_sample_by_value(values: np.ndarray, n: int, bins: int) -> np.ndarray:
@@ -64,7 +64,7 @@ def uniform_sample_by_value(values: np.ndarray, n: int, bins: int) -> np.ndarray
     return sel
 
 
-def load_joined(layer: int, dataset: str = "v1_all") -> pd.DataFrame:
+def load_joined(layer: int, dataset: str, variant: str, partition: str) -> pd.DataFrame:
     """Load clean band gaps + embeddings and inner-join on id."""
     print("Loading metadata (clean band gap) ...")
     meta = pd.read_parquet("metadata.parquet", columns=["id", BG_COL])
@@ -72,7 +72,8 @@ def load_joined(layer: int, dataset: str = "v1_all") -> pd.DataFrame:
     meta["band_gap_ev"] = meta[BG_COL].astype(float)
     print(f"  {len(meta):,} entries with clean band gap")
 
-    emb = load_embeddings(layer, dataset=dataset)
+    emb = load_embeddings(layer, dataset=dataset, variant=variant)
+    emb = filter_partition(emb, partition)
     print(f"  Embeddings: {len(emb):,}")
     df = emb.merge(meta[["id", "band_gap_ev"]], on="id", how="inner")
     print(f"  After join: {len(df):,}")
@@ -191,8 +192,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mode", choices=["split", "combined", "both"], default="both")
     ap.add_argument("--layer", type=int, default=14)
-    ap.add_argument("--dataset", default="v1_all",
-                    help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
+    add_partition_args(ap)   # --dataset / --variant / --partition
     ap.add_argument("--n-samples", type=int, default=None,
                     help="Points to sample (per group in split mode, total in "
                          "combined). Default depends on mode.")
@@ -205,9 +205,9 @@ def main():
 
     np.random.seed(RANDOM_SEED)
 
-    df = load_joined(args.layer, dataset=args.dataset)
-    out_dir = Path(f"plots/layer{args.layer}")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    df = load_joined(args.layer, args.dataset, args.variant, args.partition)
+    out_dir = analysis_dir(args.dataset, args.variant, args.partition,
+                           subdir=f"plots/layer{args.layer}")
 
     modes = ["split", "combined"] if args.mode == "both" else [args.mode]
     for mode in modes:

@@ -11,6 +11,7 @@ Output:
   analysis/nomad_bandgap_values.parquet   (id, band_gap_ev, dos_band_gap_ev)
   analysis/nomad_bandgap_histogram.png
 """
+import argparse
 import json
 from pathlib import Path
 
@@ -19,6 +20,10 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
+from utils import DATASETS, PARTITIONS, filter_partition, analysis_dir
 
 J_TO_EV = 6.241509074e18
 
@@ -33,10 +38,17 @@ def dig(d, path):
 
 
 def main():
-    out = Path("analysis"); out.mkdir(exist_ok=True)
+    # No --variant: this reads metadata only, so the CIF variant cannot change it.
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--dataset", default="v1_all", choices=list(DATASETS))
+    ap.add_argument("--partition", required=True, choices=list(PARTITIONS))
+    args = ap.parse_args()
+
+    out = analysis_dir(args.dataset, None, args.partition)
     print("Loading preparsed NOMAD metadata ...")
     df = pd.read_parquet("preparsed_metadata_nomad.parquet", columns=["id", "results"])
     print(f"  {len(df):,} rows")
+    df = filter_partition(df, args.partition)
 
     ids, bg, dosbg = [], [], []
     for id_, r in zip(df["id"].values, df["results"].values):

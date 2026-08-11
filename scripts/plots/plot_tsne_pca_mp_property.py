@@ -35,7 +35,7 @@ A^3/atom outlier cannot flatten the map to a single colour.
 
 OUTPUT
 ------
-plots/layer{N}/{prop}_tsne_pca_mp_layer{N}.png   per layer: PC1-2, PC3-4, t-SNE
+analysis/<dataset>/<variant>/<partition>/plots/layer{N}/{prop}_tsne_pca_mp_layer{N}.png   per layer: PC1-2, PC3-4, t-SNE
 plots/{prop}_tsne_mp_layers{A}_{B}.png           t-SNE side by side across layers
 
 Usage:
@@ -59,7 +59,7 @@ from sklearn.neighbors import NearestNeighbors
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
-from utils import load_embeddings
+from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir
 
 METADATA_PATH = "metadata_mp.parquet"
 JOIN_KEY = "material_id"   # NOT `id` -- see the module docstring
@@ -75,7 +75,8 @@ UNITS = {
 }
 
 
-def load_joined(layer: int, column: str, invert: bool, dataset: str) -> pd.DataFrame:
+def load_joined(layer: int, column: str, invert: bool, dataset: str,
+                variant: str, partition: str) -> pd.DataFrame:
     """v1_mp embeddings for one layer joined to an MP scalar column on material_id."""
     meta = pd.read_parquet(METADATA_PATH, columns=[JOIN_KEY, column]).dropna(subset=[column])
     meta = meta.rename(columns={JOIN_KEY: "id"})
@@ -85,7 +86,8 @@ def load_joined(layer: int, column: str, invert: bool, dataset: str) -> pd.DataF
         meta["value"] = 1.0 / meta["value"]
     print(f"  metadata rows with {column}: {len(meta):,}")
 
-    emb = load_embeddings(layer, dataset=dataset)
+    emb = load_embeddings(layer, dataset=dataset, variant=variant)
+    emb = filter_partition(emb, partition)
     df = emb.merge(meta[["id", "value"]], on="id", how="inner")
     print(f"  layer-{layer} embeddings: {len(emb):,}  ->  after join: {len(df):,}")
     if len(df) < 10:
@@ -129,8 +131,8 @@ def main():
     ap.add_argument("--invert", action="store_true",
                     help="Plot 1/column -- turns density_atomic into a number density "
                          "in atoms/A^3, where bigger really does mean denser")
-    ap.add_argument("--dataset", default="v1_mp",
-                    help="Embeddings subdir under embeddings/ (v1_mp for MP metadata)")
+    add_partition_args(ap)   # --dataset / --variant / --partition
+    #   note: MP property metadata lives in v1_mp
     ap.add_argument("--n-samples", type=int, default=15000)
     ap.add_argument("--color-scale", choices=["auto", "log", "linear"], default="auto")
     ap.add_argument("--clip-lo", type=float, default=1.0, help="Lower colour percentile")
@@ -147,7 +149,8 @@ def main():
     results = {}
     for layer in args.layers:
         print(f"\n=== layer {layer} ===")
-        df = load_joined(layer, args.column, args.invert, args.dataset)
+        df = load_joined(layer, args.column, args.invert, args.dataset,
+                         args.variant, args.partition)
 
         # Same sample across layers: the id sets are identical, and seeding per layer
         # keeps the two maps comparable point-for-point.
@@ -197,8 +200,8 @@ def main():
                      f"n={len(df):,}   [{label}]", y=1.02, fontsize=13)
         fig.tight_layout()
 
-        out_dir = Path(f"plots/layer{layer}")
-        out_dir.mkdir(parents=True, exist_ok=True)
+        out_dir = analysis_dir(args.dataset, args.variant, args.partition,
+                               subdir=f"plots/layer{layer}")
         out = out_dir / f"{prop}_tsne_pca_mp_layer{layer}.png"
         fig.savefig(out, dpi=140, bbox_inches="tight")
         plt.close(fig)

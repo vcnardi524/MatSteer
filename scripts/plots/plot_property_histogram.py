@@ -20,6 +20,8 @@ Usage:
     python scripts/plots/plot_property_histogram.py --file metadata.parquet --column density
 """
 import argparse
+import os
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +29,9 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/ -> utils.py
+from utils import DATASETS, PARTITIONS, filter_partition, analysis_dir
 
 # properties that want band-gap-style threshold markers on the zoom panel
 BANDGAP_THRESHOLDS = (0.05, 0.5, 1.0)
@@ -38,7 +43,12 @@ def main():
                    help="Parquet file to read the column from")
     p.add_argument("--column", default="band_gap",
                    help="Scalar property column to histogram")
-    p.add_argument("--out-dir", default="analysis")
+    # Histograms never read embeddings, so there is no --variant: the distribution is
+    # the same whichever CIF variant was extracted. --partition still matters for
+    # eyeballing each split, though note the split is random (bin/split.py uses
+    # train_test_split), so partitions differ in sample count more than in shape.
+    p.add_argument("--dataset", default="v1_all", choices=list(DATASETS))
+    p.add_argument("--partition", required=True, choices=list(PARTITIONS))
     p.add_argument("--bins", type=int, default=120)
     p.add_argument("--zoom-lo", type=float, default=0.5,
                    help="Lower percentile for the zoom panel (0-100)")
@@ -49,8 +59,9 @@ def main():
                         "over the rest (e.g. band_gap's spike at 0), else linear.")
     args = p.parse_args()
 
-    out = Path(args.out_dir); out.mkdir(parents=True, exist_ok=True)
-    df = pd.read_parquet(args.file, columns=[args.column])
+    out = analysis_dir(args.dataset, None, args.partition)
+    df = pd.read_parquet(args.file, columns=["id", args.column])
+    df = filter_partition(df, args.partition)
 
     # Robust to nulls: NA/None and any non-numeric entry -> NaN, drop ±inf too,
     # then drop everything missing. Report how many rows were discarded so a

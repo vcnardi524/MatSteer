@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Histogram of the clean NOMAD band_gap.value column (log y axis)."""
+"""Histogram of the clean NOMAD band_gap.value column (log y axis).
+
+--partition is required so each split can be eyeballed separately. There is no
+--variant: this reads metadata only, never embeddings, so the CIF variant cannot
+change the distribution.
+"""
+import argparse
+import os
+import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -7,10 +15,19 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/ -> utils.py
+from utils import DATASETS, PARTITIONS, filter_partition, analysis_dir
+
 COL = "dos_electronic.band_gap"  # identical to electronic.band_gap
 
-out = Path("analysis"); out.mkdir(exist_ok=True)
-df = pd.read_parquet("metadata.parquet", columns=[COL])
+_p = argparse.ArgumentParser(description=__doc__)
+_p.add_argument("--dataset", default="v1_all", choices=list(DATASETS))
+_p.add_argument("--partition", required=True, choices=list(PARTITIONS))
+args = _p.parse_args()
+
+out = analysis_dir(args.dataset, None, args.partition)
+df = pd.read_parquet("metadata.parquet", columns=["id", COL])
+df = filter_partition(df, args.partition)
 v = df[COL].dropna().astype(float)
 print(f"n={len(v):,}  metals(==0)={int((v==0).sum()):,}  >0={int((v>0).sum()):,}  "
       f">=0.5eV={int((v>=0.5).sum()):,}  >=1.0eV={int((v>=1.0).sum()):,}")

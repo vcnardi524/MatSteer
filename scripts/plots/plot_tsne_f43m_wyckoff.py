@@ -32,7 +32,7 @@ PREPARSED = "preparsed_metadata_nomad.parquet"
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_embeddings
+from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir
 
 
 def find_wyckoff_sets(results: dict):
@@ -84,8 +84,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sg", default="F-43m")
     ap.add_argument("--layer", type=int, default=14)
-    ap.add_argument("--dataset", default="v1_all",
-                    help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
+    add_partition_args(ap)   # --dataset / --variant / --partition
     ap.add_argument("--n-samples", type=int, default=10000)
     ap.add_argument("--top-n", type=int, default=8)
     ap.add_argument("--tsne-perplexity", type=float, default=30)
@@ -97,7 +96,8 @@ def main():
     ids = meta.loc[meta["space_group_symbol"] == args.sg, "id"]
     print(f"  {args.sg} materials: {len(ids):,}")
 
-    emb = load_embeddings(args.layer, dataset=args.dataset)
+    emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant)
+    emb = filter_partition(emb, args.partition)
     df = emb[emb["id"].isin(set(ids))].reset_index(drop=True)
     print(f"  with embeddings: {len(df):,}")
 
@@ -127,8 +127,8 @@ def main():
     X_tsne = TSNE(n_components=2, perplexity=args.tsne_perplexity,
                   random_state=RANDOM_SEED, n_jobs=-1).fit_transform(X)
 
-    out_dir = Path(f"plots/layer{args.layer}")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = analysis_dir(args.dataset, args.variant, args.partition,
+                           subdir=f"plots/layer{args.layer}")
     fig, axes = plt.subplots(1, 2, figsize=(20, 8))
     for ax, coords, method in [(axes[0], X_pca, "PCA"), (axes[1], X_tsne, "t-SNE")]:
         for lbl in ordered:

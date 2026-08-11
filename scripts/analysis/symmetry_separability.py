@@ -32,6 +32,11 @@ Usage:
     python symmetry_separability.py                    # all 16 layers, space group
     python symmetry_separability.py 0 5 10 14          # a subset of layers
     LABEL_COL=point_group python symmetry_separability.py    # point group instead
+    PARTITION=test VARIANT=nosym python symmetry_separability.py   # held-out, symmetry stripped
+
+PARTITION (all|train|val|test) is required; DATASET (v1_all|v1_mp) and VARIANT
+(full|nosym) default to v1_all/full. Output lands in
+analysis/<DATASET>/<VARIANT>/<PARTITION>/.
 """
 
 import gzip
@@ -49,26 +54,32 @@ import matplotlib.pyplot as plt
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_labeled_embeddings
+from utils import load_labeled_embeddings, filter_partition, analysis_dir
 
 # -------------------------------
 # Configuration
 # -------------------------------
 LAYERS = [int(a) for a in sys.argv[1:]] or list(range(16))
-DATASET = "v1_all"
 METADATA_PATH = "./metadata.parquet"
 PKL_PATH = "./CrystaLLM/cifs_v1_prep.pkl.gz"
-OUTPUT_DIR = "./analysis"
 # Which symmetry label to test: "space_group_symbol" (207 values) or "point_group" (32).
 # Set with e.g. LABEL_COL=point_group python symmetry_separability.py
 LABEL_COL = os.environ.get("LABEL_COL", "space_group_symbol")
+# Which embeddings to read and which slice of CrystaLLM's split to run on. PARTITION has
+# no default on purpose: 89.6% of the labelled structures are in the model's own training
+# set, so a silent default would quietly measure memorization.
+DATASET = os.environ.get("DATASET", "v1_all")
+VARIANT = os.environ.get("VARIANT", "full")
+PARTITION = os.environ.get("PARTITION")
+if PARTITION is None:
+    raise SystemExit("Set PARTITION=all|train|val|test, e.g. "
+                     "PARTITION=test python symmetry_separability.py")
+OUTPUT_DIR = str(analysis_dir(DATASET, VARIANT, PARTITION))
 OUT_CSV = os.path.join(OUTPUT_DIR, f"symmetry_separability_{LABEL_COL}.csv")
 OUT_PNG = os.path.join(OUTPUT_DIR, f"symmetry_separability_{LABEL_COL}.png")
 OUT_PNG_CENTERED = os.path.join(OUTPUT_DIR, f"symmetry_separability_{LABEL_COL}_centered.png")
 RANDOM_SEED = 1
 DATA_RE = re.compile(r"^data_(\S+)", re.M)
-
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def group_pair_sums(X, codes, n_groups):
@@ -176,7 +187,8 @@ def main():
         # Load and intersect datasets
         # -------------------------------
         df = load_labeled_embeddings(layer, dataset=DATASET, metadata_path=METADATA_PATH,
-                                     label_cols=(LABEL_COL,))
+                                     label_cols=(LABEL_COL,), variant=VARIANT)
+        df = filter_partition(df, PARTITION)
         df = df.merge(formula_df, on="id", how="inner")
         df = df[df[LABEL_COL].notna() & (df[LABEL_COL] != "")]
         df = df.dropna(subset=["formula"]).reset_index(drop=True)

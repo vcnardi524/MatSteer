@@ -24,14 +24,13 @@ from sklearn.manifold import TSNE
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_embeddings
+from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--layer", type=int, default=14)
-    parser.add_argument("--dataset", default="v1_all",
-                        help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
+    add_partition_args(parser)   # --dataset / --variant / --partition
     parser.add_argument("--n-samples", type=int, default=10000)
     parser.add_argument("--property", type=str, default="point_group",
                         choices=["point_group", "space_group_symbol"])
@@ -47,8 +46,9 @@ def main():
     meta = meta[meta[args.property].notna()].reset_index(drop=True)
     print(f"  Entries with {args.property}: {len(meta):,}")
 
-    emb = load_embeddings(args.layer, dataset=args.dataset)
+    emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant)
     print(f"  Embeddings: {len(emb):,}")
+    emb = filter_partition(emb, args.partition)
 
     df = emb.merge(meta, on="id", how="inner")
     print(f"  After join: {len(df):,}")
@@ -86,8 +86,8 @@ def main():
     X_tsne = TSNE(n_components=2, perplexity=args.tsne_perplexity,
                   random_state=RANDOM_SEED, n_jobs=-1).fit_transform(X)
 
-    out_dir = Path(f"plots/layer{args.layer}")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = analysis_dir(args.dataset, args.variant, args.partition,
+                           subdir=f"plots/layer{args.layer}")
 
     fig, axes = plt.subplots(1, 2, figsize=(20, 8))
     for ax, coords, method in [

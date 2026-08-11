@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
+from pathlib import Path
+
 import pandas as pd
 
 J_TO_EV = 6.2415e18
@@ -36,5 +38,8 @@ for p in percentiles:
 results = pd.DataFrame(rows)
 print(results.to_string(index=False))
 
-results.to_csv("bandgap_percentile_stats.csv", index=False)
+# analysis/ root, not a partition dir: this is a sanity check over the whole corpus,
+# not a per-split result.
+_out = Path("analysis"); _out.mkdir(exist_ok=True)
+results.to_csv(_out / "bandgap_percentile_stats.csv", index=False)
 print("\nSaved bandgap_percentile_stats.csv")

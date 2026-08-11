@@ -25,7 +25,7 @@ from sklearn.preprocessing import StandardScaler
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_labeled_embeddings
+from utils import load_labeled_embeddings, filter_partition, analysis_dir
 
 # -------------------------------
 # Configuration
@@ -36,8 +36,16 @@ LAYER = int(sys.argv[3]) if len(sys.argv) > 3 else 14
 DATASET = sys.argv[4] if len(sys.argv) > 4 else "v1_all"  # embeddings subdir (v1_all or v1_mp)
 METADATA_PATH = "./metadata.parquet"
 RANDOM_SEED = 1
-OUTPUT_DIR = f"./cocluster_results/{name}/layer{LAYER}/{N_CLUSTERS}_clusters"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# Which embeddings to read and which slice of CrystaLLM's split to run on. PARTITION has
+# no default on purpose: 89.6% of the labelled structures are in the model's own training
+# set, so a silent default would quietly measure memorization.
+VARIANT = os.environ.get("VARIANT", "full")
+PARTITION = os.environ.get("PARTITION")
+if PARTITION is None:
+    raise SystemExit("Set PARTITION=all|train|val|test, e.g. "
+                     "PARTITION=test python spec_cocluster_analysis.py ...")
+OUTPUT_DIR = str(analysis_dir(DATASET, VARIANT, PARTITION,
+                              subdir=f"cocluster_results/{name}/layer{LAYER}/{N_CLUSTERS}_clusters"))
 
 
 def plot_histogram(data, xlabel, title, path, bins=50):
@@ -58,7 +66,9 @@ def main():
     # -------------------------------
     # Load and intersect datasets
     # -------------------------------
-    df = load_labeled_embeddings(LAYER, dataset=DATASET, metadata_path=METADATA_PATH)
+    df = load_labeled_embeddings(LAYER, dataset=DATASET, metadata_path=METADATA_PATH,
+                                 variant=VARIANT)
+    df = filter_partition(df, PARTITION)
 
     # Space group + occupied Wyckoff letters. A letter is only meaningful relative
     # to its space group ("c" is a different orbit in Pnma than in P6_3/mmc), so the
