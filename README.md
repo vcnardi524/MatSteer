@@ -115,6 +115,68 @@ and **drop the space-group constraint** to give steering more room (see `tasks.m
 | `cocluster_results/` | Co-clustering outputs per layer/K. |
 | `embeddings/`, `plots/`, `logs/` | Embeddings, figures, SLURM logs. |
 
+### How `embeddings/` and `analysis/` are organised
+
+Both trees use the same first two levels, so an analysis directory names exactly which
+embeddings produced it. Built by `utils.py:analysis_dir()` / `embeddings_paths()`.
+
+```
+embeddings/<dataset>/<variant>/cif_layer{0..15}[.parquet]
+
+analysis/<dataset>/<variant>/<partition>/
+├── <global outputs>            # span every layer: probe tables, separability CSVs
+└── plots/
+    ├── <cross-layer figures>   # one figure covering several layers
+    └── layer{0..15}/           # one figure per layer
+```
+
+**1. dataset** — which corpus the CIFs came from.
+
+| | |
+|---|---|
+| `v1_all` | combined NOMAD + OQMD + MP (2,285,719 embedded ids: 71.5% NOMAD, 25.7% OQMD, 2.8% MP) |
+| `v1_mp` | Materials Project only (154,871 ids), the corpus `metadata_mp.parquet` describes |
+
+They overlap by only 58,650 ids, and each is sampled independently, so **a t-SNE from
+one is not comparable to a t-SNE from the other** — different point clouds give
+different shapes no matter what the colouring shows.
+
+**2. variant** — which CIF *text* the embeddings were extracted from.
+
+| | |
+|---|---|
+| `full` | the CIF as-is |
+| `nosym` | `_symmetry_space_group_name_H-M` and `_symmetry_Int_Tables_number` stripped before the forward pass |
+| `full_stale` | outputs made before the current `full` extraction existed — kept for provenance, not regenerated |
+
+`full` cannot answer whether the model *represents* symmetry: the space group is written
+verbatim into the text, so a probe just reads the copied token back. That is what
+`nosym` is for. `full_stale` records *when* something was made, not which directory a
+script pointed at — figures predating the restructure live there and stay there.
+
+Outputs that read metadata but never embeddings (the property histograms) pass
+`variant=None` and **drop this level entirely**: `analysis/v1_mp/all/`. They would be
+byte-identical under `full/` and `nosym/`.
+
+**3. partition** — which slice of CrystaLLM's own train/val/test split, one of
+`all` / `train` / `val` / `test`. `analysis_dir` has no default and `add_partition_args`
+makes `--partition` required, on purpose: 89.6% of labelled structures are in the
+model's training set and only 0.45% in its test set, so a result on `all` cannot
+separate learning from memorisation. Filter with `utils.py:filter_partition()`.
+
+**4. inside a partition** — files directly in the partition dir are global (they span
+every layer); `plots/` holds figures, with `plots/layer{N}/` for per-layer ones and
+cross-layer comparisons sitting directly in `plots/`.
+
+Worked example:
+
+```
+analysis/v1_all/nosym/val/plots/layer5/…   symmetry-stripped v1_all embeddings,
+                                            validation split, layer 5
+analysis/v1_mp/all/metadata_mp_*.png        MP metadata histograms — no variant level,
+                                            since no embeddings were read
+```
+
 ### Key scripts
 | Script | Purpose |
 |--------|---------|
