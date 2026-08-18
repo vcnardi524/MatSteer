@@ -126,7 +126,6 @@ embeddings/<dataset>/<variant>/cif_layer{0..15}[.parquet]
 analysis/<dataset>/<variant>/<partition>/
 ├── <global outputs>            # span every layer: probe tables, separability CSVs
 └── plots/
-    ├── <cross-layer figures>   # one figure covering several layers
     └── layer{0..15}/           # one figure per layer
 ```
 
