@@ -35,16 +35,20 @@ A^3/atom outlier cannot flatten the map to a single colour.
 
 OUTPUT
 ------
-analysis/<dataset>/<variant>/<partition>/plots/layer{N}/{prop}_tsne_pca_mp_layer{N}.png   per layer: PC1-2, PC3-4, t-SNE
-plots/{prop}_tsne_mp_layers{A}_{B}.png           t-SNE side by side across layers
+Both land under analysis/<dataset>/<variant>/<partition>/plots/ :
+    layer{N}/{prop}_tsne_pca_mp_layer{N}.png   per layer: PC1-2, PC3-4, t-SNE
+    {prop}_tsne_mp_layers{A}_{B}.png           t-SNE side by side across layers
+
+The dataset defaults to **v1_mp** here, not utils' v1_all. A t-SNE layout is only
+comparable to another t-SNE layout built from the same point cloud, so a v1_mp map
+cannot be laid next to a v1_all one (2.29M ids, 71% NOMAD) and read for shape.
 
 Usage:
-    python scripts/plots/plot_tsne_pca_mp_property.py --layers 5 14
-    python scripts/plots/plot_tsne_pca_mp_property.py --layers 5 14 --invert
-    python scripts/plots/plot_tsne_pca_mp_property.py --layers 14 --column density
+    python scripts/plots/plot_tsne_pca_mp_property.py --layers 5 14 --partition all
+    python scripts/plots/plot_tsne_pca_mp_property.py --layers 5 14 --partition val --invert
+    python scripts/plots/plot_tsne_pca_mp_property.py --layers 14 --column density --partition test
 """
 import argparse
-from pathlib import Path
 
 import numpy as np
 RANDOM_SEED = 42
@@ -132,7 +136,11 @@ def main():
                     help="Plot 1/column -- turns density_atomic into a number density "
                          "in atoms/A^3, where bigger really does mean denser")
     add_partition_args(ap)   # --dataset / --variant / --partition
-    #   note: MP property metadata lives in v1_mp
+    # This script is MP-specific (metadata_mp.parquet, joined on material_id), so it
+    # overrides add_partition_args' v1_all default. Pointing it at v1_all would join MP
+    # metadata against the NOMAD+OQMD+MP corpus and silently keep only the ~59k shared
+    # ids -- a different point cloud from the one the title claims.
+    ap.set_defaults(dataset="v1_mp")
     ap.add_argument("--n-samples", type=int, default=15000)
     ap.add_argument("--color-scale", choices=["auto", "log", "linear"], default="auto")
     ap.add_argument("--clip-lo", type=float, default=1.0, help="Lower colour percentile")
@@ -222,7 +230,8 @@ def main():
                      f"(n={results[args.layers[0]]['n']:,})   [{label}]",
                      y=1.02, fontsize=13)
         fig.tight_layout()
-        out = Path("plots") / f"{prop}_tsne_mp_layers{'_'.join(map(str, args.layers))}.png"
+        out_dir = analysis_dir(args.dataset, args.variant, args.partition, subdir="plots")
+        out = out_dir / f"{prop}_tsne_mp_layers{'_'.join(map(str, args.layers))}.png"
         fig.savefig(out, dpi=140, bbox_inches="tight")
         plt.close(fig)
         print(f"\nSaved {out}")

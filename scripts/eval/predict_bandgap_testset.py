@@ -25,13 +25,17 @@ warnings.filterwarnings("ignore")
 import matgl
 from pymatgen.core import Structure
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
+from utils import postprocess
+
 FIDELITY = 0  # PBE/GGA
 CHECKPOINT_EVERY = 1000
 
 
 def parse_cif(cif: str) -> Structure | None:
     try:
-        return Structure.from_str(cif, fmt="cif")
+        return Structure.from_str(postprocess(cif, "testset"), fmt="cif")
     except Exception:
         return None
 

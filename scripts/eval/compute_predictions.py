@@ -39,13 +39,15 @@ import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
 from predictors import REGISTRY
 
+from utils import postprocess
+
 CHECKPOINT_EVERY = 1000
 _parse_errors: list[str] = []
 
 
 def parse_cif(cif: str):
     try:
-        return Structure.from_str(cif, fmt="cif")
+        return Structure.from_str(postprocess(cif, "generated"), fmt="cif")
     except Exception as e:
         _parse_errors.append(f"{type(e).__name__}: {e}")
         return None

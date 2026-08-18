@@ -7,6 +7,39 @@ from pathlib import Path
 
 import pandas as pd
 
+from pymatgen.core.operations import SymmOp as _SymmOp
+if not hasattr(_SymmOp, "as_xyz_string"):
+    _SymmOp.as_xyz_string = _SymmOp.as_xyz_str
+
+# Duplicate of CrystaLLM's bin/postprocess.py:postprocess. It cannot be imported:
+# that module does `from crystallm import ...`, which runs crystallm/__init__.py and
+# pulls in omegaconf plus a pymatgen version megnet_venv does not have -- and
+# compute_predictions.py runs in megnet_venv. _utils.py is loaded by file path for the
+# same reason, the same idiom relax_steered_cifs.py uses. Assumes repo root is the cwd.
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("cryst_utils", "CrystaLLM/crystallm/_utils.py")
+_cryst_utils = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_cryst_utils)
+extract_space_group_symbol = _cryst_utils.extract_space_group_symbol
+replace_symmetry_operators = _cryst_utils.replace_symmetry_operators
+remove_atom_props_block = _cryst_utils.remove_atom_props_block
+
+
+def postprocess(cif: str, fname: str) -> str:
+    try:
+        # replace the symmetry operators with the correct operators
+        space_group_symbol = extract_space_group_symbol(cif)
+        if space_group_symbol is not None and space_group_symbol != "P 1":
+            cif = replace_symmetry_operators(cif, space_group_symbol)
+
+        # remove atom props
+        cif = remove_atom_props_block(cif)
+    except Exception as e:
+        cif = "# WARNING: CrystaLLM could not post-process this file properly!\n" + cif
+        print(f"error post-processing CIF file '{fname}': {e}")
+
+    return cif
+
 EMBEDDINGS_ROOT = Path("embeddings")
 DEFAULT_DATASET = "v1_all"   # combined NOMAD+OQMD+MP corpus (cifs_v1_prep / tokens_v1_all)
 DEFAULT_METADATA = "metadata.parquet"
