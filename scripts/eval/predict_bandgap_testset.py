@@ -2,12 +2,21 @@
 """
 Predict band gap for original (pre-steering) test set CIFs using MEGNet.
 
-Reads CrystaLLM/cifs_v1_test.pkl.gz, predicts band gap for each structure,
-and saves results to steering_results/bandgap_predictions/testset_baseline.parquet with columns:
-  id, predicted_bandgap_ev_raw
+Reads CrystaLLM/cifs_v1_test.pkl.gz and writes two files, both keyed on (id, sample)
+like every other run in the pipeline (sample is always 0 -- one structure per prompt):
+
+  <results-dir>/generated_cifs/testset_baseline.parquet    id, sample, cif_steered
+  <results-dir>/property_predictions/testset_baseline.parquet
+                                                           id, sample, predicted_bandgap_ev_raw
+
+Staging the CIFs lets the baseline be relaxed and summarised with the same scripts the
+steered runs use. Only the unrelaxed gap is computed here; the relaxed gap comes from
+relax_steered_cifs.py followed by compute_predictions.py, as for any other run.
+
+The script resumes from an existing predictions file, so delete it to force a recompute.
 
 Usage:
-    python scripts/eval/predict_bandgap_testset.py
+    python scripts/eval/predict_bandgap_testset.py --results-dir steering_results/bandgap
 """
 import argparse
 import gzip
@@ -47,6 +56,9 @@ def main():
                         help="Default: <results-dir>/property_predictions/testset_baseline.parquet")
     parser.add_argument("--results-dir", default="steering_results")
     parser.add_argument("--fidelity", type=int, default=FIDELITY)
+    parser.add_argument("--cif-out", default=None,
+                        help="Default: <results-dir>/generated_cifs/testset_baseline.parquet. "
+                             "Pass '' to skip staging the CIFs.")
     args = parser.parse_args()
 
     out_path = Path(args.out) if args.out else \
@@ -58,13 +70,33 @@ def main():
         test_data = pickle.load(f)
     print(f"  {len(test_data):,} test structures")
 
+    # Stage the reference CIFs in the store the rest of the pipeline reads from, so the
+    # baseline can be relaxed and summarised like any steered run. The CIF text is kept
+    # out of the predictions file on purpose: combine_bandgap_predictions.py turns every
+    # column it finds there into a run column. Written verbatim -- downstream applies
+    # postprocess() itself, the same as for generated CIFs.
+    cif_path = out_path.parent.parent / "generated_cifs" / "testset_baseline.parquet"
+    if args.cif_out is not None:
+        cif_path = Path(args.cif_out) if args.cif_out else None
+    if cif_path is not None:
+        cif_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({"id": [d[0] for d in test_data],
+                      "sample": 0,
+                      "cif_steered": [d[1] for d in test_data]}).to_parquet(cif_path, index=False)
+        print(f"  staged reference CIFs -> {cif_path}")
+
     # Resume from existing output if present
     if out_path.exists():
         df = pd.read_parquet(out_path)
+        if "sample" not in df:                 # file written before sample was added
+            df.insert(1, "sample", 0)
         done_ids = set(df[df["predicted_bandgap_ev_raw"].notna()]["id"])
         print(f"  {len(done_ids):,} already predicted, resuming")
     else:
+        # sample is constant here (one structure per prompt), but every other file in the
+        # pipeline is keyed on (id, sample) and the joins expect it.
         df = pd.DataFrame({"id": [d[0] for d in test_data]})
+        df["sample"] = 0
         df["predicted_bandgap_ev_raw"] = None
         done_ids = set()
 
