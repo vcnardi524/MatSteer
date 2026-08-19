@@ -35,7 +35,9 @@ import numpy as np
 import pandas as pd
 
 VOL_RE = re.compile(r"_cell_volume\s+([-\d.eE]+)")
-SUM_RE = re.compile(r"_chemical_formula_sum\s+'([^']+)'")
+# Single-element formulas have no space, so pymatgen writes them unquoted
+# (`_chemical_formula_sum   Mn4`). Match both forms or elemental structures drop out.
+SUM_RE = re.compile(r"_chemical_formula_sum\s+(?:'([^']+)'|(\S+))")
 LEN_RE = {k: re.compile(rf"_cell_length_{k}\s+([-\d.eE]+)") for k in "abc"}
 ANG_RE = {k: re.compile(rf"_cell_angle_{k}\s+([-\d.eE]+)")
           for k in ("alpha", "beta", "gamma")}
@@ -68,7 +70,7 @@ def natoms(text: str) -> float:
     m = SUM_RE.search(text)
     if not m:
         return np.nan
-    n = sum(int(cnt or 1) for el, cnt in ELEM_RE.findall(m.group(1)) if el)
+    n = sum(int(cnt or 1) for el, cnt in ELEM_RE.findall(m.group(1) or m.group(2)) if el)
     return float(n) if n else np.nan
 
 

@@ -121,7 +121,9 @@ PROPS = {
 # atom_site loop while keeping the full _cell_volume, so it reads ~2.7x high (median
 # 53.48 vs 19.25 A^3/atom here; only 11.9% of rows agree to within 1%).
 VOL_RE = re.compile(r"_cell_volume\s+([-\d.eE]+)")
-SUM_RE = re.compile(r"_chemical_formula_sum\s+'([^']+)'")
+# Single-element formulas have no space, so pymatgen writes them unquoted
+# (`_chemical_formula_sum   Mn4`). Match both forms or elemental structures drop out.
+SUM_RE = re.compile(r"_chemical_formula_sum\s+(?:'([^']+)'|(\S+))")
 ELEM_RE = re.compile(r"([A-Z][a-z]?)(\d*)")
 
 
@@ -131,7 +133,7 @@ def text_volume_per_atom(cif: str) -> float:
     v, f = VOL_RE.search(cif), SUM_RE.search(cif)
     if not (v and f):
         return np.nan
-    n = sum(int(c or 1) for el, c in ELEM_RE.findall(f.group(1)) if el)
+    n = sum(int(c or 1) for el, c in ELEM_RE.findall(f.group(1) or f.group(2)) if el)
     try:
         return float(v.group(1)) / n if n else np.nan
     except ValueError:
