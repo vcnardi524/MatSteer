@@ -23,17 +23,15 @@ MEASURING THE SAME THING ON BOTH SIDES
 A distribution comparison is only meaningful if both sides are measured by the same
 instrument, so the ground truth is computed exactly the way the generated values were:
 
-  density_atomic  `_cell_volume` / atom count from `_chemical_formula_sum`, read from
-                  the CIF text on BOTH sides (generated, and the originals in
-                  cifs_v1_test.pkl.gz). Both numbers are literal tokens, so this is the
-                  property exactly as generated.
-                  It deliberately does NOT use the stored `density_atomic_raw` column:
-                  that is predictors.py:37 `s.volume / len(s)` over a
-                  `Structure.from_str` parse, whose numerator is the full cell but whose
-                  denominator is only the atom_site lines pymatgen instantiated (the ops
-                  loop holds just 'x, y, z', so nothing expands). It reads 2.673x high
-                  at the median here (53.48 vs 19.25 A^3/atom, 11.9% within 1%), by a
-                  per-structure factor, so it distorts shape as well as location.
+  density_atomic  `s.volume / len(s)` on the postprocessed structure, on BOTH sides
+                  (the stored density_atomic_raw column for generated, the same
+                  computation applied to cifs_v1_test.pkl.gz for the originals).
+                  This column was unusable until 2026-08-19: postprocess silently
+                  failed to restore symmetry operators, so pymatgen built only the
+                  asymmetric unit while keeping the full _cell_volume, reading 2.673x
+                  high at the median (53.48 vs 19.25 A^3/atom). Both are fixed now and
+                  the column agrees with the CIF-text reading to a median ratio of
+                  1.0000, so text_volume_per_atom is kept only as a cross-check.
   band_gap        MEGNet on the generated CIF. Ground truth is MEGNet on the ORIGINAL
                   test CIF (property_predictions/testset_baseline.parquet), NOT the DFT
                   value -- comparing MEGNet-on-generated against DFT-on-original would
@@ -71,6 +69,8 @@ import pickle
 import re
 import sys as _sys
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -79,7 +79,8 @@ import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-from utils import analysis_dir
+from utils import analysis_dir, postprocess
+from pymatgen.core import Structure
 
 RANDOM_SEED = 42
 TEST_PKL = "CrystaLLM/cifs_v1_test.pkl.gz"
@@ -110,16 +111,19 @@ PROPS = {
         label="Volume per atom (A^3/atom)",
         scale="log",
         default_family=None,
-        measure="text",
+        measure="predictor",
     ),
 }
 
-# Volume per atom, read straight out of the CIF text. Both numbers are literal tokens
-# in the file, so this is the property as generated -- no structure parsing involved.
-# The stored density_atomic column is NOT usable: property_predictions computes it as
-# pymatgen's s.volume/len(s), and pymatgen builds only the sites listed in the
-# atom_site loop while keeping the full _cell_volume, so it reads ~2.7x high (median
-# 53.48 vs 19.25 A^3/atom here; only 11.9% of rows agree to within 1%).
+# Volume per atom read from the CIF text. Kept for the reference structures and as a
+# cross-check: it agrees with the stored density_atomic column to a median ratio of
+# 1.0000 (97.1% within 1%), the two differing only by CIF rounding, since _cell_volume
+# and the lattice parameters are rounded independently.
+#
+# The stored column used to read ~2.7x high (median 53.48 vs 19.25 A^3/atom) because
+# postprocess silently failed to restore symmetry operators, so pymatgen built only the
+# asymmetric unit while keeping the full _cell_volume. Fixed in utils.py 2026-08-19 and
+# the column recomputed, so the stored value is now the primary measurement.
 VOL_RE = re.compile(r"_cell_volume\s+([-\d.eE]+)")
 # Single-element formulas have no space, so pymatgen writes them unquoted
 # (`_chemical_formula_sum   Mn4`). Match both forms or elemental structures drop out.
@@ -228,22 +232,45 @@ def truth_band_gap(source: str, relaxed: bool) -> pd.DataFrame:
         print(f"  truth=dft: {len(meta):,} ids with {DFT_GAP_COL} (NOMAD only)")
         return meta.rename(columns={DFT_GAP_COL: "value"})[["id", "value"]]
 
-    path = "steering_results/bandgap/property_predictions/testset_baseline.parquet"
-    base = pd.read_parquet(path)
+    base = pd.read_parquet(
+        "steering_results/bandgap/property_predictions/testset_baseline.parquet")
     col = "predicted_bandgap_ev" if relaxed else "predicted_bandgap_ev_raw"
-    base = base[base["is_valid"].fillna(False) & base[col].notna()]
+    # Validity lives in its own file, as for every other run -- the predictions file
+    # carries predictions only. Older baselines kept both in one parquet.
+    val_path = Path("steering_results/bandgap/validation/testset_baseline.parquet")
+    if val_path.exists():
+        val = pd.read_parquet(val_path, columns=["id", "sample", "is_valid"])
+        base = base.merge(val, on=["id", "sample"], how="left")
+        base = base[base["is_valid"].fillna(False)]
+    elif "is_valid" in base:
+        base = base[base["is_valid"].fillna(False)]
+    base = base[base[col].notna()]
+    if base.empty:
+        raise SystemExit(
+            f"testset_baseline.parquet has no values in '{col}'. The baseline has not "
+            f"been relaxed yet, so there is no reference for the relaxed gaps -- drop "
+            f"--relaxed, or relax the baseline first.")
     print(f"  truth=matched: MEGNet on {len(base):,} original test CIFs ({col})")
     return base.rename(columns={col: "value"})[["id", "value"]]
 
 
+def parsed_volume_per_atom(cif: str) -> float:
+    """s.volume/len(s) after postprocess -- the same computation predictors.py does."""
+    try:
+        s = Structure.from_str(postprocess(cif, "truth"), fmt="cif")
+        return s.volume / len(s)
+    except Exception:
+        return np.nan
+
+
 def truth_density_atomic(ids: set) -> pd.DataFrame:
-    """volume/natoms on the ORIGINAL test CIFs, read from the text the same way the
-    generated side is -- so both curves are the same measurement."""
+    """volume/natoms on the ORIGINAL test CIFs, computed the same way the generated
+    side is (parsed structure, symmetry restored) -- so both curves match."""
     with gzip.open(TEST_PKL, "rb") as f:
         data = pickle.load(f)
-    rows = [(cid, text_volume_per_atom(text)) for cid, text in data if cid in ids]
+    rows = [(cid, parsed_volume_per_atom(text)) for cid, text in data if cid in ids]
     df = pd.DataFrame(rows, columns=["id", "value"]).dropna(subset=["value"])
-    print(f"  truth: read {len(df):,} original test CIFs from text "
+    print(f"  truth: parsed {len(df):,} original test CIFs "
           f"({len(rows) - len(df)} unparseable)")
     return df
 

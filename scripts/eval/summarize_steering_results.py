@@ -16,7 +16,9 @@ aggregations are emitted — over all samples, and best-of (per-prompt max over
 samples) — each as two tables split by whether the prompt carried a space group
 (steered runs with the _nosg suffix vs. without). Each table has the baseline on
 top, then one row per steered run: configuration, alpha, samples/cif, and
-%>0 / mean / std for both unrelaxed and relaxed gaps.
+%>0.05eV / mean / std for both unrelaxed and relaxed gaps. The 0.05 eV cutoff
+is the metal threshold, not zero: MEGNet noise straddles zero for metals, so a
+"gap > 0" count measures the sign of that noise rather than any physics.
 
 Usage:
     python scripts/eval/summarize_steering_results.py
@@ -79,11 +81,18 @@ def validation_novelty_table(val_dir: Path) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# MEGNet returns small noise either side of zero for a metal, so counting gap > 0 counts
+# the sign of that noise: the same test set scored 13.6% one way and 94.8% the other after
+# a parsing fix moved medians from -0.0085 to +0.0048 eV -- no physical change. 0.05 eV is
+# the metal cutoff the steering vector itself was built with (README), so use that.
+GAP_THRESHOLD = 0.05
+_GAP_COL = f"%>{GAP_THRESHOLD}"
+
 # two-row header: (group, sub-column). "" group = flat left-hand columns.
 BG_COLS = [
     ("", "configuration"), ("", "alpha"), ("", "samples/cif"),
-    ("unrelaxed", "%>0"), ("unrelaxed", "mean"), ("unrelaxed", "std"),
-    ("relaxed", "%>0"), ("relaxed", "mean"), ("relaxed", "std"),
+    ("unrelaxed", _GAP_COL), ("unrelaxed", "mean"), ("unrelaxed", "std"),
+    ("relaxed", _GAP_COL), ("relaxed", "mean"), ("relaxed", "std"),
 ]
 
 
@@ -95,7 +104,7 @@ def run_alpha(run: str):
 
 
 def _gap_stats(df: pd.DataFrame, col: str | None, agg: str = "all"):
-    """(%>0, mean, std) for a bandgap column, or dashes if missing/empty.
+    """(% above GAP_THRESHOLD, mean, std) for a bandgap column, or dashes if missing/empty.
 
     agg="all": over every (id, sample); agg="max": per-prompt best (max over the
     prompt's samples), then stats across prompts.
@@ -104,11 +113,16 @@ def _gap_stats(df: pd.DataFrame, col: str | None, agg: str = "all"):
         return ("—", "—", "—")
     s = pd.to_numeric(df[col], errors="coerce")
     if agg == "max":
-        s = s.groupby(df["id"]).max()  # per-prompt max over its samples
+        s = s.groupby(df["id"]).max()   # per-prompt best over its samples
+    elif agg == "mean":
+        # Average within a prompt first, then across prompts, so every prompt counts
+        # once. Pooling all samples instead lets prompts with more surviving samples
+        # weigh more, and the survival rate itself varies with alpha.
+        s = s.groupby(df["id"]).mean()
     v = s.dropna()
     if v.empty:
         return ("—", "—", "—")
-    return (f"{(v > 0).mean():.1%}", f"{v.mean():.3f}", f"{v.std():.3f}")
+    return (f"{(v > GAP_THRESHOLD).mean():.1%}", f"{v.mean():.3f}", f"{v.std():.3f}")
 
 
 def _bg_row(df: pd.DataFrame, run: str, cols: dict, agg: str = "all") -> dict:
@@ -121,8 +135,8 @@ def _bg_row(df: pd.DataFrame, run: str, cols: dict, agg: str = "all") -> dict:
         ("", "configuration"): "baseline" if run == "baseline" else "steered",
         ("", "alpha"): "—" if alpha is None else (int(alpha) if alpha == int(alpha) else alpha),
         ("", "samples/cif"): samples,
-        ("unrelaxed", "%>0"): unrel[0], ("unrelaxed", "mean"): unrel[1], ("unrelaxed", "std"): unrel[2],
-        ("relaxed", "%>0"): rel[0], ("relaxed", "mean"): rel[1], ("relaxed", "std"): rel[2],
+        ("unrelaxed", _GAP_COL): unrel[0], ("unrelaxed", "mean"): unrel[1], ("unrelaxed", "std"): unrel[2],
+        ("relaxed", _GAP_COL): rel[0], ("relaxed", "mean"): rel[1], ("relaxed", "std"): rel[2],
     }
 
 
@@ -191,8 +205,9 @@ def main():
             section(f"Predicted band gap — {bg_path}",
                     "(not found — run combine_bandgap_predictions.py first)")
         else:
-            # emit both aggregations: over all samples, and per-prompt best-of
-            for agg, note in [("all", "all samples"),
+            # emit each aggregation: pooled, per-prompt mean, per-prompt best-of
+            for agg, note in [("all", "all samples pooled"),
+                              ("mean", "per-prompt mean over valid samples"),
                               ("max", "best-of samples: per-prompt max")]:
                 sg, nosg = bandgap_tables(bg_path, agg)
                 for title, tbl in [("with space group in prompt", sg),
