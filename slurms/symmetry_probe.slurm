@@ -10,19 +10,24 @@
 source /home/victor_nardi/MatSteer/CrystaLLM/crystallm_venv/bin/activate
 cd /home/victor_nardi/MatSteer
 
-# Exp 1.3: logistic-regression probe vs a composition-only baseline and a majority floor.
+# Exp 1.3: logistic-regression probe vs lookup / composition baselines and a majority floor.
 #
 # LAYERS:     space-separated, e.g. LAYERS="0 5 14". Empty runs the script default.
 # LABEL_COLS: comma-separated subset of space_group_symbol,point_group,wyckoff_letters.
+#             One job per label: the output filename is keyed on LABEL_COLS, so running
+#             two labels together writes a combined CSV the table plot cannot split.
 # VARIANT:    full (default) or nosym.
-# PARTITION:  all|train|val|test. REQUIRED; the script exits if unset.
 #
-#   sbatch --export=ALL,LABEL_COLS=point_group,VARIANT=nosym,PARTITION=val,LAYERS="0 1 2 ..." \
+# The probe always fits on the train split and scores on val -- that is fixed in the
+# script, not a knob, so there is no PARTITION variable any more.
+#
+#   sbatch --export=ALL,LABEL_COLS=point_group,VARIANT=nosym,LAYERS="0 1 2 ..." \
 #          slurms/symmetry_probe.slurm
 #
-# Memory is dominated by the embedding frame (~50G per layer), not the fit: point group
-# is only 32 classes, so lbfgs is cheap next to loading a 14.6 GB parquet. Layers are
+# Memory is dominated by the embedding frame (~50G per layer), not the fit. Layers are
 # processed one at a time and freed in between.
+#
+# scikit-learn is CPU-only, so this asks for cpus, not a GPU.
 #
 # node11 excluded for the same reason as symmetry_separability.slurm: it advertises
 # 192G but has been seen with <5G free, which OOM-killed job 323209.

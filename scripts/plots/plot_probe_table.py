@@ -30,10 +30,13 @@ from utils import DATASETS, PARTITIONS, VARIANTS, analysis_dir
 
 COLUMNS = [
     ("majority_acc", "majority\n(floor)"),
+    ("lookup_acc", "lookup\n(memorized formula)"),
     ("composition_acc", "composition\n(chemistry only)"),
     ("embedding_acc", "embedding\n(residual stream)"),
-    ("margin_over_composition", "margin\n(emb - comp)"),
+    ("margin_over_best_baseline", "margin\n(emb - best baseline)"),
 ]
+# The column the shading tracks, and the one the experiment is actually about.
+MARGIN_COL = "margin_over_best_baseline"
 
 
 def main():
@@ -63,14 +66,14 @@ def main():
         cells, colours = [], []
         # Shade the margin column only. The three accuracies share a scale but mean
         # different things, so colouring them all would invite reading across the row.
-        lo, hi = d["margin_over_composition"].min(), d["margin_over_composition"].max()
+        lo, hi = d[MARGIN_COL].min(), d[MARGIN_COL].max()
         span = (hi - lo) or 1.0
         for _, r in d.iterrows():
             cells.append([f"{r[c]:.4f}" for c, _ in COLUMNS])
-            shade = plt.cm.Blues(0.15 + 0.55 * (r["margin_over_composition"] - lo) / span)
-            colours.append(["white", "white", "white", shade])
+            shade = plt.cm.Blues(0.15 + 0.55 * (r[MARGIN_COL] - lo) / span)
+            colours.append(["white"] * (len(COLUMNS) - 1) + [shade])
 
-        fig, ax = plt.subplots(figsize=(9, 0.32 * len(d) + 1.6))
+        fig, ax = plt.subplots(figsize=(11.5, 0.32 * len(d) + 2.2))
         ax.axis("off")
         table = ax.table(cellText=cells,
                          rowLabels=[f"layer {int(l)}" for l in d["layer"]],
@@ -79,16 +82,26 @@ def main():
         table.auto_set_font_size(False)
         table.set_fontsize(9)
         table.scale(1, 1.4)
+        # Column headers are two lines; without extra height the second line is drawn
+        # over the row border below it.
+        for (row, _), cell in table.get_celld().items():
+            if row == 0:
+                cell.set_height(cell.get_height() * 2.2)
 
         n_classes = int(d["n_classes"].iloc[0])
         n_test = int(d["n_test"].iloc[0])
+        n_train = int(d["n_train"].iloc[0])
+        # Older CSVs predate the fixed train->val design and carry no partition columns.
+        fit = d["train_partition"].iloc[0] if "train_partition" in d else "?"
+        scored = d["eval_partition"].iloc[0] if "eval_partition" in d else args.partition
         # State the shading endpoints. The margin barely moves across layers, so a
         # colour scale stretched over that range makes differences well inside the
         # noise look dramatic -- naming the span stops the colour being over-read.
         ax.set_title(
             f"Linear probe — {label}\n"
-            f"{args.dataset} / {args.variant} / partition={args.partition} / split={args.split}\n"
-            f"{n_classes} classes, ~{n_test:,} test rows per layer   |   "
+            f"{args.dataset} / {args.variant}   |   fit on {fit} ({n_train:,} rows), "
+            f"scored on {scored} ({n_test:,} rows)   |   split={args.split}\n"
+            f"{n_classes} classes   |   "
             f"margin shading spans {lo:.4f}–{hi:.4f} (range {hi - lo:.4f})",
             fontsize=10, pad=12)
         fig.tight_layout()
