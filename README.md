@@ -40,16 +40,24 @@ CIF prompt ──► CrystaLLM (steered)  ──► generated CIF
 ### Alpha (steering strength)
 Residual-stream norm at layer 14 ≈ 164/token, so:
 
-| alpha | ≈ fraction of residual norm | status |
-|------:|:----------------------------|:-------|
-| 11    | ~7%                         | swept  |
-| 16    | ~10%                        | swept, analyzed |
-| 25    | ~15%                        | swept  |
-| 40    | ~25%                        | swept, analyzed |
-| 80    | ~49%                        | **breaks** — logits → inf/nan, generation crashes |
+| alpha | ≈ fraction of residual norm | valid samples | status |
+|------:|:----------------------------|--------------:|:-------|
+| −16   | ~10% (negative)             | 95.1%         | swept, analyzed |
+| 0     | 0% (control)                | 95.5%         | swept, analyzed |
+| 11    | ~7%                         | 94.3%         | swept  |
+| 16    | ~10%                        | 95.2%         | swept, analyzed |
+| 25    | ~15%                        | 95.5%         | swept, analyzed |
+| 40    | ~25%                        | 94.0%         | swept, analyzed |
+| 60    | ~37%                        | 88.8%         | swept, analyzed |
+| 80    | ~49%                        | —             | **breaks** — logits → inf/nan, generation crashes |
 
-alpha = 80 is the numerical breaking point (`RuntimeError: probability tensor
-contains inf/nan`). The sweep stays at 11/16/25/40.
+alpha = 80 is the numerical breaking point for the band-gap vector
+(`RuntimeError: probability tensor contains inf/nan`); the band-gap sweep tops out
+at 60. The density vector is better behaved and does run at 80.
+
+Validity falls off well before generation breaks — 88.8% at alpha 60 against ~95%
+elsewhere — and the prompts that drop out are not a random sample, so per-alpha
+means must be compared on shared prompts rather than each run's own set.
 
 ### Relaxation
 - M3GNet-PES (matgl) via `relax_venv` (torch 2.4.1+cu121, V100/sm_70 compatible).
@@ -63,31 +71,54 @@ contains inf/nan`). The sweep stays at 11/16/25/40.
 
 ## Key results so far
 
-### Band-gap steering (best-of-3 samples, matched 300 prompts)
+### Band-gap steering — no effect at any strength
 
-Steered values are the per-prompt max over 3 samples, averaged over the 300 prompts.
-Baseline is 1 sample/prompt over the same 300 prompts.
+Over the full test set (10,286 prompts, 3 samples each, no space group in the
+prompt), each prompt contributing the mean of its valid samples:
 
-| Configuration          | alpha | Samples | Unrelaxed mean (eV) | Unrelaxed %gap | Relaxed mean (eV) | Relaxed %gap |
-|------------------------|------:|--------:|--------------------:|---------------:|------------------:|-------------:|
-| Baseline (matched 300) |     0 |       1 |               0.090 |           15.3 |             0.161 |         17.7 |
-| Steered                |    16 |       3 |               0.174 |           20.3 |             0.195 |         19.1 |
-| Steered                |    40 |       3 |               0.172 |           21.0 |             0.184 |         19.2 |
+| Configuration | alpha | Unrelaxed %>0.05 eV | Unrelaxed mean | Relaxed %>0.05 eV | Relaxed mean |
+|---------------|------:|--------------------:|---------------:|------------------:|-------------:|
+| Baseline      |     — |               15.2% |          0.194 |                 — |            — |
+| Steered       |   −16 |               15.5% |          0.147 |             16.0% |        0.185 |
+| Steered       |     0 |               15.9% |          0.146 |             16.3% |        0.186 |
+| Steered       |    16 |               15.8% |          0.146 |             16.3% |        0.190 |
+| Steered       |    25 |               15.8% |          0.146 |             16.3% |        0.188 |
+| Steered       |    40 |               15.7% |          0.140 |             15.9% |        0.179 |
+| Steered       |    60 |               14.5% |          0.122 |             14.6% |        0.154 |
 
-**Finding: no meaningful band-gap lift from steering** once the baseline is matched
-to the same 300 prompts.
-- A naïve comparison against the *full* test baseline (13.9% gap>0) made steering
-  look like an improvement, but restricting the baseline to the same 300 prompts
-  gives 17.7% — the 300 sampled prompts are simply higher-gap than the test-set
-  average.
-- Of the 300 prompts with ground-truth data, they are essentially all metals
-  (mean 0.003 eV, max 0.025 eV, 0% insulators). Steering is fighting strong
-  metallic prompt conditioning.
-- Raw vs. relaxed give similar gap fractions, so **relaxation is not washing out**
-  any steering effect — the effect is just small to begin with.
+**Finding: steering does not move the band gap, in either direction.** Each alpha
+paired against alpha 0 on the prompts they share (`steering_ttest.py`) gives
+Holm-adjusted p >= 0.60 and |Cohen's d| <= 0.017 on the relaxed gaps, and p = 1.00
+with |d| <= 0.010 unrelaxed. At n ~ 10,000 the design would detect d ~ 0.04, so
+these are tight nulls, not inconclusive ones. Median per-prompt differences are
+order 1e-7 — the typical prompt does not move at all.
 
-This motivates the current tasks: steer over **all ~10k prompts** (unbiased set)
-and **drop the space-group constraint** to give steering more room (see `tasks.md`).
+Two traps this analysis had to avoid, both of which produce fake effects:
+
+- **Comparing runs on different prompt sets.** Generation and relaxation fail on
+  different prompts each run, and because gaps are so skewed (median 0.005 eV, max
+  ~8 eV) a handful of insulators entering or leaving dominates any mean. alpha 60's
+  own-prompt mean of 0.154 looks like a real drop; against alpha 0 restricted to the
+  prompts they share it is 0.1516 vs 0.1518. Always pair.
+- **Counting `gap > 0`.** MEGNet returns small noise either side of zero for a
+  metal, so that statistic counts the sign of the noise: the same test set read
+  13.6% and 94.8% before and after an unrelated parsing fix that moved the median
+  from -0.0085 to +0.0048 eV. Use the 0.05 eV metal cutoff.
+
+The one real difference between generated and real structures is in the tail, not
+the centre: p99 is 3.24 eV for the original test CIFs against 2.17-2.30 eV for every
+generated run at every alpha. The model under-produces wide-gap structures, and
+steering does not fix that.
+
+### Volume-per-atom steering — small but real
+
+The density vector is the only one that does anything. Paired against alpha 0 on
+log10 volume/atom: alpha 40 gives d = 0.128 (p = 6.9e-05), alpha 80 gives d = 0.165
+(p = 9.1e-07), so the effect scales with strength. In absolute terms it is +0.4% and
++0.7% on the median.
+
+It exists only as a per-prompt nudge, not a moved distribution: unpaired Welch on the
+same data gives p ~ 0.6-0.8, and Levene ~ 0.97 shows the spread does not change.
 
 ### Spectral co-clustering "incoherence" — a construction artifact
 - `spec_cocluster_analysis.py` runs Dhillon spectral co-clustering on per-layer
@@ -200,6 +231,17 @@ analysis/v1_mp/all/metadata_mp_*.png        MP metadata histograms — no varian
   `analysis/bandgap_percentile_stats.py`. Note `utils.py:DEFAULT_LABEL_COLS` asks for
   `band_gap_ev`, which does not exist in `metadata.parquet` and is silently dropped, so
   `load_labeled_embeddings` never returns a gap — join it yourself.
+- **Symmetry must be restored before parsing.** A CIF lists the asymmetric unit plus
+  a space group; the full cell comes from applying that group's operators, and
+  CrystaLLM writes a placeholder operator list holding only the identity. Parse
+  without restoring them and you get the asymmetric unit alone — wrong atom count,
+  wrong formula, volume/atom inflated by the multiplicity factor. Always go through
+  `utils.py:postprocess()` (or `restore_symmetry_operators()`), never CrystaLLM's
+  `replace_symmetry_operators` directly: the upstream regex assumes unindented CIFs,
+  which is true of generated ones and false of the pymatgen-written references, and
+  a miss returns the text unchanged without raising. This silently corrupted the
+  test-set baseline (87.5% wrong atom counts, 52.6% wrong formula) and the
+  `density_atomic_raw` column (2.67x high at the median) until 2026-08-19.
 - **CIF strings live in exactly two places**: `generated_cifs/` (`cif_steered`, raw)
   and `relaxed/` (`cif_relaxed`, relaxed). `validation/` holds flags only. Downstream
   scripts (novelty, relax, predict) join flags with the CIF source on `(id, sample)`
