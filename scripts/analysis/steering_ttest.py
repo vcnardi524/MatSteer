@@ -18,8 +18,9 @@ if the two disagree badly, the pairing is carrying the result.
 Values and their filtering are read exactly as plot_steering_distribution_shift.py reads
 them (same loaders, same valid-only rule, same one-point-per-prompt mean, same log10 for
 density_atomic), so the numbers here and the curves there describe the same samples.
-Alphas are compared on the ids common to ALL plotted alphas, so every row is the same
-population of prompts.
+Each alpha is paired against alpha 0 on the ids those two share. Every comparison is
+therefore still perfectly paired, but a prompt lost by one alpha does not remove it
+from the other comparisons -- so n differs by row, on purpose.
 
 WHAT THE COLUMNS MEAN
 ---------------------
@@ -125,32 +126,36 @@ def main():
         per_alpha[a] = _ds.load_alpha(spec["results_dir"], runs[a], spec["col"],
                                       args.relaxed, "mean", spec["measure"])
 
-    common = sorted(set.intersection(*(set(d["id"]) for d in per_alpha.values())))
-    print(f"\nPrompts common to all {len(alphas)} alphas: {len(common):,}")
-    if len(common) < 10:
-        raise SystemExit("Too few shared prompts to compare.")
-
-    # One column per alpha, rows aligned on id -> every comparison is paired by row.
-    wide = pd.DataFrame({"id": common}).set_index("id")
-    for a in alphas:
-        d = per_alpha[a].set_index("id")["value"]
-        wide[a] = d.reindex(common)
+    # Each alpha is paired against alpha 0 on the prompts THOSE TWO share, not on the
+    # prompts every alpha shares. Intersecting across all of them would discard a prompt
+    # from every comparison because one unrelated alpha happened to lose it, and the
+    # prompts that drop out are not a random sample -- they skew high-gap, so the whole
+    # comparison shifts level as well as losing power.
+    series = {a: d.set_index("id")["value"] for a, d in per_alpha.items()}
+    ref = series[0.0]
+    print(f"\nalpha 0 covers {len(ref):,} prompts; each alpha is paired against it "
+          f"on the prompts they share")
 
     scale = spec["scale"] if args.x_scale == "auto" else args.x_scale
-    if scale == "log" and (wide.to_numpy(float) <= 0).any():
+    if scale == "log" and any((s.to_numpy(float) <= 0).any() for s in series.values()):
         print("  ! non-positive values present -- testing on the linear scale")
         scale = "linear"
     if scale == "log":
-        wide = np.log10(wide)
+        series = {a: np.log10(s) for a, s in series.items()}
+        ref = series[0.0]
     unit = " [log10]" if scale == "log" else ""
     print(f"Testing on the {scale} scale{unit}")
 
-    base = wide[0.0].to_numpy(float)
     rows = []
     for a in alphas:
         if a == 0.0:
             continue
-        x = wide[a].to_numpy(float)
+        idx = ref.index.intersection(series[a].index)
+        if len(idx) < 10:
+            print(f"  ! alpha {a:g}: only {len(idx)} shared prompts -- skipped")
+            continue
+        base = ref.loc[idx].to_numpy(float)
+        x = series[a].loc[idx].to_numpy(float)
         diff = x - base
         t, p_t = ttest_rel(x, base)
         sd = diff.std(ddof=1)
