@@ -34,29 +34,14 @@ from pymatgen.core.operations import SymmOp as _SymmOp
 if not hasattr(_SymmOp, "as_xyz_string"):
     _SymmOp.as_xyz_string = _SymmOp.as_xyz_str
 
-# Load crystallm._utils directly by file path to avoid triggering
-# crystallm/__init__.py (which needs full pymatgen, not just pymatgen-core).
-import importlib.util as _ilu
-_spec = _ilu.spec_from_file_location(
-    "cryst_utils", "CrystaLLM/crystallm/_utils.py")
-_cryst_utils = _ilu.module_from_spec(_spec)
-_spec.loader.exec_module(_cryst_utils)
-extract_space_group_symbol = _cryst_utils.extract_space_group_symbol
-replace_symmetry_operators = _cryst_utils.replace_symmetry_operators
-remove_atom_props_block = _cryst_utils.remove_atom_props_block
-
-
-def postprocess(cif: str) -> str:
-    sg = extract_space_group_symbol(cif)
-    if sg is not None and sg != "P 1":
-        cif = replace_symmetry_operators(cif, sg)
-    cif = remove_atom_props_block(cif)
-    return cif
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
+from utils import postprocess
 
 
 def parse_cif(cif: str) -> Structure | None:
     try:
-        processed = postprocess(cif)
+        processed = postprocess(cif, "relax")
         return Structure.from_str(processed, fmt="cif")
     except Exception:
         return None

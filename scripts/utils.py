@@ -3,6 +3,7 @@
 Kept import-light so any script can `from utils import ...` (scripts/ is on
 sys.path when a script is run as `python scripts/<name>.py`).
 """
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -25,12 +26,43 @@ replace_symmetry_operators = _cryst_utils.replace_symmetry_operators
 remove_atom_props_block = _cryst_utils.remove_atom_props_block
 
 
+# CrystaLLM's replace_symmetry_operators finds the placeholder identity-operator block
+# with a literal regex that assumes no indentation -- true of CIFs its own model writes,
+# false of pymatgen's indented reference CIFs. On a miss re.sub returns the text
+# unchanged and nothing raises, leaving the structure to parse as the asymmetric unit
+# alone (wrong atom count and formula). Normalise the block first so the swap fires
+# for both sources.
+_IDENTITY_OPS = re.compile(
+    r"loop_[ \t]*\n[ \t]*_symmetry_equiv_pos_site_id[ \t]*\n"
+    r"[ \t]*_symmetry_equiv_pos_as_xyz[ \t]*\n[ \t]*1[ \t]+'x,\s*y,\s*z'")
+_CANONICAL_OPS = ("loop_\n_symmetry_equiv_pos_site_id\n"
+                  "_symmetry_equiv_pos_as_xyz\n1 'x, y, z'")
+# P1 is written both with and without the space, and needs no expansion either way.
+_NO_SYMMETRY = ("P 1", "P1")
+
+
+def restore_symmetry_operators(cif: str, space_group_symbol: str) -> str:
+    """replace_symmetry_operators, but it also works on indented CIFs.
+
+    Raises if the substitution did not take, instead of returning the input unchanged.
+    Call this anywhere the raw CrystaLLM function would otherwise be used.
+    """
+    if space_group_symbol is None or space_group_symbol in _NO_SYMMETRY:
+        return cif                      # P1: the identity operator is the whole story
+    out = replace_symmetry_operators(_IDENTITY_OPS.sub(_CANONICAL_OPS, cif),
+                                     space_group_symbol)
+    # A missed substitution is silent, which is how the reference CIFs went unexpanded
+    # for so long. Treat leftover identity ops as the failure they are.
+    if _IDENTITY_OPS.search(out):
+        raise ValueError(f"symmetry operators for '{space_group_symbol}' were not "
+                         f"substituted -- CIF still has identity only")
+    return out
+
+
 def postprocess(cif: str, fname: str) -> str:
     try:
         # replace the symmetry operators with the correct operators
-        space_group_symbol = extract_space_group_symbol(cif)
-        if space_group_symbol is not None and space_group_symbol != "P 1":
-            cif = replace_symmetry_operators(cif, space_group_symbol)
+        cif = restore_symmetry_operators(cif, extract_space_group_symbol(cif))
 
         # remove atom props
         cif = remove_atom_props_block(cif)

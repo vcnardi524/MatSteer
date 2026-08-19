@@ -47,8 +47,11 @@ from crystallm import (
     is_sensible,
     is_space_group_consistent,
     is_valid,
-    replace_symmetry_operators,
 )
+
+import os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
+from utils import restore_symmetry_operators
 
 
 def eval_one(args):
@@ -74,9 +77,10 @@ def eval_one(args):
 
         # Replace generated symmetry operators with canonical ones for the stated
         # space group before checking consistency — same as evaluate_cifs.py does.
-        sg = extract_space_group_symbol(cif)
-        if sg is not None and sg != "P 1":
-            cif = replace_symmetry_operators(cif, sg)
+        # Via utils so indented CIFs are handled and a failed swap raises: without it
+        # every non-P1 structure reads as the asymmetric unit alone and fails the
+        # space-group consistency check.
+        cif = restore_symmetry_operators(cif, extract_space_group_symbol(cif))
 
         result["atom_site_consistent"] = is_atom_site_multiplicity_consistent(cif)
         result["space_group_consistent"] = is_space_group_consistent(cif)
