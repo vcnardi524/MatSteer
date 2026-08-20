@@ -15,4 +15,9 @@ mkdir -p logs
 
 source megnet_venv/bin/activate
 
-python scripts/predict_bandgap_testset.py
+# Baseline gaps for the reference test CIFs. RESULTS_DIR picks the property tree;
+# output lands in <RESULTS_DIR>/property_predictions/testset_baseline.parquet.
+# The script resumes from that file, so delete it first to force a full recompute.
+RESULTS_DIR=${RESULTS_DIR:-"steering_results/bandgap"}
+
+python scripts/eval/predict_bandgap_testset.py --results-dir ${RESULTS_DIR}

@@ -19,6 +19,6 @@ pip install -q "numpy<2"
 INPUT=${INPUT:-"steering_results/validation/steered_test_clean_alpha16.0_layer14.parquet"}
 BASE=${BASE:-"CrystaLLM/cifs_v1_train.pkl.gz"}
 
-python scripts/novelty_steered_cifs.py \
+python scripts/eval/novelty_steered_cifs.py \
     --input ${INPUT} \
     --base ${BASE}

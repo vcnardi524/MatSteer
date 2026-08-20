@@ -23,9 +23,9 @@ for LAYER in ${LAYERS}; do
     echo "========================================"
     echo "Plotting layer ${LAYER}"
     echo "========================================"
-    python scripts/plot_tsne_pca_bandgap.py --layer ${LAYER} --n-samples 10000
-    python scripts/plot_tsne_pca_categorical.py --layer ${LAYER} --property point_group
-    python scripts/plot_tsne_pca_categorical.py --layer ${LAYER} --property space_group_symbol --top-n 20
+    python scripts/plots/plot_tsne_pca_bandgap.py --layer ${LAYER} --n-samples 10000
+    python scripts/plots/plot_tsne_pca_categorical.py --layer ${LAYER} --property point_group
+    python scripts/plots/plot_tsne_pca_categorical.py --layer ${LAYER} --property space_group_symbol --top-n 20
 done
 
 echo "All layers done."
