@@ -78,7 +78,7 @@ prompt), each prompt contributing the mean of its valid samples:
 
 | Configuration | alpha | Unrelaxed %>0.05 eV | Unrelaxed mean | Relaxed %>0.05 eV | Relaxed mean |
 |---------------|------:|--------------------:|---------------:|------------------:|-------------:|
-| Baseline      |     — |               15.2% |          0.194 |                 — |            — |
+| Baseline      |     — |               15.2% |          0.194 |             14.6% |        0.188 |
 | Steered       |   −16 |               15.5% |          0.147 |             16.0% |        0.185 |
 | Steered       |     0 |               15.9% |          0.146 |             16.3% |        0.186 |
 | Steered       |    16 |               15.8% |          0.146 |             16.3% |        0.190 |
@@ -106,9 +106,16 @@ Two traps this analysis had to avoid, both of which produce fake effects:
   from -0.0085 to +0.0048 eV. Use the 0.05 eV metal cutoff.
 
 The one real difference between generated and real structures is in the tail, not
-the centre: p99 is 3.24 eV for the original test CIFs against 2.17-2.30 eV for every
-generated run at every alpha. The model under-produces wide-gap structures, and
-steering does not fix that.
+the centre, and **relaxation removes it**. On the raw generated CIFs p99 is 3.24 eV
+for the originals against 2.17-2.30 eV for every generated run at every alpha; after
+M3GNet relaxation the originals sit at 3.14 eV and the generated runs at 3.01-3.17.
+
+So the deficit is a property of the geometry the model emits, not of what it
+represents: raw generated structures have unrelaxed bond lengths that suppress the
+predicted gap, and relaxing recovers the tail. Steering moves neither version.
+
+The same shows up in the means: unrelaxed, the steered runs average 0.12-0.15 eV
+against the baseline's 0.194, but relaxed they land at 0.154-0.190 against 0.188.
 
 ### Volume-per-atom steering — small but real
 
