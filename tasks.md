@@ -4,6 +4,67 @@ Active experiments. See `README.md` for everything completed so far and the
 overall pipeline.
 ## consider probing at the layers to see if they are actually encoding information
 
+## pca_centroid steering (branch `geometry_steering`, started 2026-08-25)
+Testing whether the property direction is curved rather than straight. Instead of
+`h + alpha * (mean_high - mean_low)`, project the layer-14 hidden state into the top-K
+PCA subspace of the training activations, interpolate a fraction `t` toward the centroid
+of a target class, and map the change back:
+
+    z <- (h - mu) @ W.T ;  h <- h + t * (centroid_pca - z) @ W
+
+Only the K principal directions move; the rest of the residual stream passes through, so
+it keeps supplying the context the centroid does not specify. There is no negative class
+-- the target centroid alone defines the destination.
+
+Scripts: `compute_pca_basis.py` (basis, once per layer) -> `compute_centroid_target.py`
+(one centroid per target) -> `steer_generate_cif.py --method pca_centroid`.
+Artifacts under `steering_vectors/pca_centroid/`; runs named `steered_pca_*` so they sit
+alongside the linear runs without colliding.
+
+First target: density_atomic 30 A^3/atom (train median is 19.10, so ~1.6x), class = the
+100,000 train structures nearest that value, which spans [28.50, 31.50].
+
+### Result of the first t sweep (2026-08-25): no better than linear
+`analysis/v1_all/test/pca_centroid_vs_linear_density_atomic.csv`. 1,000 test prompts x 3
+samples, paired per prompt against the alpha=0 control, valid samples only, log10 units.
+
+    run       valid%   median   cohens_d
+    alpha0     96.3%    19.26      --
+    alpha40    94.9%    19.34    0.181
+    alpha80    88.4%    19.56    0.189
+    t=0.25     96.1%    19.33    0.140
+    t=0.5      95.0%    19.39    0.151
+    t=1.0      12.5%    19.46    0.053
+    t=2.0       0.0%      --       --
+
+Where the model stays coherent (t <= 0.5) the effect matches the linear method's, which
+is to say it is small. Past that the model degrades instead of steering.
+
+**The trap this sweep walked into, for the next person.** Measured over every *parseable*
+CIF, t=1.0 looked like a large win: median 19.29 -> 25.05, d=0.677, ~3.7x the best linear
+run. It was an artifact. Only 12.5% of those CIFs are chemically valid, and the failures
+are malformed text ("integer modulo by zero" 524, "zip() argument 2 is longer than
+argument 1" 256, "len(items)=15 is not a multiple of n=2" 213), not oversized cells --
+so it is not validity unfairly penalising us for making cells bigger. Filtering to valid
+rows drops d to 0.053 on 210 surviving prompts. **Always join the validation flags before
+reading a density shift**; a steering strength that breaks the CIF grammar produces huge
+apparent movement in anything computed from the parsed text.
+
+The PCA subspace itself is not the problem: the target centroid sits 4.273 from the
+global activation mean and 4.221 of that (98.8%) lies inside the top-64 directions, so
+the projection keeps essentially all of the class signal. Top-64 explains 68.9% of the
+variance overall (pc1 alone 14.2%).
+
+Worth trying before abandoning the non-linear premise: a target closer to the corpus
+median (the t needed to reach 30 may simply exceed what the model tolerates); steering a
+subset of layers or token positions rather than all of them; larger K; and checking
+whether LayerNorm downstream of layer 14 is renormalising the injected change away.
+
+**Not done yet: the analysis path.** `plot_steering_distribution_shift.py:discover_runs`
+keys runs on `alpha(-?[\d.]+)` in the stem, so `steered_pca_*` files are invisible to it
+and to `steering_ttest.py`. Those two need a way to enumerate `t` runs before the method
+can be measured against the linear one.
+
 ## consider different types of steering
 
 ## consider different generative models

@@ -72,6 +72,44 @@ def postprocess(cif: str, fname: str) -> str:
 
     return cif
 
+
+# --- scalar reads straight off the CIF text -----------------------------------
+# Both `_cell_volume` and `_chemical_formula_sum` are written for the FULL cell, so
+# these need no symmetry expansion and no pymatgen parse -- which is what makes them
+# cheap enough to run over the whole 2M-structure corpus.
+_CELL_VOLUME_RE = re.compile(r"_cell_volume\s+([-\d.eE]+)")
+# Single-element formulas have no space, so pymatgen writes them unquoted
+# (`_chemical_formula_sum   Mn4`). Match both forms or elemental structures drop out.
+_FORMULA_SUM_RE = re.compile(r"_chemical_formula_sum\s+(?:'([^']+)'|(\S+))")
+_ELEMENT_RE = re.compile(r"([A-Z][a-z]?)(\d*)")
+
+
+def cell_volume_from_text(cif: str) -> float:
+    """The `_cell_volume` token, in A^3. NaN if absent or unparseable."""
+    m = _CELL_VOLUME_RE.search(cif) if isinstance(cif, str) else None
+    if not m:
+        return float("nan")
+    try:
+        return float(m.group(1))
+    except ValueError:
+        return float("nan")
+
+
+def natoms_from_text(cif: str) -> float:
+    """Atom count summed from `_chemical_formula_sum`. NaN if absent or empty."""
+    m = _FORMULA_SUM_RE.search(cif) if isinstance(cif, str) else None
+    if not m:
+        return float("nan")
+    n = sum(int(cnt or 1) for el, cnt in _ELEMENT_RE.findall(m.group(1) or m.group(2)) if el)
+    return float(n) if n else float("nan")
+
+
+def density_atomic_from_text(cif: str) -> float:
+    """Volume per atom (A^3/atom) -- the same quantity as MP's `density_atomic`."""
+    n = natoms_from_text(cif)
+    return cell_volume_from_text(cif) / n if n == n else float("nan")
+
+
 EMBEDDINGS_ROOT = Path("embeddings")
 DEFAULT_DATASET = "v1_all"   # combined NOMAD+OQMD+MP corpus (cifs_v1_prep / tokens_v1_all)
 DEFAULT_METADATA = "metadata.parquet"

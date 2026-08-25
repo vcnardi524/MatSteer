@@ -27,11 +27,24 @@ if [ "${WITH_SG:-1}" = "0" ]; then SG_FLAG=""; fi
 CACHE_FLAG="--use-cache"
 if [ "${USE_CACHE:-1}" = "0" ]; then CACHE_FLAG="--no-use-cache"; fi
 
+# METHOD=linear (default) steers with ALPHA * the mean-difference vector.
+# METHOD=pca_centroid interpolates a fraction T toward the TARGET centroid inside the
+# top-K PCA subspace; it reads steering_vectors/pca_centroid/ and needs TARGET set.
+#
+#   sbatch --export=ALL,METHOD=pca_centroid,STEERING_PROPERTY=density_atomic,TARGET=30,T=0.5 \
+#          slurms/steer_generate_cif.slurm
+METHOD=${METHOD:-linear}
+METHOD_FLAGS="--alpha ${ALPHA:-1.0}"
+if [ "$METHOD" = "pca_centroid" ]; then
+    METHOD_FLAGS="--target ${TARGET:?TARGET is required for METHOD=pca_centroid} --t ${T:-0.5} --k ${K:-64}"
+fi
+
 python scripts/steering/steer_generate_cif.py \
     --model CrystaLLM/crystallm_v1_large \
     --pkl ${PKL:-CrystaLLM/cifs_v1_test.pkl.gz} \
     --temperature ${TEMPERATURE:-1.0} \
-    --alpha ${ALPHA:-1.0} \
+    --method ${METHOD} \
+    ${METHOD_FLAGS} \
     --layer ${LAYER:-14} \
     --steering-property ${STEERING_PROPERTY:-bandgap} \
     --n-prompts ${N_PROMPTS:-0} \
