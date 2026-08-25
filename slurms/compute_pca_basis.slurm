@@ -30,13 +30,20 @@ K=${K:-64}
 PARTITION=${PARTITION:-train}
 echo "layer=$LAYER k=$K partition=$PARTITION target=${TARGET:-<none>}"
 
-python scripts/steering/compute_pca_basis.py \
-    --layer "$LAYER" \
-    --k "$K" \
-    --partition "$PARTITION" \
-    --dataset ${DATASET:-v1_all} \
-    --variant ${VARIANT:-full} \
-    --batch-size ${BATCH_SIZE:-50000}
+# The basis is property-independent, so a second property at the same layer only needs
+# a new centroid. Refit only when it is missing, or when REFIT=1 asks for it.
+BASIS="steering_vectors/pca_centroid/pca_layer${LAYER}_k${K}.parquet"
+if [ -f "$BASIS" ] && [ "${REFIT:-0}" != "1" ]; then
+    echo "Reusing $BASIS (REFIT=1 to refit)"
+else
+    python scripts/steering/compute_pca_basis.py \
+        --layer "$LAYER" \
+        --k "$K" \
+        --partition "$PARTITION" \
+        --dataset ${DATASET:-v1_all} \
+        --variant ${VARIANT:-full} \
+        --batch-size ${BATCH_SIZE:-50000} || exit 1
+fi
 
 if [ -n "${TARGET}" ]; then
     python scripts/steering/compute_centroid_target.py \
