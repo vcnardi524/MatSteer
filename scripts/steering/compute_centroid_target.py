@@ -52,7 +52,11 @@ def main():
     ap.add_argument("--target", type=float, required=True,
                     help="Target property value the centroid is built around")
     ap.add_argument("--property", default=DEFAULT_PROPERTY,
-                    help="Label column, and the output subdir name")
+                    help="Label column in --labels")
+    ap.add_argument("--name", default=None,
+                    help="Output subdir under steering_vectors/pca_centroid/ "
+                         "(default: --property). Give it when the column name is not a "
+                         "good directory name, e.g. dos_electronic.band_gap -> bandgap.")
     ap.add_argument("--labels", default=DEFAULT_LABELS,
                     help="Parquet with an `id` column and --property")
     ap.add_argument("--class-size", type=int, default=100_000,
@@ -100,11 +104,12 @@ def main():
           f"|c - mean|={np.linalg.norm(centroid - mean):.3f}, "
           f"of which {np.linalg.norm(centroid_pca):.3f} lies in the top-{args.k} subspace")
 
-    out_dir = METHOD_DIR / args.property
+    out_dir = METHOD_DIR / (args.name or args.property)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"layer{args.layer}_k{args.k}_target{args.target:g}.parquet"
     pd.DataFrame([{
         "property": args.property,
+        "name": args.name or args.property,
         "target": args.target,
         "class_size": n,
         "class_lo": float(vals.min()),

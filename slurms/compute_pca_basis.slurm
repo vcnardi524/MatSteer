@@ -42,6 +42,7 @@ if [ -n "${TARGET}" ]; then
     python scripts/steering/compute_centroid_target.py \
         --target "$TARGET" \
         --property ${PROPERTY:-density_atomic} \
+        --name ${NAME:-${PROPERTY:-density_atomic}} \
         --labels ${LABELS:-density_atomic_v1.parquet} \
         --class-size ${CLASS_SIZE:-100000} \
         --layer "$LAYER" \

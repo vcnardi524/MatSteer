@@ -169,14 +169,27 @@ def alpha_colour(alpha: float, positives: list) -> str:
     return ramp_colours(len(positives))[positives.index(alpha)]
 
 
-def discover_runs(results_dir: str, family: str) -> dict:
-    """{alpha: stem} for the runs that have BOTH predictions and validation."""
+# How a run's steering strength is read out of its filename. The linear runs carry
+# `alpha40.0`; the pca_centroid runs carry `t0.5` and are prefixed `steered_pca_` so the
+# two families never collide in one directory. Both methods use 0 to mean "hook adds
+# nothing", so the alpha=0 run is also the t=0 control and is listed under both.
+STRENGTH_RE = {"linear": re.compile(r"alpha(-?[\d.]+)"),
+               "pca_centroid": re.compile(r"_t(-?[\d.]+)_")}
+
+
+def discover_runs(results_dir: str, family: str, method: str = "linear") -> dict:
+    """{strength: stem} for the runs that have BOTH predictions and validation."""
     runs = {}
     for f in sorted(glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet")):
         stem = _os.path.basename(f)
         if stem == "testset_baseline.parquet":
             continue
-        m = re.search(r"alpha(-?[\d.]+)", stem)
+        is_pca = stem.startswith("steered_pca_")
+        if is_pca != (method == "pca_centroid"):
+            # the alpha=0 run is the shared control: no injection either way
+            if not (method == "pca_centroid" and re.search(r"alpha-?0(\.0)?_", stem)):
+                continue
+        m = STRENGTH_RE["linear" if not is_pca else "pca_centroid"].search(stem)
         if not m:
             continue
         is_nosg = stem.endswith("_nosg.parquet")
@@ -275,6 +288,11 @@ def truth_density_atomic(ids: set) -> pd.DataFrame:
     return df
 
 
+def strength_label(method: str) -> str:
+    """What the steering knob is called for this method, for prints and the legend."""
+    return "alpha" if method == "linear" else "t"
+
+
 def kde_curve(v: np.ndarray, grid: np.ndarray, bw: float):
     """Gaussian KDE evaluated on grid, or None when the sample is degenerate."""
     if len(v) < 2 or np.allclose(v, v[0]):
@@ -289,6 +307,16 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--property", default="band_gap", choices=sorted(PROPS))
+    ap.add_argument("--method", choices=["linear", "pca_centroid"], default="linear",
+                    help="Which steering family to draw. linear reads alpha runs, "
+                         "pca_centroid reads steered_pca_* runs keyed by t (plus the "
+                         "alpha=0 control, which is the same no-injection run).")
+    ap.add_argument("--no-intersect", action="store_true",
+                    help="Draw every curve over its own surviving prompts, and the "
+                         "ground truth over all of them, instead of restricting all "
+                         "curves to the prompts common to every run. Use it when one "
+                         "strength collapses -- the intersection would otherwise shrink "
+                         "every other curve to that run's few survivors.")
     ap.add_argument("--alphas", type=float, nargs="+", default=None,
                     help="Steering strengths to draw (default: every run on disk)")
     ap.add_argument("--family", choices=["nosg", "sg"], default=None,
@@ -314,10 +342,11 @@ def main():
     print(f"Value source: {'relaxed' if args.relaxed else 'raw generated CIF'}   "
           f"aggregation: {args.agg}   family: {family}")
 
-    runs = discover_runs(spec["results_dir"], family)
+    runs = discover_runs(spec["results_dir"], family, args.method)
     if not runs:
-        raise SystemExit(f"No runs found for {args.property} (family={family}).")
-    print(f"Runs on disk: alphas {sorted(runs)}")
+        raise SystemExit(f"No runs found for {args.property} "
+                         f"(family={family}, method={args.method}).")
+    print(f"Runs on disk: strengths {sorted(runs)}")
     if args.alphas is not None:
         missing = [a for a in args.alphas if a not in runs]
         if missing:
@@ -331,13 +360,31 @@ def main():
     print("Loading runs ...")
     per_alpha = {}
     for a in alphas:
-        print(f"  alpha {a:g}  [{runs[a]}]")
+        print(f"  {strength_label(args.method)} {a:g}  [{runs[a]}]")
         per_alpha[a] = load_alpha(spec["results_dir"], runs[a], spec["col"],
                                   args.relaxed, args.agg, spec["measure"])
 
-    # Same prompt population in every curve, truth included.
-    common = set.intersection(*(set(d["id"]) for d in per_alpha.values()))
-    print(f"\nPrompts common to all {len(alphas)} alphas: {len(common):,}")
+    # A strength that broke the model entirely has nothing to draw. Drop it loudly
+    # rather than letting an empty array fall through to the axis-range computation.
+    empty = [a for a, d in per_alpha.items() if d.empty]
+    for a in empty:
+        print(f"  ! {strength_label(args.method)} {a:g}: no valid structures at all "
+              f"-- no curve drawn")
+        del per_alpha[a]
+    alphas = [a for a in alphas if a not in empty]
+    if not alphas:
+        raise SystemExit("Every run has zero valid structures.")
+
+    # Same prompt population in every curve, truth included -- unless --no-intersect,
+    # where each curve keeps its own survivors and truth covers the union. One collapsed
+    # strength would otherwise drag every other curve down to its handful of survivors.
+    if args.no_intersect:
+        common = set.union(*(set(d["id"]) for d in per_alpha.values()))
+        print(f"\nNo intersection: each curve keeps its own prompts, truth covers "
+              f"all {len(common):,} used")
+    else:
+        common = set.intersection(*(set(d["id"]) for d in per_alpha.values()))
+        print(f"\nPrompts common to all {len(alphas)} alphas: {len(common):,}")
     if len(common) < 10:
         raise SystemExit("Too few shared prompts to compare.")
 
@@ -369,6 +416,7 @@ def main():
 
     xlabel = spec["label"] + (" [log10]" if scale == "log" else "")
     positives = sorted(a for a in alphas if a > 0)
+    strength_name = strength_label(args.method)
 
     # Two panels over the SAME curves: linear y shows the shape, log y separates the
     # tails. With a distribution this concentrated the alpha lines superimpose on the
@@ -394,7 +442,8 @@ def main():
             else:
                 ax.plot(grid, curve, color=alpha_colour(key, positives), lw=2.0, zorder=3,
                         ls="--" if key == 0 else "-",
-                        label=f"alpha {key:g}" + ("  (control)" if key == 0 else "")
+                        label=f"{strength_name} {key:g}"
+                              + ("  (control)" if key == 0 else "")
                               + f", n={len(v):,}")
         vf = per_alpha[key].attrs.get("valid_frac", float("nan")) if key != "truth" else 1.0
         rows.append(dict(series=key, n=len(v), valid_sample_frac=vf, median=med,
@@ -420,15 +469,19 @@ def main():
 
     src = "relaxed" if args.relaxed else "raw generated"
     fam = f", {family} prompts" if family else ""
+    pop = ("each curve over its own surviving prompts, ground truth over all "
+           f"{len(common):,}" if args.no_intersect else f"n={len(common):,} shared prompts")
     fig.suptitle(
-        f"{args.property}: generated distribution vs ground truth across steering strength\n"
+        f"{args.property} ({args.method}): generated distribution vs ground truth "
+        f"across steering strength\n"
         f"layer 14{fam}, {src} CIFs, one point per prompt = mean of its valid samples, "
-        f"n={len(common):,} shared prompts", fontsize=12.5, y=1.02)
+        f"{pop}", fontsize=12.5, y=1.02)
     fig.tight_layout()
 
     out_dir = analysis_dir("v1_all", None, "test", subdir="plots")
     tag = "_relaxed" if args.relaxed else ""
-    out = out_dir / f"{args.property}_distribution_shift{tag}.png"
+    meth = "" if args.method == "linear" else f"_{args.method}"
+    out = out_dir / f"{args.property}{meth}_distribution_shift{tag}.png"
     fig.savefig(out, dpi=140, bbox_inches="tight")
     plt.close(fig)
 
@@ -436,7 +489,7 @@ def main():
     unit = " [log10]" if scale == "log" else ""
     print(f"\n=== summary{unit} ===")
     print(stats.to_string(index=False))
-    csv = out_dir / f"{args.property}_distribution_shift{tag}.csv"
+    csv = out_dir / f"{args.property}{meth}_distribution_shift{tag}.csv"
     stats.to_csv(csv, index=False)
     print(f"\nSaved {out}\nSaved {csv}")
 
