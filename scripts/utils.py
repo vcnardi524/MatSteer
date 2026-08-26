@@ -134,6 +134,46 @@ SPLIT_INDEX_PATH = "splits_v1.parquet"
 ANALYSIS_ROOT = Path("analysis")
 
 
+# One schema for every steering results table under analysis/<dataset>/<partition>/.
+# These files accumulated four different shapes -- `median` meant A^3/atom in one and
+# log10 in another, the run was keyed by `run` here and `method`+`t` there -- which made
+# them impossible to read side by side. Every results table now leads with these columns,
+# in this order, and may append extras after them.
+#
+#   identity     what was run. `strength` is alpha for linear, t for the pca methods,
+#                so one column orders every method's sweep. `family` is the prompt form
+#                -- sg or nosg -- and belongs to identity because the two are different
+#                prompt sets and a run may only be paired against a control of its own.
+#   population   valid_pct is of all generated samples; n_prompts is how many survived
+#                to contribute a point; n_paired is how many the control also has.
+#   value        `unit` names the scale, so a median is never ambiguous. mean_diff and
+#                median are always in that unit.
+#   stats        cohens_d first: with ~1000 paired prompts a 0.5% shift reaches
+#                p=1e-20, so the p-values rank runs but only d says whether one matters.
+RESULT_COLUMNS = [
+    "property", "method", "layer", "family", "target", "strength", "source", "run",
+    "valid_pct", "n_prompts", "n_paired",
+    "unit", "control_median", "median", "mean_diff", "frac_of_target_move",
+    "cohens_d", "p_paired", "p_holm", "p_wilcoxon",
+]
+RESULT_UNITS = {"band_gap": "eV", "density_atomic": "log10_A3_per_atom"}
+
+
+def write_results_table(df: pd.DataFrame, path) -> Path:
+    """Write a steering results table in the canonical column order.
+
+    Raises on a missing core column rather than writing a table that cannot be
+    compared with the others. Extra columns are kept, after the core ones.
+    """
+    missing = [c for c in RESULT_COLUMNS if c not in df.columns]
+    if missing:
+        raise ValueError(f"results table is missing core columns: {missing}")
+    extras = [c for c in df.columns if c not in RESULT_COLUMNS]
+    path = Path(path)
+    df[RESULT_COLUMNS + extras].to_csv(path, index=False, float_format="%.6g")
+    return path
+
+
 def analysis_dir(dataset: str = DEFAULT_DATASET, variant: str = DEFAULT_VARIANT,
                  partition: str = "all", subdir: str = None) -> Path:
     """Output dir for an analysis run: analysis/<dataset>/<variant>/<partition>[/<subdir>].
