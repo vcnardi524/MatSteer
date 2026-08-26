@@ -55,23 +55,32 @@ global activation mean and 4.221 of that (98.8%) lies inside the top-64 directio
 the projection keeps essentially all of the class signal. Top-64 explains 68.9% of the
 variance overall (pc1 alone 14.2%).
 
-### Results tables: one schema, one file
-`analysis/v1_all/test/steering_runs.csv`, rebuilt by
-`scripts/analysis/build_steering_table.py`. One row per
-(property, method, layer, family, target, strength, source); columns and their meaning
-are `utils.RESULT_COLUMNS`, and `write_results_table()` refuses to write a table missing
-any of them. It replaces four hand-written CSVs that each keyed the run differently and
-disagreed about what `median` meant -- A^3/atom in one, log10 in another, eV in a third.
-The `unit` column now says which.
+### Results tables: one schema, one script
+**Never write a results CSV by hand.** `scripts/analysis/steering_ttest.py` computes the
+paired comparison and is the only thing that writes these files:
 
-Read `cohens_d`, not the p-values. Runs are discovered on disk, so a new sweep appears
-as soon as it has predictions and validation.
+    python scripts/analysis/steering_ttest.py --all        # every run -> steering_runs.csv
+    python scripts/analysis/steering_ttest.py --property density_atomic \
+        --method pca_centroid --target 30 --layer 14       # one sweep -> its own file
 
-**`family` is part of run identity, not a label.** sg and nosg are different prompt sets
-and a run may only be paired against a control of its own family. Only nosg was ever
-generated at alpha=0 for band gap, so the sg runs list population and value but leave
-the paired statistics empty -- before this they were silently paired against the nosg
-control, which compared two different prompt sets.
+`analyse()` is the single place a run is scored, so the combined table and the
+per-property ones cannot disagree. Columns are `utils.RESULT_COLUMNS`;
+`write_results_table()` raises rather than write a table missing any of them. `unit`
+names the value scale (a median was A^3/atom in one old file, log10 in another, eV in a
+third) and `strength` holds alpha for the linear method and t for the pca ones, so one
+column orders every sweep. Read `cohens_d`, not the p-values.
+
+**A run is keyed by (layer, target, strength), and the family is part of its identity.**
+Any two of those alone collide, and the collision is silent -- one run overwrites the
+other in the discovery dict. Found three ways while standardising:
+- two targets swept over the same t (22.5 and 30 both at t=0.5)
+- one target swept at two layers (30 at layer 9 and layer 14 -- layer 9 won, so the
+  reported layer-14 numbers were briefly layer 9's)
+- sg and nosg runs sharing a key, *and* sg runs being paired against the nosg control,
+  which compares two different prompt sets
+
+Only nosg was ever generated at alpha=0 for band gap, so sg runs are listed with
+population and value and no paired statistics, rather than dropped.
 
 ### The full sweep (2026-08-26): eight arms, all null
 Two properties x two targets x two layers, plus a local-centroid variant. CSVs in

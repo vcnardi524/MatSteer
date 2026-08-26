@@ -50,6 +50,7 @@ Usage:
 """
 import argparse
 import importlib.util as _ilu
+import re
 import os as _os
 import sys as _sys
 
@@ -58,7 +59,30 @@ import pandas as pd
 from scipy.stats import levene, ttest_ind, ttest_rel, wilcoxon
 
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-from utils import analysis_dir
+from utils import analysis_dir, write_results_table, RESULT_UNITS, RESULT_COLUMNS
+
+# What a run stem says about itself. pca runs carry target/t/k, linear ones carry alpha.
+# `family` (sg vs nosg) is part of the identity: the two are different prompt sets and a
+# run may only be paired against a control of its own.
+_PCA_RE = [
+    ("pca_local", re.compile(r"^steered_pcalocal_\w+?_target([\d.]+)_t[\d.]+_k\d+_nb\d+_layer(\d+)")),
+    ("pca_centroid", re.compile(r"^steered_pca_\w+?_target([\d.]+)_t[\d.]+_k\d+_layer(\d+)")),
+]
+_LINEAR_RE = re.compile(r"^steered_test_(?:clean_)?alpha-?[\d.]+_layer(\d+)")
+
+
+def run_meta(stem: str) -> dict:
+    """{method, target, layer, family} for a run stem."""
+    stem = stem[:-len(".parquet")] if stem.endswith(".parquet") else stem
+    family = "nosg" if stem.endswith("_nosg") else "sg"
+    for method, rx in _PCA_RE:
+        m = rx.match(stem)
+        if m:
+            return dict(method=method, target=float(m.group(1)),
+                        layer=int(m.group(2)), family=family)
+    m = _LINEAR_RE.match(stem)
+    layer = int(m.group(1)) if m else 14
+    return dict(method="linear", target=float("nan"), layer=layer, family=family)
 
 # The loaders live in the plot script; load it by file path because `plots` is not a
 # package and the filename is not importable as a module name from here.
@@ -82,9 +106,134 @@ def holm(p: np.ndarray) -> np.ndarray:
     return adj
 
 
+def analyse(prop: str, method: str, relaxed: bool, family: str = None,
+            x_scale: str = "auto", verbose: bool = True,
+            target: float = None, layer: int = None) -> pd.DataFrame:
+    """Paired stats for every run of one (property, method, source), in the canonical
+    schema. Returns an empty frame when the family has no alpha=0 control to pair on.
+
+    This is the one place the paired comparison is computed. Both the per-property
+    t-test CSV and the combined steering_runs.csv come out of it, so a change to how a
+    run is scored cannot land in one table and not the other.
+    """
+    spec = _ds.PROPS[prop]
+    family = family or spec["default_family"]
+    runs = _ds.discover_runs(spec["results_dir"], family, method, target, layer)
+    if not runs:
+        return pd.DataFrame()
+
+    per = {}
+    for a, stem in runs.items():
+        try:
+            per[a] = _ds.load_alpha(spec["results_dir"], stem, spec["col"],
+                                    relaxed, "mean", spec["measure"])
+        except (SystemExit, FileNotFoundError):
+            continue                      # not scored on this source yet
+    per = {a: d for a, d in per.items() if not d.empty}
+    if not per:
+        return pd.DataFrame()
+    # A family with no alpha=0 run of its own still gets listed -- population and value,
+    # with the paired statistics left empty. Pairing it against another family's control
+    # would compare two different prompt sets, and dropping it would hide that the run
+    # exists. Only band_gap's sg family is in this state: it was never generated at 0.
+    if 0.0 not in per and verbose:
+        print(f"  ! {prop}/{method}/{family or 'all'}: no control in this family -- "
+              f"listing runs without paired statistics")
+
+    series = {a: d.set_index("id")["value"] for a, d in per.items()}
+    scale = spec["scale"] if x_scale == "auto" else x_scale
+    if scale == "log" and any((s.to_numpy(float) <= 0).any() for s in series.values()):
+        scale = "linear"
+    if scale == "log":
+        series = {a: np.log10(s) for a, s in series.items()}
+    ref = series.get(0.0)
+    ctrl_median = float(ref.median()) if ref is not None else np.nan
+    source = "relaxed" if relaxed else "raw"
+
+    rows = []
+    for a in sorted(series):
+        s_a, meta = series[a], run_meta(runs[a])
+        r = dict(property=prop, source=source, run=runs[a][:-len(".parquet")],
+                 strength=a, unit=RESULT_UNITS[prop], control_median=ctrl_median,
+                 median=float(s_a.median()),
+                 valid_pct=float(per[a].attrs.get("valid_frac", np.nan)),
+                 n_prompts=len(s_a), **meta)
+        if a == 0.0:
+            r["method"] = "linear"        # the no-injection control belongs to no method
+        idx = (ref.index.intersection(s_a.index) if ref is not None else pd.Index([]))
+        r["n_paired"] = len(idx) if a != 0.0 else np.nan
+        if a != 0.0 and len(idx) >= 10:
+            base, x = ref.loc[idx].to_numpy(float), s_a.loc[idx].to_numpy(float)
+            diff = x - base
+            sd = diff.std(ddof=1)
+            try:
+                p_w = wilcoxon(x, base).pvalue
+            except ValueError:
+                p_w = 1.0                 # every pair identical: that IS the answer
+            # how much of the way to the target it got, on the value scale
+            need = ((np.log10(meta["target"]) if scale == "log" else meta["target"])
+                    - ctrl_median) if np.isfinite(meta["target"]) else np.nan
+            r.update(mean_diff=float(diff.mean()), sd_diff=float(sd),
+                     median_diff=float(np.median(diff)),
+                     frac_of_target_move=float(diff.mean() / need) if need else np.nan,
+                     cohens_d=float(diff.mean() / sd) if sd else np.nan,
+                     t=float(ttest_rel(x, base).statistic),
+                     p_paired=float(ttest_rel(x, base).pvalue), p_wilcoxon=float(p_w),
+                     p_welch=float(ttest_ind(x, base, equal_var=False).pvalue),
+                     sd_zero=float(base.std(ddof=1)), sd_alpha=float(x.std(ddof=1)),
+                     p_levene=float(levene(x, base, center="median").pvalue))
+        rows.append(r)
+
+    out = pd.DataFrame(rows).reindex(columns=RESULT_COLUMNS + [
+        "sd_diff", "median_diff", "t", "p_welch", "sd_zero", "sd_alpha", "p_levene"])
+    m = out["p_paired"].notna()
+    if m.any():
+        out.loc[m, "p_holm"] = holm(out.loc[m, "p_paired"].to_numpy(float))
+    return out
+
+
+def build_all(out_path=None) -> pd.DataFrame:
+    """Every property x method x source, in one canonical table."""
+    frames = []
+    for prop in sorted(_ds.PROPS):
+        for method in ("linear", "pca_centroid", "pca_local"):
+            for relaxed in (False, True):
+                for family in (["sg", "nosg"] if prop == "band_gap" else [None]):
+                    fam = family or _ds.PROPS[prop]["default_family"]
+                    # a run is keyed by (layer, target, strength), so each sweep is
+                    # discovered and paired separately
+                    sweeps = _ds.discover_sweeps(_ds.PROPS[prop]["results_dir"], method)
+                    for lay, tgt in (sweeps or [(None, None)]):
+                        f = analyse(prop, method, relaxed, family, verbose=False,
+                                    target=tgt, layer=lay)
+                        if not f.empty:
+                            frames.append(f)
+    df = pd.concat(frames, ignore_index=True).drop_duplicates(
+        subset=["property", "source", "family", "method", "layer", "target", "strength"])
+    df = df.sort_values(["property", "source", "family", "method", "layer",
+                         "target", "strength"], na_position="first").reset_index(drop=True)
+    path = write_results_table(df, out_path or
+                               analysis_dir("v1_all", None, "test") / "steering_runs.csv")
+    print(f"Wrote {path}  ({len(df)} rows)")
+    return df
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--all", action="store_true",
+                    help="Every property x method x source into one canonical table, "
+                         "analysis/v1_all/test/steering_runs.csv, instead of a single "
+                         "per-property file. Same statistics either way.")
+    ap.add_argument("--method", choices=["linear", "pca_centroid", "pca_local"],
+                    default="linear",
+                    help="Which steering family to test (default: linear)")
+    ap.add_argument("--target", type=float, default=None,
+                    help="pca methods only: which target sweep to test. A run is keyed "
+                         "by (layer, target, strength) -- two targets swept over the "
+                         "same t, or one target swept at two layers, are different runs.")
+    ap.add_argument("--layer", type=int, default=None,
+                    help="Which layer's sweep to test; see --target")
     ap.add_argument("--property", default="band_gap", choices=sorted(_ds.PROPS))
     ap.add_argument("--alphas", type=float, nargs="+", default=None,
                     help="Steering strengths to test (default: every run on disk)")
@@ -96,112 +245,49 @@ def main():
                     help="log tests the multiplicative shift; matches the plot by default")
     args = ap.parse_args()
 
-    spec = _ds.PROPS[args.property]
-    family = args.family or spec["default_family"]
-    print(f"Property: {args.property}  ({spec['label']})")
-    print(f"Value source: {'relaxed' if args.relaxed else 'raw generated CIF'}   "
-          f"family: {family}")
+    if args.all:
+        build_all()
+        return
 
-    runs = _ds.discover_runs(spec["results_dir"], family)
-    if not runs:
-        raise SystemExit(f"No runs found for {args.property} (family={family}).")
-    print(f"Runs on disk: alphas {sorted(runs)}")
-    if args.alphas is not None:
-        missing = [a for a in args.alphas if a not in runs]
-        if missing:
-            print(f"  ! requested but absent: {missing} -- skipping them")
-        alphas = [a for a in args.alphas if a in runs]
-    else:
-        alphas = sorted(runs)
-    if 0.0 not in alphas:
-        raise SystemExit("alpha=0 is the baseline for this test and is not in the set.")
-    if len(alphas) < 2:
-        raise SystemExit("Need alpha=0 plus at least one steered run.")
+    out = analyse(args.property, args.method, args.relaxed, args.family,
+                  args.x_scale, target=args.target, layer=args.layer)
+    if out.empty:
+        raise SystemExit(f"No runs found for {args.property} (method={args.method}).")
 
-    print("Loading runs ...")
-    per_alpha = {}
-    for a in alphas:
-        print(f"  alpha {a:g}  [{runs[a]}]")
-        # agg='mean' -- one point per prompt, so the pairing is well defined
-        per_alpha[a] = _ds.load_alpha(spec["results_dir"], runs[a], spec["col"],
-                                      args.relaxed, "mean", spec["measure"])
+    unit = " [log10]" if out["unit"].iloc[0].startswith("log10") else ""
+    steered = out[out["strength"] != 0.0]
+    print(f"Property: {args.property}  method: {args.method}  "
+          f"source: {'relaxed' if args.relaxed else 'raw generated CIF'}")
+    print(f"control covers {int(out.loc[out.strength == 0, 'n_prompts'].iloc[0]):,} "
+          f"prompts; each run is paired against it on the prompts they share")
 
-    # Each alpha is paired against alpha 0 on the prompts THOSE TWO share, not on the
-    # prompts every alpha shares. Intersecting across all of them would discard a prompt
-    # from every comparison because one unrelated alpha happened to lose it, and the
-    # prompts that drop out are not a random sample -- they skew high-gap, so the whole
-    # comparison shifts level as well as losing power.
-    series = {a: d.set_index("id")["value"] for a, d in per_alpha.items()}
-    ref = series[0.0]
-    print(f"\nalpha 0 covers {len(ref):,} prompts; each alpha is paired against it "
-          f"on the prompts they share")
-
-    scale = spec["scale"] if args.x_scale == "auto" else args.x_scale
-    if scale == "log" and any((s.to_numpy(float) <= 0).any() for s in series.values()):
-        print("  ! non-positive values present -- testing on the linear scale")
-        scale = "linear"
-    if scale == "log":
-        series = {a: np.log10(s) for a, s in series.items()}
-        ref = series[0.0]
-    unit = " [log10]" if scale == "log" else ""
-    print(f"Testing on the {scale} scale{unit}")
-
-    rows = []
-    for a in alphas:
-        if a == 0.0:
-            continue
-        idx = ref.index.intersection(series[a].index)
-        if len(idx) < 10:
-            print(f"  ! alpha {a:g}: only {len(idx)} shared prompts -- skipped")
-            continue
-        base = ref.loc[idx].to_numpy(float)
-        x = series[a].loc[idx].to_numpy(float)
-        diff = x - base
-        t, p_t = ttest_rel(x, base)
-        sd = diff.std(ddof=1)
-        # Wilcoxon errors out when every pair is identical; that IS the answer, so say so.
-        try:
-            p_w = wilcoxon(x, base).pvalue
-        except ValueError:
-            p_w = 1.0
-        rows.append(dict(
-            alpha=a, n=len(diff),
-            mean_alpha=float(x.mean()), mean_zero=float(base.mean()),
-            mean_diff=float(diff.mean()), sd_diff=float(sd),
-            median_diff=float(np.median(diff)),
-            cohens_d=float(diff.mean() / sd) if sd else np.nan,
-            t=float(t), p_paired=float(p_t),
-            p_wilcoxon=float(p_w),
-            p_welch=float(ttest_ind(x, base, equal_var=False).pvalue),
-            sd_alpha=float(x.std(ddof=1)), sd_zero=float(base.std(ddof=1)),
-            p_levene=float(levene(x, base, center="median").pvalue),
-        ))
-
-    out = pd.DataFrame(rows)
-    out.insert(out.columns.get_loc("p_wilcoxon"), "p_holm",
-               holm(out["p_paired"].to_numpy(float)))
-
-    cols = ["alpha", "n", "mean_zero", "mean_alpha", "mean_diff", "cohens_d",
-            "t", "p_paired", "p_holm", "p_wilcoxon", "p_welch",
-            "sd_zero", "sd_alpha", "p_levene"]
-    print(f"\n=== paired t-test vs alpha=0{unit} ===")
+    cols = ["strength", "n_paired", "control_median", "median", "mean_diff", "cohens_d",
+            "t", "p_paired", "p_holm", "p_wilcoxon", "p_welch", "p_levene"]
+    print(f"\n=== paired t-test vs the no-injection control{unit} ===")
     with pd.option_context("display.float_format", lambda v: f"{v:.4g}"):
-        print(out[cols].to_string(index=False))
+        print(steered[cols].to_string(index=False))
 
     print("\nReading: p says 'the shift is not noise'; cohens_d says whether it matters.")
-    for r in rows:
+    for _, r in steered.iterrows():
+        if not np.isfinite(r["p_wilcoxon"]):
+            continue
         if r["p_wilcoxon"] > 0.05:
-            print(f"  alpha {r['alpha']:g}: indistinguishable from the control")
+            print(f"  {r['strength']:g}: indistinguishable from the control")
             continue
         d = abs(r["cohens_d"])
         size = ("negligible" if d < 0.2 else "small" if d < 0.5 else
                 "medium" if d < 0.8 else "large")
-        print(f"  alpha {r['alpha']:g}: different (d={r['cohens_d']:+.3f}, {size})")
+        print(f"  {r['strength']:g}: different (d={r['cohens_d']:+.3f}, {size})")
 
+    # The sweep is part of the filename for the same reason it is part of the identity:
+    # two targets, or two layers, are different runs and must not share a file.
     dest = analysis_dir("v1_all", None, "test")
     tag = "_relaxed" if args.relaxed else ""
-    path = dest / f"{args.property}_steering_ttest{tag}.csv"
-    out.to_csv(path, index=False)
+    meth = "" if args.method == "linear" else f"_{args.method}"
+    sweep = (f"_target{args.target:g}" if args.target is not None else "") + \
+            (f"_layer{args.layer}" if args.layer is not None else "")
+    path = write_results_table(
+        out, dest / f"{args.property}{meth}{sweep}_steering_ttest{tag}.csv")
     print(f"\nSaved {path}")
 
 

@@ -174,24 +174,77 @@ def alpha_colour(alpha: float, positives: list) -> str:
 # two families never collide in one directory. Both methods use 0 to mean "hook adds
 # nothing", so the alpha=0 run is also the t=0 control and is listed under both.
 STRENGTH_RE = {"linear": re.compile(r"alpha(-?[\d.]+)"),
-               "pca_centroid": re.compile(r"_t(-?[\d.]+)_")}
+               "pca": re.compile(r"_t(-?[\d.]+)_")}
 
 
-def discover_runs(results_dir: str, family: str, method: str = "linear") -> dict:
-    """{strength: stem} for the runs that have BOTH predictions and validation."""
+def discover_sweeps(results_dir: str, method: str) -> list:
+    """The distinct (layer, target) sweeps on disk for a method, ascending.
+
+    A run is identified by (layer, target, strength). Any two of those alone collide:
+    the same target swept at two layers, or two targets swept over the same t, would
+    share a key and silently overwrite each other.
+    """
+    out = set()
+    for f in glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet"):
+        b = _os.path.basename(f)
+        kind = ("pca_local" if b.startswith("steered_pcalocal_")
+                else "pca_centroid" if b.startswith("steered_pca_") else "linear")
+        if kind != method:
+            continue
+        tm = re.search(r"_target([\d.]+)_t[\d.]+_k", b)
+        lm = re.search(r"_layer(\d+)", b)
+        if lm:
+            out.add((int(lm.group(1)), float(tm.group(1)) if tm else None))
+    return sorted(out, key=lambda p: (p[0], p[1] if p[1] is not None else -1))
+
+
+def discover_targets(results_dir: str, family: str, method: str) -> list:
+    """The distinct target values swept for a pca method, ascending."""
+    tg = set()
+    for f in glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet"):
+        m = re.search(r"_target([\d.]+)_t[\d.]+_k", _os.path.basename(f))
+        b = _os.path.basename(f)
+        kind = ("pca_local" if b.startswith("steered_pcalocal_")
+                else "pca_centroid" if b.startswith("steered_pca_") else "linear")
+        if m and kind == method:
+            tg.add(float(m.group(1)))
+    return sorted(tg)
+
+
+def discover_runs(results_dir: str, family: str, method: str = "linear",
+                  target: float = None, layer: int = None) -> dict:
+    """{strength: stem} for the runs that have BOTH predictions and validation.
+
+    Strength alone identifies a linear run, but a pca run is identified by
+    (target, strength) -- two targets swept over the same t would otherwise collide on
+    one key and silently overwrite each other. Pass `target` to select one sweep; the
+    alpha=0 control has no target and is always included, whatever layer it names.
+    """
     runs = {}
     for f in sorted(glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet")):
         stem = _os.path.basename(f)
         if stem == "testset_baseline.parquet":
             continue
-        is_pca = stem.startswith("steered_pca_")
-        if is_pca != (method == "pca_centroid"):
-            # the alpha=0 run is the shared control: no injection either way
-            if not (method == "pca_centroid" and re.search(r"alpha-?0(\.0)?_", stem)):
-                continue
-        m = STRENGTH_RE["linear" if not is_pca else "pca_centroid"].search(stem)
+        # Which method wrote this file is decided by its prefix, longest first so
+        # steered_pcalocal_ is never read as steered_pca_.
+        kind = ("pca_local" if stem.startswith("steered_pcalocal_")
+                else "pca_centroid" if stem.startswith("steered_pca_") else "linear")
+        is_control = kind == "linear" and re.search(r"alpha-?0(\.0)?_", stem)
+        # every method's t=0 is the same no-injection run, so the control is shared
+        if kind != method and not (is_control and method != "linear"):
+            continue
+        m = STRENGTH_RE["linear" if kind == "linear" else "pca"].search(stem)
         if not m:
             continue
+        if kind != "linear" and not is_control:
+            if target is not None:
+                tm = re.search(r"_target([\d.]+)_t[\d.]+_k", stem)
+                if not tm or float(tm.group(1)) != target:
+                    continue
+            if layer is not None:
+                lm = re.search(r"_layer(\d+)", stem)
+                if not lm or int(lm.group(1)) != layer:
+                    continue
         is_nosg = stem.endswith("_nosg.parquet")
         if family == "nosg" and not is_nosg:
             continue
