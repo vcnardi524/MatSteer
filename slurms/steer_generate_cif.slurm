@@ -30,14 +30,17 @@ if [ "${USE_CACHE:-1}" = "0" ]; then CACHE_FLAG="--no-use-cache"; fi
 # METHOD=linear (default) steers with ALPHA * the mean-difference vector.
 # METHOD=pca_centroid interpolates a fraction T toward the TARGET centroid inside the
 # top-K PCA subspace; it reads steering_vectors/pca_centroid/ and needs TARGET set.
+# METHOD=pca_local does the same but rebuilds the centroid per prompt from the
+# NEIGHBOURS class members nearest that prompt; it needs the matching *_bank.parquet.
 #
 #   sbatch --export=ALL,METHOD=pca_centroid,STEERING_PROPERTY=density_atomic,TARGET=30,T=0.5 \
 #          slurms/steer_generate_cif.slurm
 METHOD=${METHOD:-linear}
-METHOD_FLAGS="--alpha ${ALPHA:-1.0}"
-if [ "$METHOD" = "pca_centroid" ]; then
-    METHOD_FLAGS="--target ${TARGET:?TARGET is required for METHOD=pca_centroid} --t ${T:-0.5} --k ${K:-64}"
-fi
+case "$METHOD" in
+  pca_centroid) METHOD_FLAGS="--target ${TARGET:?TARGET is required for $METHOD} --t ${T:-0.5} --k ${K:-64}" ;;
+  pca_local)    METHOD_FLAGS="--target ${TARGET:?TARGET is required for $METHOD} --t ${T:-0.5} --k ${K:-64} --neighbours ${NEIGHBOURS:-256}" ;;
+  *)            METHOD_FLAGS="--alpha ${ALPHA:-1.0}" ;;
+esac
 
 python scripts/steering/steer_generate_cif.py \
     --model CrystaLLM/crystallm_v1_large \

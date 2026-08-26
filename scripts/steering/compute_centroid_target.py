@@ -65,6 +65,10 @@ def main():
     ap.add_argument("--k", type=int, default=64)
     add_partition_args(ap)   # --dataset / --variant / --partition
     ap.add_argument("--batch-size", type=int, default=50_000)
+    ap.add_argument("--save-bank", action="store_true",
+                    help="Also write <stem>_bank.parquet: every class member's subspace "
+                         "coordinate. pca_local steering searches it for the members "
+                         "nearest each prompt, instead of using one global centroid.")
     args = ap.parse_args()
 
     mean, comps = load_pca(args.layer, args.k)
@@ -89,9 +93,14 @@ def main():
     files = embedding_files(args.layer, args.dataset, args.variant)
     print(f"Averaging layer-{args.layer} embeddings over the class ...")
     total, n = np.zeros(len(mean), dtype=np.float64), 0
+    bank = [] if args.save_bank else None
     for batch in stream_batches(files, class_ids, args.batch_size):
         total += batch.sum(0)
         n += len(batch)
+        if bank is not None:
+            # keep each member's subspace coordinate, not the 1024-d vector: that is
+            # all a local neighbourhood search needs, and it is 16x smaller.
+            bank.append(((batch - mean) @ comps.T).astype(np.float32))
         print(f"  {n:,} / {len(cls):,}", flush=True)
     if n != len(cls):
         print(f"  ! {len(cls) - n:,} class ids had no embedding and were dropped")
@@ -122,6 +131,16 @@ def main():
         "centroid_pca": centroid_pca.astype(np.float32).tolist(),
     }]).to_parquet(out_path, index=False)
     print(f"Wrote {out_path}")
+
+    if bank is not None:
+        Z = np.concatenate(bank)
+        bank_path = out_path.with_name(out_path.stem + "_bank.parquet")
+        pd.DataFrame({"coord": list(Z)}).to_parquet(bank_path, index=False)
+        spread = np.linalg.norm(Z - centroid_pca, axis=1)
+        print(f"Wrote {bank_path}  ({Z.shape[0]:,} x {Z.shape[1]})")
+        print(f"  members sit a median {np.median(spread):.2f} from the global centroid "
+              f"(p10 {np.percentile(spread, 10):.2f}, p90 {np.percentile(spread, 90):.2f}) "
+              f"-- the class is only a single destination if this is small")
 
 
 if __name__ == "__main__":

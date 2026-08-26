@@ -57,5 +57,6 @@ if [ -n "${TARGET}" ]; then
         --partition "$PARTITION" \
         --dataset ${DATASET:-v1_all} \
         --variant ${VARIANT:-full} \
-        --batch-size ${BATCH_SIZE:-50000}
+        --batch-size ${BATCH_SIZE:-50000} \
+        ${SAVE_BANK:+--save-bank}
 fi

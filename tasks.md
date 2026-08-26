@@ -55,10 +55,52 @@ global activation mean and 4.221 of that (98.8%) lies inside the top-64 directio
 the projection keeps essentially all of the class signal. Top-64 explains 68.9% of the
 variance overall (pc1 alone 14.2%).
 
-Worth trying before abandoning the non-linear premise: a target closer to the corpus
-median (the t needed to reach 30 may simply exceed what the model tolerates); steering a
-subset of layers or token positions rather than all of them; larger K; and checking
-whether LayerNorm downstream of layer 14 is renormalising the injected change away.
+### The full sweep (2026-08-26): eight arms, all null
+Two properties x two targets x two layers, plus a local-centroid variant. CSVs in
+`analysis/v1_all/test/`: `pca_centroid_density_targets.csv`,
+`pca_local_vs_centroid_density.csv`, `pca_centroid_bandgap_raw_vs_relaxed.csv`.
+
+Nothing moved. Read `cohens_d`, not `p_wilcoxon`: with ~980 paired prompts a 0.5% shift
+lands at p=1e-20 while |d| stays at 0.14. Every arm sits at |d| <= 0.15.
+
+**Three explanations were tested and ruled out.**
+
+*Reach.* density 22.5 needs +0.068 log10 from the control median, density 30 needs
++0.192 -- 2.8x further. Both produced the same ~0.002 absolute move. The displacement
+does not scale with where the centroid sits, so the target being far away is not the
+limit. Head-to-head the two targets differ at p=0.21.
+
+*Model degradation.* The cleanest nulls come at the model's best operating points:
+band gap t=0.75 is 85.9% valid and p=0.55; density t=0.5 is 95% valid and d=0.12.
+
+*Centroid choice.* `pca_local` rebuilds the centroid per prompt from the 256 class
+members nearest that prompt (`--save-bank` on compute_centroid_target.py writes the
+member coordinates; `--method pca_local` consumes them). Local centroids sit a median
+10.63 from the global one -- 2.5x the global centroid's whole displacement from the
+corpus mean -- and both methods degrade the model identically (96.0/95.2/81.0% valid vs
+96.1/95.0/82.5%), so they are comparable at equal t and differ only in direction. Result:
+no difference, p=0.65 at t=0.25 and p=0.17 at t=0.5.
+
+**Relaxation erases the raw band-gap drift.** The +0.03 eV nudge visible in raw CIFs goes
+to -0.001..-0.013 after M3GNet (all p >= 0.56, |d| <= 0.074). Steering perturbs the
+written cell in a way MEGNet reads as slightly gapped; relaxation settles it back out.
+The same thing happened with the linear method -- always check the relaxed column.
+
+**What the bank actually showed.** The target class is not a place. Its centroid sits
+4.22 from the corpus mean while members sit a median 13.43 from that centroid -- a
+signal-to-spread ratio of 0.31. And the class matches a single Gaussian of the same
+covariance (13.43 vs 14.02 median, near-identical tails), so it is one diffuse cloud, not
+several lobes with an average falling in the gap. Structures at 30 A^3/atom are scattered
+through the same region as everything else. "Interpolate toward the class" has nothing
+to aim at, which is sufficient to explain every null without any claim about curvature.
+
+Two genuinely different destinations (local vs global, 10.63 apart) with matched
+displacement and matched model damage give the same non-result. That points upstream of
+centroid choice: layer-14 activations may not carry a controllable handle on these
+properties at all, only a decodable one.
+
+**Still untested:** whether LayerNorm downstream of the injection renormalises the change
+away; steering a subset of layers or token positions rather than all of them; larger K.
 
 **Not done yet: the analysis path.** `plot_steering_distribution_shift.py:discover_runs`
 keys runs on `alpha(-?[\d.]+)` in the stem, so `steered_pca_*` files are invisible to it

@@ -91,6 +91,36 @@ def pca_centroid_hook(mean, components, centroid_pca, t, device):
     return hook
 
 
+def prompt_embedding(model, tokenizer, device, prompt_str, layer):
+    """Mean-pooled layer-L hidden state of the prompt, matching how the training
+    embeddings were built -- except those pooled a whole CIF and this pools a header,
+    which is the only view available before generation starts."""
+    captured = {}
+
+    def grab(module, inp, out):
+        captured["h"] = (out[0] if isinstance(out, tuple) else out).detach()
+
+    handle = model.transformer.h[layer].register_forward_hook(grab)
+    tokens = tokenizer.encode(tokenizer.tokenize_cif(prompt_str))
+    x = torch.tensor(tokens, dtype=torch.long, device=device).unsqueeze(0)
+    with torch.no_grad():
+        model(x)
+    handle.remove()
+    return captured["h"][0].float().mean(0)          # (1024,)
+
+
+def local_centroid(z_prompt, bank, n_neighbours):
+    """Centroid of the n_neighbours class members closest to this prompt.
+
+    The global centroid averages the whole class, so every prompt is pulled toward the
+    same point no matter where it starts. If the class does not sit in one place, that
+    average is a point between the pieces rather than inside any of them.
+    """
+    d = torch.cdist(z_prompt.view(1, -1), bank).view(-1)
+    idx = torch.topk(d, min(n_neighbours, bank.shape[0]), largest=False).indices
+    return bank[idx].mean(0), float(d[idx].mean())
+
+
 def generate(model, tokenizer, device, prompt_str, max_new_tokens, temperature, top_k,
              hook=None, layer=None, use_cache=False):
     handle = model.transformer.h[layer].register_forward_hook(hook) if hook else None
@@ -151,14 +181,40 @@ def build_pca_centroid(args, device):
             f"target{args.target:g}_t{args.t}_k{args.k}")
 
 
+def build_pca_local(args, device):
+    """(mean, components, bank) for the per-prompt local-centroid method."""
+    if args.target is None:
+        raise SystemExit("--method pca_local needs --target")
+    mean, comps = load_pca(args.layer, args.k)
+    stem = f"layer{args.layer}_k{args.k}_target{args.target:g}"
+    bank_path = PCA_DIR / args.steering_property / f"{stem}_bank.parquet"
+    if not bank_path.exists():
+        raise FileNotFoundError(
+            f"No class bank at {bank_path} -- rerun compute_centroid_target.py with "
+            f"--save-bank")
+    Z = np.vstack(pd.read_parquet(bank_path)["coord"].to_numpy()).astype(np.float32)
+    print(f"Class bank [{args.steering_property}] {bank_path}: {Z.shape[0]:,} members "
+          f"x {Z.shape[1]} dims")
+    print(f"Method=pca_local  t={args.t}  k={args.k}  neighbours={args.neighbours}  "
+          f"layer={args.layer}")
+    return (torch.tensor(mean, device=device), torch.tensor(comps, device=device),
+            torch.tensor(Z, device=device))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--pkl", required=True)
-    parser.add_argument("--method", choices=("linear", "pca_centroid"), default="linear",
+    parser.add_argument("--method", choices=("linear", "pca_centroid", "pca_local"),
+                        default="linear",
                         help="linear: alpha * mean-difference vector. "
-                             "pca_centroid: interpolate toward a target centroid inside "
-                             "the top-K PCA subspace.")
+                             "pca_centroid: interpolate toward one global target centroid "
+                             "inside the top-K PCA subspace. "
+                             "pca_local: same, but the centroid is recomputed per prompt "
+                             "from the class members nearest that prompt.")
+    parser.add_argument("--neighbours", type=int, default=256,
+                        help="[pca_local] class members averaged into each prompt's "
+                             "local centroid")
     parser.add_argument("--alpha", type=float, default=1.0,
                         help="[linear] steering strength (positive = towards the high class)")
     parser.add_argument("--target", type=float, default=None,
@@ -200,10 +256,15 @@ def main():
     model, config = load_model(args.model, device)
     tokenizer = CIFTokenizer()
 
+    local = None
     if args.method == "linear":
         hook, run_tag = build_linear(args, device)
-    else:
+    elif args.method == "pca_centroid":
         hook, run_tag = build_pca_centroid(args, device)
+    else:
+        local = build_pca_local(args, device)
+        hook = None                      # rebuilt per prompt, once its centroid is known
+        run_tag = f"target{args.target:g}_t{args.t}_k{args.k}_nb{args.neighbours}"
     print(f"KV cache={'on' if args.use_cache else 'off'}  dropout={config.dropout}")
 
     data = load_cifs(args.pkl)
@@ -230,7 +291,8 @@ def main():
     out_dir = Path(args.out) if args.out else Path(args.results_dir) / "generated_cifs"
     out_dir.mkdir(parents=True, exist_ok=True)
     sg_tag = "" if args.with_spacegroup else "_nosg"
-    prefix = "steered" if args.method == "linear" else "steered_pca"
+    prefix = {"linear": "steered", "pca_centroid": "steered_pca",
+              "pca_local": "steered_pcalocal"}[args.method]
     out_path = out_dir / f"{prefix}_{split}_{run_tag}_layer{args.layer}{sg_tag}.parquet"
 
     # resume: skip already-done ids
@@ -246,6 +308,17 @@ def main():
             continue
 
         print(f"[{i+1}/{len(prompts)}] {id_}", flush=True)
+
+        if local is not None:
+            # This prompt's own neighbourhood of the class, not the class average.
+            mean_t, comps_t, bank = local
+            z = (prompt_embedding(model, tokenizer, device, prompt, args.layer)
+                 - mean_t) @ comps_t.T
+            c_local, dist = local_centroid(z, bank, args.neighbours)
+            hook = pca_centroid_hook(mean_t.cpu().numpy(), comps_t.cpu().numpy(),
+                                     c_local.cpu().numpy(), args.t, device)
+            if i % 100 == 0:
+                print(f"    local centroid {dist:.2f} from prompt in subspace", flush=True)
 
         for j in range(args.n_samples):
             steered = generate(model, tokenizer, device, prompt,
