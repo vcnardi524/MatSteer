@@ -190,6 +190,52 @@ data -- and simultaneously buried under within-bucket variance larger than the s
 Additive steering moves a hidden state along the ridge by less than the cloud's own
 width, which is what d ~ 0.15 looks like.
 
+### Band gap has a direction but no path; density has both (2026-08-28)
+Same centroid-PCA measurement across layers, properties and corpora. Turning angle is
+weighted by bucket count, so a vertex resting on 50 structures does not count as much as
+one resting on 50,000. **A weighted turn near 90 degrees is a random walk** -- consecutive
+segments perpendicular on average -- and above 90 the path oscillates around itself,
+which is what estimation noise looks like.
+
+    property            corpus   buckets  tortuosity  turn_wtd   best pc
+    density L7  train   NOMAD        82     1.70x       26.6     pc2 -0.95
+    density L9  train   NOMAD        82     1.80x       27.3     pc2 -0.95
+    density L10 train   NOMAD        82     1.86x       28.4     pc2 -0.96
+    density L14 train   NOMAD        82     2.01x       27.8     pc2 -0.95
+    band gap L14 train  NOMAD        41     6.15x       94.7     pc0 +0.94
+    band gap L14 gapped NOMAD        40     6.64x      102.6     pc0 +0.94
+    band gap L14 all    MP           74    12.74x      106.7     pc2 -0.90
+    band gap L14 gapped MP           74     5.34x      112.5     pc2 -0.94
+
+**Density curves smoothly and the curvature grows with depth** (1.70 -> 2.01 from layer 7
+to 14), with pc2 carrying it at rho ~ -0.95 at every layer, replicated on val. Note layer
+7 has the straightest path AND the largest effect in the causal probe (-0.037 vs layer
+14's -0.0000): straighter representation, more steerable.
+
+**Band gap never traces a path, and it is not a sample-size problem.** NOMAD has only
+6,296 gapped structures so noise was the obvious suspect; MP has 78,668 across 74
+buckets, twelve times more, and the turning angle went UP (94.7 -> 106.7). Both corpora
+give a strong monotone direction (|rho| 0.90-0.94) with no smooth trajectory between
+buckets. That is a real difference from density, on two independent datasets, and it
+matches the steering results: density moved slightly at every strength, band gap not at
+all.
+
+Restricting NOMAD to gapped materials made it *worse* (6.15 -> 6.64x, 94.7 -> 102.6 deg),
+against expectation: dropping the metals removed the one well-estimated centroid and left
+40 noisy ones. The metals were anchoring the path, not drowning it.
+
+**"Gapped" means >= 0.05 eV, never != 0.** 65% of NOMAD sits in (0, 0.05) -- nonzero but
+physically metallic -- so a != 0 cutoff would call 386,208 structures gapped instead of
+7,003, and 98% of them would be metals. MP's own `is_metal` flag agrees with the 0.05
+threshold exactly: of its 72,640 metals, zero have band_gap >= 0.05.
+
+**pc2 carrying both density and band gap is not the two properties being correlated**:
+MP band_gap vs density_atomic is Spearman -0.208.
+
+**v1_mp has no split.** 96,229 of its 154,879 ids appear nowhere in splits_v1, so the MP
+runs use `--partition all` and mix structures the model trained on with ones it did not.
+Whether those 96,229 are genuinely outside the training corpus is unverified.
+
 ### Steering moves TOWARD the data, not away from it (2026-08-27)
 `scripts/analysis/manifold_distance.py`. The hypothesis was that steering pushes
 activations off the data manifold and that is why the CIFs stop being valid. Measured

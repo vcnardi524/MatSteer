@@ -22,8 +22,13 @@ python scripts/plots/centroid_pca_plots.py \
     --partition ${PARTITION:-train} \
     --property ${PROPERTY:-density_atomic} \
     --labels ${LABELS:-density_atomic_v1.parquet} \
+    --id-col ${ID_COL:-id} \
+    --dataset ${DATASET:-v1_all} \
     --width ${WIDTH:-1.0} \
     --layer ${LAYER:-14} \
     --k ${K:-64} \
     --min-count ${MIN_COUNT:-30} \
-    --basis ${BASIS:-corpus}
+    --basis ${BASIS:-corpus} \
+    --sample ${SAMPLE:-3000} \
+    ${MAX_PER_BUCKET:+--max-per-bucket $MAX_PER_BUCKET} \
+    ${MIN_VALUE:+--min-value $MIN_VALUE}

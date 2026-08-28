@@ -60,12 +60,18 @@ def embedding_files(layer, dataset, variant):
     return files
 
 
-def bucket_centroids(labels, prop, width, layer, dataset, variant, batch_size):
-    """{bucket_index: (centroid, count)} accumulated by streaming the layer."""
+def bucket_centroids(labels, prop, width, layer, dataset, variant, batch_size,
+                     sample_ids=None):
+    """Per-bucket (sum, count) by streaming the layer, plus the raw rows for sample_ids.
+
+    The sample is drawn as ids up front rather than reservoir-sampled, so the same pass
+    that builds the centroids also collects the individual points to draw behind them.
+    """
     idx = np.floor(labels[prop].to_numpy() / width).astype(np.int64)
     bucket_of = dict(zip(labels["id"].to_numpy(), idx))
+    want = set() if sample_ids is None else set(sample_ids)
 
-    sums, counts = {}, {}
+    sums, counts, s_vec, s_id = {}, {}, [], []
     for path in embedding_files(layer, dataset, variant):
         for rb in pq.ParquetFile(path).iter_batches(batch_size=batch_size,
                                                     columns=["id", "embedding"]):
@@ -80,14 +86,24 @@ def bucket_centroids(labels, prop, width, layer, dataset, variant, batch_size):
                 m = b == u
                 sums[u] = sums.get(u, 0) + X[m].sum(0)
                 counts[u] = counts.get(u, 0) + int(m.sum())
-    return sums, counts
+            if want:
+                m = df["id"].isin(want).to_numpy()
+                if m.any():
+                    s_vec.append(X[m])
+                    s_id.extend(df["id"].to_numpy()[m])
+    S = np.vstack(s_vec) if s_vec else np.empty((0, 1024))
+    return sums, counts, S, s_id
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--property", default=DEFAULT_PROPERTY, help="Label column to bucket")
     ap.add_argument("--labels", default=DEFAULT_LABELS,
-                    help="Parquet with `id` and --property")
+                    help="Parquet with the join key and --property")
+    ap.add_argument("--id-col", default="id",
+                    help="Column in --labels to join against the embedding id. "
+                         "metadata_mp.parquet needs material_id: its `id` column is a "
+                         "different identifier and matches nothing in the embeddings.")
     ap.add_argument("--width", type=float, default=1.0,
                     help="Bucket width in the property's own units")
     ap.add_argument("--layer", type=int, default=14)
@@ -101,6 +117,23 @@ def main():
                     help="Flat list of principal directions, in triples: 0 1 2 3 4 5")
     ap.add_argument("--min-count", type=int, default=30,
                     help="Drop buckets with fewer structures than this")
+    ap.add_argument("--max-per-bucket", type=int, default=0,
+                    help="Subsample each bucket to at most this many structures before "
+                         "averaging. The centroid lands in the same place either way -- "
+                         "what this fixes is PRECISION: band gap's first bucket holds 99%% "
+                         "of the corpus and its centroid is exact, while a 300-structure "
+                         "bucket is ~40x noisier, so a kink in the path cannot be read as "
+                         "geometry rather than estimation error. 0 = use every structure.")
+    ap.add_argument("--min-value", type=float, default=None,
+                    help="Drop structures below this property value before bucketing. For "
+                         "band gap pass 0.05 (the metal threshold): 99%% of the corpus has "
+                         "no gap, so without it the path is the metal blob plus a noisy "
+                         "tail rather than the trajectory of gapped materials.")
+    ap.add_argument("--max-value", type=float, default=None,
+                    help="Drop structures above this property value before bucketing")
+    ap.add_argument("--sample", type=int, default=3000,
+                    help="Individual structures drawn translucently behind the centroids, "
+                         "so the width of the cloud the path sits in is visible. 0 to skip.")
     add_partition_args(ap)   # --dataset / --variant / --partition
     ap.add_argument("--batch-size", type=int, default=50_000)
     args = ap.parse_args()
@@ -111,19 +144,52 @@ def main():
             raise SystemExit("--dims needs a multiple of three values")
         dims = [tuple(args.dims[i:i + 3]) for i in range(0, len(args.dims), 3)]
 
-    labels = pd.read_parquet(args.labels, columns=["id", args.property]).dropna()
+    labels = pd.read_parquet(args.labels,
+                             columns=[args.id_col, args.property]).dropna()
+    if args.id_col != "id":
+        labels = labels.rename(columns={args.id_col: "id"})
     labels[args.property] = pd.to_numeric(labels[args.property], errors="coerce")
     labels = labels.dropna(subset=[args.property])
     if args.partition != "all":
         splits = load_split_index()
         keep = set(splits.loc[splits["split"] == args.partition, "id"])
         labels = labels[labels["id"].isin(keep)]
-    print(f"{len(labels):,} labelled structures in partition '{args.partition}'")
+    if args.min_value is not None:
+        labels = labels[labels[args.property] >= args.min_value]
+    if args.max_value is not None:
+        labels = labels[labels[args.property] <= args.max_value]
+    print(f"{len(labels):,} labelled structures in partition '{args.partition}'"
+          + (f", restricted to [{args.min_value}, {args.max_value}]"
+             if (args.min_value is not None or args.max_value is not None) else ""))
+
+    rng0 = np.random.default_rng(0)
+    if args.max_per_bucket > 0:
+        # cap each bucket so every centroid is estimated from a comparable number of
+        # structures, and the wiggle in the path means the same thing everywhere
+        b = np.floor(labels[args.property].to_numpy() / args.width).astype(np.int64)
+        keep = np.zeros(len(labels), bool)
+        for u in np.unique(b):
+            idx = np.flatnonzero(b == u)
+            if len(idx) > args.max_per_bucket:
+                idx = rng0.choice(idx, args.max_per_bucket, replace=False)
+            keep[idx] = True
+        before = len(labels)
+        labels = labels[keep]
+        print(f"  capped at {args.max_per_bucket:,}/bucket: {before:,} -> {len(labels):,}")
+
+    rng = np.random.default_rng(0)
+    sample_ids = ()
+    if args.sample > 0:
+        take = min(args.sample, len(labels))
+        sample_ids = labels["id"].to_numpy()[
+            rng.choice(len(labels), take, replace=False)]
+    sample_val = dict(zip(labels["id"].to_numpy(), labels[args.property].to_numpy()))
 
     print(f"Streaming layer-{args.layer} embeddings, bucketing '{args.property}' "
           f"by {args.width:g} ...")
-    sums, counts = bucket_centroids(labels, args.property, args.width, args.layer,
-                                    args.dataset, args.variant, args.batch_size)
+    sums, counts, S, s_ids = bucket_centroids(labels, args.property, args.width, args.layer,
+                                              args.dataset, args.variant, args.batch_size,
+                                              sample_ids)
     kept = sorted(b for b, n in counts.items() if n >= args.min_count)
     dropped = len(counts) - len(kept)
     if not kept:
@@ -152,7 +218,11 @@ def main():
         mean, comps, evr = p.mean_, p.components_, p.explained_variance_ratio_
         basis_note = f"PCA refitted on the {len(C)} centroids"
     Y = (C - mean) @ comps.T
+    YS = (S - mean) @ comps.T if len(S) else np.empty((0, comps.shape[0]))
+    sv = np.array([sample_val[i] for i in s_ids]) if len(S) else np.empty(0)
     print(f"  basis: {basis_note}")
+    if len(S):
+        print(f"  {len(S):,} individual structures sampled for the background")
 
     max_dim = max(max(d) for d in dims)
     if max_dim >= Y.shape[1]:
@@ -168,8 +238,14 @@ def main():
     fig = plt.figure(figsize=(8.5 * ncol, 7.0 * nrow))
     for i, (a, b, c) in enumerate(dims, start=1):
         ax = fig.add_subplot(nrow, ncol, i, projection="3d")
+        # individual structures first, translucent, so the centroid path reads on top of
+        # the cloud it is a conditional mean of -- the width of that cloud is the point
+        if len(YS):
+            ax.scatter(YS[:, a], YS[:, b], YS[:, c], c=np.clip(sv, lo.min(), lo.max()),
+                       cmap=cmap, vmin=lo.min(), vmax=lo.max() + args.width,
+                       s=4, alpha=0.10, linewidth=0, depthshade=False, zorder=0)
         # the path in bucket order, so a bend is visible and not just a cloud
-        ax.plot(Y[:, a], Y[:, b], Y[:, c], color="0.55", lw=1.0, zorder=1)
+        ax.plot(Y[:, a], Y[:, b], Y[:, c], color="0.25", lw=1.4, zorder=1)
         s = ax.scatter(Y[:, a], Y[:, b], Y[:, c], c=cvals, cmap=cmap,
                        s=np.clip(18 + 30 * n / n.max(), 18, 70),
                        edgecolor="white", linewidth=0.5, depthshade=False, zorder=2)
@@ -178,6 +254,13 @@ def main():
         ax.set_zlabel(f"pc{c}  ({evr[c]:.1%})")
         ax.set_title(f"pc{a} / pc{b} / pc{c}", fontsize=11)
         ax.grid(alpha=0.25)
+        # frame on the cloud, not the path: the figure's message is how much narrower
+        # the conditional-mean path is than the spread of individual structures
+        if len(YS):
+            for axis, j in ((ax.set_xlim, a), (ax.set_ylim, b), (ax.set_zlim, c)):
+                q = np.percentile(np.concatenate([YS[:, j], Y[:, j]]), [1, 99])
+                pad = 0.05 * (q[1] - q[0])
+                axis(q[0] - pad, q[1] + pad)
 
     cb = fig.colorbar(plt.cm.ScalarMappable(cmap=cmap,
                                             norm=plt.Normalize(lo.min(), lo.max() + args.width)),
@@ -188,11 +271,20 @@ def main():
         f"{args.property}: bucket centroids in PCA space — {args.dataset}/{args.variant}/"
         f"{args.partition}, layer {args.layer}\n{len(kept)} buckets of width "
         f"{args.width:g}, {n.min():,}-{n.max():,} structures each, {basis_note}. "
-        f"Marker size = bucket count; grey path joins buckets in property order.",
+        f"Marker size = bucket count; dark path joins buckets in property order"
+        + (f"; {len(S):,} individual structures behind at 10% opacity." if len(S) else "."),
         fontsize=12.5, y=0.99)
 
     out_dir = analysis_dir(args.dataset, args.variant, args.partition, subdir="plots")
-    stem = f"centroid_pca_{args.property.replace('.', '_')}_layer{args.layer}"
+    # The restriction and the bucket width are part of what the figure IS, so they go in
+    # the filename: a run over gapped materials only must not overwrite the run over all
+    # of them, and two widths are two different pictures.
+    tag = f"_w{args.width:g}"
+    if args.min_value is not None:
+        tag += f"_min{args.min_value:g}"
+    if args.max_value is not None:
+        tag += f"_max{args.max_value:g}"
+    stem = (f"centroid_pca_{args.property.replace('.', '_')}_layer{args.layer}{tag}")
     png = out_dir / f"{stem}.png"
     fig.savefig(png, dpi=130, bbox_inches="tight")
     plt.close(fig)
