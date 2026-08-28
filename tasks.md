@@ -155,6 +155,67 @@ Caveat: measured on the prompt forward pass (short sequences), not mid-generatio
 normalisation mechanism is the same either way, but the residual norm grows with sequence
 length, so the ratio during a long generation will differ.
 
+### The property IS a curved ridge in activation space (2026-08-28)
+`scripts/plots/centroid_pca_plots.py` -- bucket a property into [x, x+width), average the
+embeddings in each bucket, project the centroids into the PCA basis, plot in property
+order. Streams the layer, so it costs one pass. `--property`/`--labels` make it work on
+any scalar column; `--basis centroids` refits PCA on the centroids instead of using the
+corpus one.
+
+density_atomic, width 1, layer 14 and 9, buckets under 30 structures dropped:
+
+    layer  part   buckets  tortuosity(all)  tortuosity(core 10-40)  turn_wtd  best pc
+      14   train      82        11.80x              2.01x             27.8    pc2 -0.95
+       9   train      82        12.60x              1.80x             27.3    pc2 -0.95
+      14   val        53         5.54x              2.10x             35.6    pc2 -0.91
+       9   val        53         5.40x              1.89x             35.7    pc3 -0.93
+
+**The path is not straight and it replicates out of sample.** Tortuosity is path length
+over end-to-end distance. Restricted to 10-40 A^3/atom, which holds 98% of structures,
+it is ~2x at both layers in both partitions.
+
+**Most of the wild wiggling is sampling noise, not geometry.** 40-90 A^3/atom is 45
+buckets holding 1.7% of structures, so those centroids average a few dozen points each.
+Weighting the turning angle by bucket count drops it from a median of ~78 degrees to
+~28. Read the core column, not the all column.
+
+**One principal direction tracks density almost monotonically**: pc2 at Spearman -0.95
+(train, both layers), -0.91 (val), and pc3 -0.93 for layer 9 val.
+
+**Why this coexists with nine null steering results.** The centroid path spans 8.35 units
+end to end across 12 dimensions. Individual structures sit a median 13.43 from their own
+class centroid. *The conditional-mean trajectory is smaller than the scatter around it.*
+Density is genuinely encoded -- curved, near-monotone along pc2, reproducible on held-out
+data -- and simultaneously buried under within-bucket variance larger than the signal.
+Additive steering moves a hidden state along the ridge by less than the cloud's own
+width, which is what d ~ 0.15 looks like.
+
+### Steering moves TOWARD the data, not away from it (2026-08-27)
+`scripts/analysis/manifold_distance.py`. The hypothesis was that steering pushes
+activations off the data manifold and that is why the CIFs stop being valid. Measured
+against 100,000 real training activations (the class bank), in subspace coordinates:
+
+    t      d_nn    d_knn   mahal   valid%
+    0.0   87.54    91.71   45.06   96.3
+    0.5   40.30    42.43   22.53   95.0
+    1.0    8.99     9.57    0.00   12.5
+    2.0   83.77    87.04   45.06    0.0
+
+Distance to real activations FALLS monotonically with t. At t=1.0 the steered state is
+10x closer to real activations than the unsteered one, and that is where validity
+collapses. **The decisive pair is t=0 vs t=2.0**: both ~87-92 away, both mahal 45.06,
+validity 96.3% vs 0.0%. Manifold distance does not determine validity; displacement
+magnitude does.
+
+Why "closer" still breaks things: at t=1.0 mahal is exactly 0 -- we land on the centroid,
+and in 64 dimensions the mean is not a typical sample. The data lives on a shell at
+radius ~sqrt(64)=8; the centre is the emptiest place in it.
+
+Caveat: the bank is mean-pooled whole-CIF embeddings while the probe measures per-token
+prompt activations, which is why even the clean row sits at mahal 45 rather than ~8. The
+t=0 vs t=2.0 comparison is unaffected (both measured identically), but "distance to this
+bank" is not a clean measure of the model's own per-token activation manifold.
+
 ### No layer translates the property in a single step (2026-08-27)
 `scripts/analysis/layer_causal_probe.py`. CrystaLLM writes numbers digit by digit, so
 the model's belief about the volume is a distribution over digit tokens at known
