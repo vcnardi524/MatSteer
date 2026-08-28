@@ -241,7 +241,7 @@ explanation that would invalidate every null above, so it was measured directly
 | after block 15 `ln_1` | 0.295 | 0.254 |
 | after block 15 (residual) | 0.246 | 0.233 |
 | after `ln_f` | 0.213 | 0.246 |
-| **in the logits** | **0.229** | **0.133** |
+| **in the logits** | **0.166** | **0.191** |
 | component along all-ones (LN removes outright) | 0.28% | 0.48% |
 
 **The injection survives.** It reaches the logits at 13–23% relative magnitude, and the
@@ -250,10 +250,46 @@ under half a percent. So the sweeps applied what they were meant to apply, the m
 output distribution really is being perturbed, and the property still does not move. The
 nulls stand as measured.
 
-One number worth a follow-up: `pca_centroid` injects a *larger* vector than the linear
-method (55.6 vs 40.0) yet reaches the logits with a *smaller* relative change (0.133 vs
-0.229). The top-64 subspace has less influence on the output per unit norm than the raw
-mean-difference direction.
+Both rows are full-sequence. `_model.py` runs `lm_head` on the last position only unless
+`targets` is passed, so a naive `model(x)` reports the logit change for one token rather
+than the sequence — the scripts pass `targets` for exactly this reason.
+
+### No layer has usable causal control over the property
+
+Steering at layer 14 does nothing and the injection is not being erased, so the next
+question is whether some *other* layer carries a usable handle. A generation sweep per
+layer would cost days; `analysis/layer_causal_probe.py` answers it with forward passes.
+CrystaLLM writes numbers digit by digit (`_cell_volume   160.9257` → `['1','6','0','.',…]`),
+so the model's belief about the volume is a distribution over digit tokens at known
+positions. Teacher-force a real CIF, inject at layer L, compare against clean.
+
+| layer | `d_log10_vol` | integer-digit term | leading-digit term | selectivity |
+|---:|---:|---:|---:|---:|
+| 0 | +0.0066 | 0.0000 | +0.0066 | 0.801 |
+| 4 | **−0.0566** | 0.0000 | −0.0566 | 2.276 |
+| 6 | −0.0462 | 0.0000 | −0.0462 | **3.094** |
+| 9 | −0.0196 | 0.0000 | −0.0196 | 2.669 |
+| 14 | **−0.0000** | 0.0000 | −0.0000 | 2.582 |
+| 15 | +0.0001 | 0.0000 | +0.0001 | 2.428 |
+
+**The injection lands on the right tokens and fails to move them.** Selectivity — KL at
+the volume digits over KL everywhere else — is 2.4–3.1 across layers 1–15, so the volume
+tokens are perturbed ~2.6× more than the rest of the CIF. This is not undifferentiated
+noise. But the magnitude does not shift: the **integer-digit count is exactly zero at
+every layer**, and that is the term carrying orders of magnitude (a volume goes 90 → 900
+by gaining a digit). All movement is in the leading digit, at most 0.057 log10, and
+**negative at 14 of 16 layers** even though the vector points low → high. Target 30 needs
++0.192.
+
+So the injection **scrambles** the digit distribution rather than **translating** it —
+which explains high KL alongside an unmoved median, and explains every null sweep above.
+
+Two checks that make the probe trustworthy: it predicts a negative shift at layer 9 and
+the layer-9 generation sweep did come out negative (d = −0.084); it predicts ~0 at layer
+14 and those sweeps gave d ≈ +0.11, i.e. nothing. Independent methods, same answer.
+
+Read `selectivity` and `d_log10_vol` together — selectivity alone says only that the
+injection arrives, not that it directs anything.
 
 ### Spectral co-clustering "incoherence" — a construction artifact
 - `spec_cocluster_analysis.py` runs Dhillon spectral co-clustering on per-layer

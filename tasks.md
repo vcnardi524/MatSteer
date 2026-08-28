@@ -155,8 +155,47 @@ Caveat: measured on the prompt forward pass (short sequences), not mid-generatio
 normalisation mechanism is the same either way, but the residual norm grows with sequence
 length, so the ratio during a long generation will differ.
 
-**Still untested:** steering a subset of layers or token positions rather than all of
-them; larger K; whether any layer has causal control of these properties.
+### No layer has usable causal control (2026-08-27)
+`scripts/analysis/layer_causal_probe.py`. CrystaLLM writes numbers digit by digit, so
+the model's belief about the volume is a distribution over digit tokens at known
+positions. Teacher-force a real CIF, inject at layer L, compare those distributions
+against clean. Forward passes only -- 16 layers x 60 CIFs, minutes, where a generation
+sweep per layer would be days. Needed a steering vector at every layer, which is why
+`compute_steering_vector.py` now streams (verified against the stored layer-14 vector:
+cosine 0.99999998).
+
+    layer   d_log10_vol   n_digits   lead     selectivity
+      0       +0.0066      0.0000   +0.0066     0.801
+      4       -0.0566      0.0000   -0.0566     2.276   <- largest magnitude effect
+      6       -0.0462      0.0000   -0.0462     3.094   <- peak selectivity
+      9       -0.0196      0.0000   -0.0196     2.669
+     14       -0.0000      0.0000   -0.0000     2.582   <- where every sweep was run
+     15       +0.0001      0.0000   +0.0001     2.428
+
+**The injection lands on the right tokens and does not move them.** Selectivity is
+2.4-3.1 across layers 1-15: the volume digits are perturbed ~2.6x more than the rest of
+the CIF, so this is not undifferentiated noise. But the magnitude does not shift. The
+integer-digit count -- the term that carries orders of magnitude, since a volume goes
+90 -> 900 by gaining a digit -- is **exactly zero at every layer**. All movement is in
+the leading digit, at most 0.057 log10, and **negative at 14 of 16 layers** when the
+vector points low -> high. Reaching target 30 needs +0.192.
+
+So the injection SCRAMBLES the digit distribution rather than TRANSLATING it. That
+explains high KL with an unmoved median, and it explains all nine null sweeps better
+than anything before it.
+
+**The probe agrees with generation, which validates it.** It predicts negative at layer
+9 and the layer-9 sweep gave d = -0.084/-0.091 (wrong direction); it predicts ~0 at
+layer 14 and those sweeps gave d ~ +0.11 (nothing). Two independent methods, same answer.
+
+Note the layer-14 collapse to -0.0000 is not a rounding artifact of the fixed metric: the
+earlier, confounded E[leading digit] version showed the same profile (large at layers
+4-8, ~0 at 11-15). Only the sign and scale were unreadable there.
+
+**Still untested:** steering only the token positions where the property is written,
+rather than all of them; larger K; whether a non-additive intervention (patching
+activations from a high-volume structure) transfers the property where adding a
+direction does not.
 
 **Not done yet: the analysis path.** `plot_steering_distribution_shift.py:discover_runs`
 keys runs on `alpha(-?[\d.]+)` in the stem, so `steered_pca_*` files are invisible to it

@@ -33,7 +33,20 @@ import pandas as pd
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_embeddings
+import pyarrow.parquet as pq
+from utils import DEFAULT_VARIANT, embeddings_paths
+
+
+def embedding_files(layer: int, dataset: str, variant: str) -> list:
+    """The consolidated parquet if it exists, else the checkpoint shards."""
+    single, ckpt = embeddings_paths(layer, dataset, variant)
+    if single.exists():
+        return [single]
+    files = sorted(ckpt.glob("checkpoint_*.parquet")) + sorted(ckpt.glob("batch_*.parquet"))
+    if not files:
+        raise FileNotFoundError(f"No embeddings for layer {layer} at {single} or {ckpt}/")
+    return files
+
 
 DEFAULT_PROPERTY = "dos_electronic.band_gap"  # clean band gap (eV); == electronic.band_gap
 
@@ -78,38 +91,49 @@ def main():
     meta = meta.dropna(subset=["val"])
     print(f"  {len(meta):,} entries with a numeric '{prop}'")
 
-    print(f"Loading layer-{args.layer} embeddings (dataset={args.dataset}) ...")
-    emb = load_embeddings(args.layer, dataset=args.dataset)
     join = meta[[args.id_col, "val"]].rename(columns={args.id_col: "id"})
-    df = emb.merge(join, on="id", how="inner")
-    print(f"  joined: {len(df):,}")
-    if df.empty:
-        raise SystemExit(
-            f"No id overlap between embeddings/{args.dataset} and {args.metadata} "
-            f"on '{args.id_col}'. Check that dataset/id-col match the property's source.")
 
-    X = np.vstack(df["embedding"].values).astype(np.float32)
-    vals = df["val"].values
-
+    # Thresholds come from the labels alone, so they can be fixed before any embedding
+    # is read -- which lets the class means be accumulated by streaming instead of
+    # holding the layer in memory. A consolidated layer is 2.29M x 1024 floats (9.4 GB
+    # raw, several times that once pandas has boxed the list column), so loading one
+    # outright is what stopped this script running over every layer.
     if args.pct is not None:
-        low_thresh = float(np.percentile(vals, args.pct))
-        high_thresh = float(np.percentile(vals, 100 - args.pct))
+        low_thresh = float(np.percentile(join["val"].to_numpy(), args.pct))
+        high_thresh = float(np.percentile(join["val"].to_numpy(), 100 - args.pct))
         print(f"  percentile buckets: bottom {args.pct:g}% (<= p{args.pct:g}={low_thresh:.4g}) "
               f"vs top {args.pct:g}% (>= p{100-args.pct:g}={high_thresh:.4g})")
     else:
         low_thresh, high_thresh = args.low, args.high
 
-    mask_low = vals <= low_thresh
-    mask_high = vals >= high_thresh
-    n_low, n_high = int(mask_low.sum()), int(mask_high.sum())
+    low_ids = set(join.loc[join["val"] <= low_thresh, "id"])
+    high_ids = set(join.loc[join["val"] >= high_thresh, "id"])
+
+    print(f"Streaming layer-{args.layer} embeddings (dataset={args.dataset}) ...")
+    files = embedding_files(args.layer, args.dataset, DEFAULT_VARIANT)
+    sums = {"low": np.zeros(1024), "high": np.zeros(1024)}
+    counts = {"low": 0, "high": 0}
+    for path in files:
+        for rb in pq.ParquetFile(path).iter_batches(batch_size=50_000,
+                                                    columns=["id", "embedding"]):
+            df = rb.to_pandas()
+            for side, keep in (("low", low_ids), ("high", high_ids)):
+                sel = df[df["id"].isin(keep)]
+                if sel.empty:
+                    continue
+                sums[side] += np.vstack(sel["embedding"].to_numpy()).astype(np.float64).sum(0)
+                counts[side] += len(sel)
+
+    n_low, n_high = counts["low"], counts["high"]
     print(f"  low  ({prop} <= {low_thresh:.4g}): {n_low:,}")
     print(f"  high ({prop} >= {high_thresh:.4g}): {n_high:,}")
     if n_high < 50 or n_low < 50:
         print("  WARNING: a class is very small; consider adjusting --low/--high")
     if n_high == 0 or n_low == 0:
-        raise SystemExit("A class is empty — adjust --low/--high for this property.")
+        raise SystemExit("A class is empty — adjust --low/--high, or check that "
+                         "dataset/id-col match the property's source.")
 
-    steer = X[mask_high].mean(0) - X[mask_low].mean(0)
+    steer = ((sums["high"] / n_high) - (sums["low"] / n_low)).astype(np.float32)
     raw_norm = float(np.linalg.norm(steer))
     steer = steer / raw_norm
     print(f"  raw mean-diff norm = {raw_norm:.3f}")

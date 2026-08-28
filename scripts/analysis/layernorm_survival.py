@@ -70,7 +70,10 @@ def capture(model, x, layer, inject=None):
     handles.append(model.transformer.h[layer + 1].register_forward_hook(save("h_next")))
     handles.append(model.transformer.ln_f.register_forward_hook(save("ln_f")))
     with torch.no_grad():
-        logits, _ = model(x)
+        # targets=x only to make the model run lm_head over EVERY position; without it
+        # _model.py returns logits for the last token alone, so the logits row would
+        # describe one position instead of the sequence.
+        logits, _ = model(x, targets=x)
     for h in handles:
         h.remove()
     if inject is not None:
