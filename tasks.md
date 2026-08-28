@@ -190,6 +190,39 @@ data -- and simultaneously buried under within-bucket variance larger than the s
 Additive steering moves a hidden state along the ridge by less than the cloud's own
 width, which is what d ~ 0.15 looks like.
 
+### Path smoothness is a spectrum, and structural share does not predict it (2026-08-28)
+Extended the centroid-PCA measurement to `energy_above_hull` and `efermi` on MP, to test
+what makes a property's representation readable. Count-weighted turning angle, layer 14:
+
+    property             structural share  turn_wtd   best pc   corr w/ writable
+    density_atomic             57.1%         27.8     pc2 -0.95      1.00
+    efermi                       --          56.2     pc5 -0.91      0.668
+    energy_above_hull          55.4%         81.3     pc3 +0.91      0.283
+    band_gap                   10.4%        106.7     pc2 -0.90      0.445
+
+**The prediction failed.** energy_above_hull was chosen because its structural share
+(55.4%, i.e. the fraction of variance surviving a fixed composition) nearly matches
+density's 57.1%, so it should have traced a comparable path. It does not: 81.3 degrees
+against 27.8. **How much of a property survives fixing the composition does not predict
+whether its representation has a trajectory.** That was the whole reason for preferring
+it over a density replication.
+
+**efermi is the first non-geometric property to land in between**, 56.2 degrees at layer
+14 and 57.4 at layer 9. Not density's smooth ridge, not band gap's oscillation.
+
+The better predictor now looks like **correlation with what the model literally writes
+into the CIF** (max over volume / density_atomic / density / nsites) -- monotone for
+three of the four, with band gap and energy_above_hull swapping. Four points and a broken
+ordering is not a law; treat it as a lead.
+
+Caveat on efermi: it correlates 0.668 with density, so "readable because it is partly
+density" is live. Against that, it loads on pc5 while density loads on pc2 -- different
+directions. Worth settling before calling efermi an independent result.
+
+`--min-value 0.001` on energy_above_hull changed almost nothing (81.3 -> 82.1) because
+the 5,000/bucket cap had already cut the on-hull spike down. Unlike band gap, where the
+restriction mattered.
+
 ### Band gap has a direction but no path; density has both (2026-08-28)
 Same centroid-PCA measurement across layers, properties and corpora. Turning angle is
 weighted by bucket count, so a vertex resting on 50 structures does not count as much as
