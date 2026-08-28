@@ -4,6 +4,45 @@ Active experiments. See `README.md` for everything completed so far and the
 overall pipeline.
 ## consider probing at the layers to see if they are actually encoding information
 
+## Experiment settings live in `experiments/*.conf`, run via `./run.sh` (2026-08-28)
+`./run.sh <name> [--local|--dry-run] [overrides]`. See CLAUDE.md for the contract.
+
+Replaces the env-var-per-slurm convention for anything new. Three things it fixes:
+squeue now shows `centroid_density_l14-l10-w3-s500` instead of eight identical
+`centroid_pca_plots.slurm`; `experiments/runs.tsv` records every submission with its git
+SHA and resolved command including overrides; and the boilerplate (cd / PATH / bashrc /
+mkdir logs / venv activate) lives once in `slurms/_job.slurm` instead of being pasted
+into 17 files.
+
+**Migrated so far** (chosen by usage -- these five slurms account for 720 of ~860 jobs
+ever run): centroid_density_l14, centroid_bandgap_mp_l14, validate_steered,
+predict_bandgap, predict_density, relax_steered, steer_pca_density, steer_linear_bandgap.
+The old slurm files still work and are left in place until each is verified.
+
+**Not migrated on purpose.** `compute_pca_basis.slurm` runs two scripts with a
+skip-if-exists guard and a TARGET-gated second call -- that is control flow, not
+configuration. `plot_tsne_pca.slurm` and `plot_categorical.slurm` loop over layers with
+several calls each. `slurm_cocluster.sh` passes positionals to a script that also reads
+os.environ directly. A loop is not a config.
+
+**Found while surveying, not fixed here:**
+- `plot_categorical.slurm`, `plot_tsne_pca.slurm`, `plot_wyckoff.slurm` never pass
+  `--partition`, which `utils.py:add_partition_args` makes required=True. Those jobs die
+  at argparse. They have 2 log files each, so they have barely run.
+- `slurm_cocluster.sh` uses `N_CLUSTERS` and `RUN_NAME` with no default and no `:?`
+  guard; unset silently expands to nothing and the script crashes on `sys.argv[1]`.
+- `#SBATCH -V` appears in 9 files and is a no-op -- in SLURM `-V` is `--version`; the
+  export-the-environment meaning is PBS/Torque's `qsub -V`. `_job.slurm` omits it.
+- Eight variables carry conflicting defaults across files (ALPHA 40 vs 1.0, N_SAMPLES
+  10000 vs 3, TARGET 30 vs required vs branch-gating). Under the new layout the default
+  lives in the python argparse and each config states what it wants.
+- `PARTITION` means the data split here and the queue in SLURM. The config format calls
+  the queue `QUEUE` to keep them apart.
+
+**Watch out:** `--local` runs write to the same output paths as a real run, so a quick
+test with reduced settings will overwrite a committed figure. It happened while building
+this. `runs.tsv` records the clobbering command, and `git checkout` restores the file.
+
 ## pca_centroid steering (branch `geometry_steering`, started 2026-08-25)
 Testing whether the property direction is curved rather than straight. Instead of
 `h + alpha * (mean_high - mean_low)`, project the layer-14 hidden state into the top-K

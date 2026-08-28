@@ -33,25 +33,46 @@ importing one script from another needs `importlib.util.spec_from_file_location`
 `crystallm_venv`'s cu130 build **cannot run on the V100**. Anything touching M3GNet
 must use `relax_venv`.
 
-### SLURM
-
-Submit scripts live in `slurms/` and are driven entirely by environment variables,
-which each script documents in a header comment. They `cd` to the repo root and
-activate the right venv themselves.
+### SLURM — use `./run.sh`
 
 ```bash
-sbatch --export=ALL,INPUT=steering_results/bandgap/validation/<stem>.parquet \
-       slurms/relax_steered_cifs.slurm
+./run.sh <experiment>                    # submit
+./run.sh <experiment> --layer 9          # submit, overriding a flag
+./run.sh --local <experiment>            # run inline (debugging)
+./run.sh --dry-run <experiment>          # print the resolved command and stop
+./run.sh --list                          # what experiments exist
 ```
 
-**`--export` splits on commas.** A value containing a comma silently truncates:
-`--export=ALL,LABEL_COLS=point_group,space_group_symbol` parses as
-`LABEL_COLS=point_group` plus a stray variable, and the job runs one label while
-looking successful. Export in the submitting shell and pass a plain `--export=ALL`
-instead. Scripts that take comma-separated values echo their resolved config at
-startup for exactly this reason — check that line in the log before trusting a run.
+Settings live in `experiments/<name>.conf` — a sourced bash file naming the script, the
+venv, the SLURM resources, and the flags. `run.sh` resolves one, picks the venv, derives
+a readable `--job-name`, and submits `slurms/_job.slurm`, which is the single template
+and carries no per-experiment resource directives (they are all passed as sbatch CLI
+flags instead).
 
-Logs go to `logs/<name>_<jobid>.log` (or `.out`/`.err`), gitignored.
+**Overrides are appended to `ARGS` and win**, because argparse takes the last occurrence
+of a flag — true for plain store actions, `store_true`, and `BooleanOptionalAction`.
+So `./run.sh foo --layer 9` really does run at layer 9.
+
+Every submission appends a line to `experiments/runs.tsv` (tracked): timestamp, job id,
+experiment, git SHA, and the fully resolved command. That is the record of what produced
+a result, including overrides the config file cannot know about.
+
+**`--export` splits on commas**, which is why `run.sh` exports in the submitting shell
+and passes a bare `--export=ALL`. Never put `VAR=value` on an sbatch command line:
+`--export=ALL,LABEL_COLS=point_group,space_group_symbol` parses as
+`LABEL_COLS=point_group` plus a stray variable, and the job runs one label while looking
+successful.
+
+`#SBATCH -V` in the older files is a no-op: in SLURM `-V` means `--version`, and the
+"export the environment" meaning is PBS/Torque's `qsub -V`. `_job.slurm` omits it.
+
+Logs go to `logs/<experiment>_<jobid>.out`/`.err`, gitignored. Under `run.sh` the stem
+matches the experiment name; the older hand-written slurms each chose their own stem.
+
+Not everything is migrated. The older `slurms/*.slurm` files still work and still take
+env vars; `run.sh` is the path for anything new. Scripts with real control flow
+(`compute_pca_basis.slurm` runs two scripts with a skip-if-exists guard) or layer loops
+(`plot_tsne_pca.slurm`) stay as they are — a loop is not a config.
 
 Some nodes are excluded in the SLURM headers for cause — `node11` advertises 192G but
 has been seen with under 5G free, which OOM-killed a job. Keep the exclusions.
