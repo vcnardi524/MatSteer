@@ -228,6 +228,33 @@ prompts that dictate the space group, because that is where each property's `alp
 control exists. Each is internally valid, but the two are not a like-for-like
 cross-property comparison.
 
+### LayerNorm is not why steering fails
+
+CrystaLLM is pre-norm (`x = x + attn(ln_1(x))`), so a vector added to the residual stream
+at layer 14 is normalised by block 15 before anything reads it. That is the one mundane
+explanation that would invalidate every null above, so it was measured directly
+(`analysis/layernorm_survival.py`, forward passes only, no generation):
+
+| `‖steered − clean‖ / ‖clean‖` | linear α=40 | pca_centroid t=0.5 |
+|---|---:|---:|
+| at the injection (layer 14 out) | 0.271 | 0.292 |
+| after block 15 `ln_1` | 0.295 | 0.254 |
+| after block 15 (residual) | 0.246 | 0.233 |
+| after `ln_f` | 0.213 | 0.246 |
+| **in the logits** | **0.229** | **0.133** |
+| component along all-ones (LN removes outright) | 0.28% | 0.48% |
+
+**The injection survives.** It reaches the logits at 13–23% relative magnitude, and the
+part LayerNorm annihilates for free — whatever lies along the uniform direction — is
+under half a percent. So the sweeps applied what they were meant to apply, the model's
+output distribution really is being perturbed, and the property still does not move. The
+nulls stand as measured.
+
+One number worth a follow-up: `pca_centroid` injects a *larger* vector than the linear
+method (55.6 vs 40.0) yet reaches the logits with a *smaller* relative change (0.133 vs
+0.229). The top-64 subspace has less influence on the output per unit norm than the raw
+mean-difference direction.
+
 ### Spectral co-clustering "incoherence" — a construction artifact
 - `spec_cocluster_analysis.py` runs Dhillon spectral co-clustering on per-layer
   embeddings and reports subspace incoherence

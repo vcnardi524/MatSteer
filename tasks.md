@@ -126,8 +126,37 @@ displacement and matched model damage give the same non-result. That points upst
 centroid choice: layer-14 activations may not carry a controllable handle on these
 properties at all, only a decodable one.
 
-**Still untested:** whether LayerNorm downstream of the injection renormalises the change
-away; steering a subset of layers or token positions rather than all of them; larger K.
+### LayerNorm is not the explanation (2026-08-27)
+`scripts/analysis/layernorm_survival.py`, 40 prompts, forward passes only.
+CrystaLLM is pre-norm, so anything added at layer 14 is normalised by block 15's ln_1
+before it is read. Two parts of an injection could vanish for free -- the component along
+the all-ones direction (removed by mean subtraction) and the scale (divided out by the
+per-token std). Neither happens.
+
+    ||steered - clean|| / ||clean||   linear a=40   pca_centroid t=0.5
+      at the injection                    0.271          0.292
+      after block 15 ln_1                 0.295          0.254
+      after block 15 (residual)           0.246          0.233
+      after ln_f                          0.213          0.246
+      in the logits                       0.229          0.133
+    uniform component (LN removes it)     0.28%          0.48%
+
+**The injection reaches the logits at 13-23% relative magnitude and the property still
+does not move.** That closes off the last mundane explanation: the sweeps did apply what
+they were meant to apply, and the nine nulls stand as measured. The model's output
+distribution is being perturbed substantially -- just not along the property.
+
+Worth noting for a later experiment: pca_centroid injects a *larger* vector than linear
+(55.6 vs 40.0) but reaches the logits with a *smaller* relative change (0.133 vs 0.229).
+The top-64 subspace has less influence on the output per unit norm than the raw
+mean-difference direction does.
+
+Caveat: measured on the prompt forward pass (short sequences), not mid-generation. The
+normalisation mechanism is the same either way, but the residual norm grows with sequence
+length, so the ratio during a long generation will differ.
+
+**Still untested:** steering a subset of layers or token positions rather than all of
+them; larger K; whether any layer has causal control of these properties.
 
 **Not done yet: the analysis path.** `plot_steering_distribution_shift.py:discover_runs`
 keys runs on `alpha(-?[\d.]+)` in the stem, so `steered_pca_*` files are invisible to it
