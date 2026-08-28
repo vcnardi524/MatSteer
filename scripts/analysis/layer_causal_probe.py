@@ -96,6 +96,13 @@ def main():
     ap.add_argument("--model", default="CrystaLLM/crystallm_v1_large")
     ap.add_argument("--property", default="density_atomic",
                     help="steering_vectors/<property>/layer{N}.parquet must exist per layer")
+    ap.add_argument("--method", choices=("linear", "pca_centroid"), default="linear",
+                    help="Which injection to probe. pca_centroid needs --target/--t and "
+                         "a basis + centroid; its displacement depends on the hidden "
+                         "state, so --frac is ignored and t sets the strength.")
+    ap.add_argument("--target", type=float, default=30.0, help="[pca_centroid]")
+    ap.add_argument("--t", type=float, default=0.5, help="[pca_centroid]")
+    ap.add_argument("--k", type=int, default=64, help="[pca_centroid]")
     ap.add_argument("--frac", type=float, default=0.21,
                     help="Injection norm as a fraction of the layer's own residual norm. "
                          "0.21 matches alpha=40 at layer 14.")
@@ -111,15 +118,31 @@ def main():
     log_digit = torch.tensor([0.0] + [np.log10(d) for d in range(1, 10)],
                              device=device, dtype=torch.float32)
 
-    vecs = {}
-    for L in range(config.n_layer):
-        p = f"steering_vectors/{args.property}/layer{L}.parquet"
-        if os.path.exists(p):
-            v = np.array(pd.read_parquet(p).iloc[0]["steering_vector"], dtype=np.float32)
-            vecs[L] = torch.tensor(v, device=device)
-    print(f"steering vectors found for layers: {sorted(vecs)}\n")
+    vecs, pca = {}, {}
+    if args.method == "linear":
+        for L in range(config.n_layer):
+            p = f"steering_vectors/{args.property}/layer{L}.parquet"
+            if os.path.exists(p):
+                v = np.array(pd.read_parquet(p).iloc[0]["steering_vector"], dtype=np.float32)
+                vecs[L] = torch.tensor(v, device=device)
+        print(f"linear vectors found for layers: {sorted(vecs)}\n")
+    else:
+        for L in range(config.n_layer):
+            base = f"steering_vectors/pca_centroid/pca_layer{L}_k{args.k}.parquet"
+            cen = (f"steering_vectors/pca_centroid/{args.property}/"
+                   f"layer{L}_k{args.k}_target{args.target:g}.parquet")
+            if os.path.exists(base) and os.path.exists(cen):
+                b = pd.read_parquet(base).iloc[0]
+                c = pd.read_parquet(cen).iloc[0]
+                pca[L] = (torch.tensor(np.asarray(b["mean"], dtype=np.float32), device=device),
+                          torch.tensor(np.asarray(b["components"], dtype=np.float32)
+                                       .reshape(int(b["k"]), -1), device=device),
+                          torch.tensor(np.asarray(c["centroid_pca"], dtype=np.float32),
+                                       device=device))
+                vecs[L] = None
+        print(f"pca_centroid target={args.target:g} t={args.t:g}: layers {sorted(vecs)}\n")
     if not vecs:
-        raise SystemExit(f"No per-layer vectors under steering_vectors/{args.property}/")
+        raise SystemExit(f"No injection available for method={args.method}")
 
     data = load_cifs(TEST_PKL)
     cifs = []
@@ -151,9 +174,16 @@ def main():
                 # without it _model.py returns logits for the last token alone.
                 clean, _ = model(ids, targets=ids)
             h_handle.remove()
-            # match the injection to this layer's own scale, so depth is not confounded
-            scale = args.frac * hidden["h"].float().norm(dim=-1).mean()
-            inject = (vec * scale).view(1, 1, -1)
+            if args.method == "linear":
+                # match the injection to this layer's own scale, so depth is not confounded
+                scale = args.frac * hidden["h"].float().norm(dim=-1).mean()
+                inject = (vec * scale).view(1, 1, -1)
+            else:
+                # the pca displacement depends on the hidden state, exactly as the
+                # generator computes it; t alone sets the strength
+                mu, W, c = pca[L]
+                h = hidden["h"].float()
+                inject = args.t * (c - (h - mu) @ W.T) @ W
 
             def steer(module, inp, out):
                 h = out[0] if isinstance(out, tuple) else out
@@ -198,7 +228,9 @@ def main():
                 kl_other=float(kl[~mask].mean()),
             ))
         m = pd.DataFrame(acc).mean()
-        rows.append(dict(layer=L, n_cifs=len(cifs), inject_frac=args.frac,
+        rows.append(dict(layer=L, method=args.method, n_cifs=len(cifs),
+                         inject_frac=args.frac if args.method == "linear" else np.nan,
+                         t=args.t if args.method != "linear" else np.nan,
                          d_log10_volume=m.d_log10_volume,
                          d_n_int_digits=m.d_n_int_digits, d_log_leading=m.d_log_leading,
                          kl_target=m.kl_target, kl_other=m.kl_other,
@@ -210,7 +242,10 @@ def main():
               f"sel {r['selectivity']:.3f}", flush=True)
 
     df = pd.DataFrame(rows)
-    out = analysis_dir("v1_all", None, "test") / f"layer_causal_probe_{args.property}.csv"
+    tag = ("linear" if args.method == "linear"
+           else f"pca_centroid_target{args.target:g}_t{args.t:g}")
+    out = (analysis_dir("v1_all", None, "test")
+           / f"layer_causal_probe_{args.property}_{tag}.csv")
     df.to_csv(out, index=False, float_format="%.6g")
     print("\nRead the two columns together. High selectivity with d_log10_volume ~ 0 is\n"
           "the injection SCRAMBLING the property's tokens rather than TRANSLATING them:\n"

@@ -254,14 +254,24 @@ Both rows are full-sequence. `_model.py` runs `lm_head` on the last position onl
 `targets` is passed, so a naive `model(x)` reports the logit change for one token rather
 than the sequence — the scripts pass `targets` for exactly this reason.
 
-### No layer has usable causal control over the property
+### No layer translates the property in a single step
 
 Steering at layer 14 does nothing and the injection is not being erased, so the next
 question is whether some *other* layer carries a usable handle. A generation sweep per
-layer would cost days; `analysis/layer_causal_probe.py` answers it with forward passes.
-CrystaLLM writes numbers digit by digit (`_cell_volume   160.9257` → `['1','6','0','.',…]`),
-so the model's belief about the volume is a distribution over digit tokens at known
-positions. Teacher-force a real CIF, inject at layer L, compare against clean.
+layer would cost days; `analysis/layer_causal_probe.py` answers a narrower version with
+forward passes. CrystaLLM writes numbers digit by digit
+(`_cell_volume   160.9257` → `['1','6','0','.',…]`), so the model's belief about the
+volume is a distribution over digit tokens at known positions. Teacher-force a real CIF,
+inject at layer L, compare against clean.
+
+**Scope, and it matters** — the probe is teacher-forced, so it measures a *single-step*
+effect from a *well-formed prefix*. It cannot see anything that arises from errors
+compounding over a long autoregressive generation, and that turns out to be where the
+one visible behavioural effect lives (below). Read it as "does layer L shift the next
+digit given a correct prefix", not as "does layer L control the property".
+
+Linear vector, injected at a fixed fraction of each layer's own residual norm
+(`--frac 0.21`, matching alpha=40 at layer 14):
 
 | layer | `d_log10_vol` | integer-digit term | leading-digit term | selectivity |
 |---:|---:|---:|---:|---:|
@@ -279,14 +289,40 @@ noise. But the magnitude does not shift: the **integer-digit count is exactly ze
 every layer**, and that is the term carrying orders of magnitude (a volume goes 90 → 900
 by gaining a digit). All movement is in the leading digit, at most 0.057 log10, and
 **negative at 14 of 16 layers** even though the vector points low → high. Target 30 needs
-+0.192.
++0.192. `pca_centroid` behaves the same way at layer 14: `d_log10_vol` = −0.0009 at
+t=0.5 and +0.0011 at t=1.0, with the digit count flat at both.
 
-So the injection **scrambles** the digit distribution rather than **translating** it —
-which explains high KL alongside an unmoved median, and explains every null sweep above.
+So in a single step the injection **scrambles** the digit distribution rather than
+**translating** it.
 
-Two checks that make the probe trustworthy: it predicts a negative shift at layer 9 and
-the layer-9 generation sweep did come out negative (d = −0.084); it predicts ~0 at layer
-14 and those sweeps gave d ≈ +0.11, i.e. nothing. Independent methods, same answer.
+#### The one real behavioural effect is drift, not steering
+
+`pca_centroid` at t=1.0 *did* make the model write much bigger volumes — that was
+reported here for a while as a large win. Splitting those generations by validity shows
+what it was:
+
+| subset | n | median Å³/atom |
+|---|---:|---:|
+| control (valid) | 2,888 | 19.25 |
+| t=1.0, **valid** | 374 | 19.48 |
+| t=1.0, **parsed but invalid** | 2,571 | **24.56** |
+
+The entire effect lives in structures that parse but are chemically invalid. The valid
+ones do not move. The probe agrees and explains why: at layer 14, t=1.0, selectivity
+**falls to 0.598** — the injection now disturbs non-volume tokens *more* than volume
+tokens (KL 1.672 vs 0.999), which is the fingerprint of general degradation rather than
+targeting. At layer 9, t=1.0 the digit count finally does move (−0.165) with KL of 10.3,
+i.e. the grammar coming apart.
+
+A strong injection therefore does change the number the model writes, by pushing it
+off-distribution over hundreds of autoregressive steps, and ~87% of what it then writes
+is not a valid crystal. That is a different phenomenon from steering, and it is invisible
+to a teacher-forced probe by construction.
+
+Two checks that the probe tracks reality where its scope allows: it predicts a negative
+shift at layer 9 under the linear vector and the layer-9 generation sweep did come out
+negative (d = −0.084); it predicts ~0 at layer 14 and those sweeps gave d ≈ +0.11, i.e.
+nothing.
 
 Read `selectivity` and `d_log10_vol` together — selectivity alone says only that the
 injection arrives, not that it directs anything.

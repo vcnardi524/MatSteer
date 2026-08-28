@@ -155,7 +155,7 @@ Caveat: measured on the prompt forward pass (short sequences), not mid-generatio
 normalisation mechanism is the same either way, but the residual norm grows with sequence
 length, so the ratio during a long generation will differ.
 
-### No layer has usable causal control (2026-08-27)
+### No layer translates the property in a single step (2026-08-27)
 `scripts/analysis/layer_causal_probe.py`. CrystaLLM writes numbers digit by digit, so
 the model's belief about the volume is a distribution over digit tokens at known
 positions. Teacher-force a real CIF, inject at layer L, compare those distributions
@@ -191,6 +191,22 @@ layer 14 and those sweeps gave d ~ +0.11 (nothing). Two independent methods, sam
 Note the layer-14 collapse to -0.0000 is not a rounding artifact of the fixed metric: the
 earlier, confounded E[leading digit] version showed the same profile (large at layers
 4-8, ~0 at 11-15). Only the sign and scale were unreadable there.
+
+**Scope: the probe is teacher-forced**, so it measures a single-step effect from a
+well-formed prefix and is blind to anything that compounds over a long generation. That
+blind spot is where the one visible behavioural effect lives. pca_centroid t=1.0 really
+did make the model write bigger volumes, and splitting by validity shows what that was:
+
+    control (valid)             n=2,888  median 19.25 A^3/atom
+    t=1.0 VALID                 n=  374  median 19.48
+    t=1.0 parsed but INVALID    n=2,571  median 24.56
+
+All of it is in the invalid structures. The probe agrees: at layer 14, t=1.0 selectivity
+falls to 0.598 -- the injection disturbs non-volume tokens MORE than volume tokens
+(KL 1.672 vs 0.999), the fingerprint of degradation, not targeting. At layer 9, t=1.0 the
+digit count moves (-0.165) with KL 10.3: the grammar coming apart. A strong injection
+changes the written number by pushing the model off-distribution over hundreds of
+autoregressive steps, and ~87% of what it writes is then not a valid crystal.
 
 **Still untested:** steering only the token positions where the property is written,
 rather than all of them; larger K; whether a non-additive intervention (patching
