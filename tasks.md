@@ -190,6 +190,42 @@ data -- and simultaneously buried under within-bucket variance larger than the s
 Additive steering moves a hidden state along the ridge by less than the cloud's own
 width, which is what d ~ 0.15 looks like.
 
+### Bucket width is a confound, and the DIRECTION of its effect is the real diagnostic
+The turning angle was being read across properties binned at different widths, so bucket
+count and structures-per-centroid were confounded with the geometry. Swept the width at
+layer 14:
+
+    property            width  buckets  turn_wtd
+    density_atomic        1       82      27.8    <- train
+    density_atomic        2       47      50.3
+    density_atomic        5       24      41.2
+    band_gap (MP)         0.1     74     106.7
+    band_gap (MP)         0.25    31      96.4
+    band_gap (MP)         0.5     16      48.6
+    energy_above_hull     0.02   107      81.3
+    energy_above_hull     0.1     46      93.1
+    energy_above_hull     0.25    21      59.2
+    efermi                0.25    68      56.2
+    efermi                0.5     36      48.4
+    efermi                1       22      48.6
+
+**The two properties respond in opposite directions.** Density gets WORSE as buckets
+widen (27.8 -> 50.3), band gap gets much BETTER (106.7 -> 48.6). Coarsening does two
+things at once: it averages estimation noise away, and it under-samples genuine fine
+structure. So the direction of change separates them -- density's fine structure is real
+and coarse bins destroy it; band gap's jitter is noise and coarse bins remove it. That is
+a better diagnostic than the raw angle.
+
+**Correction to the earlier claim.** At comparable bucket counts the properties converge:
+density 41.2 at 24 buckets, band gap 48.6 at 16, efermi 48.6 at 22. The dramatic
+27.8-vs-106.7 contrast holds only at fine resolution (82 vs 74 buckets, so it is a fair
+comparison there) -- but "band gap has no path at all" was too strong. At coarse
+resolution it has one about as good as density's.
+
+Watch out when summarising these: a glob over `*layer14*` picks up train AND val, which
+are different populations with different bucket counts. The val density row at width 1
+has 53 buckets and 35.6 degrees, and is not comparable to train's 82 and 27.8.
+
 ### Path smoothness is a spectrum, and structural share does not predict it (2026-08-28)
 Extended the centroid-PCA measurement to `energy_above_hull` and `efermi` on MP, to test
 what makes a property's representation readable. Count-weighted turning angle, layer 14:
