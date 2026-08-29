@@ -16,7 +16,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_root"
 
-EXP_DIR="experiments"
+EXP_DIR="experiments_configs"
 TEMPLATE="slurms/_job.slurm"
 RUN_LOG="$EXP_DIR/runs.tsv"
 
