@@ -43,6 +43,56 @@ os.environ directly. A loop is not a config.
 test with reduced settings will overwrite a committed figure. It happened while building
 this. `runs.tsv` records the clobbering command, and `git checkout` restores the file.
 
+## Manifold steering: validity solved, property still unmoved (2026-08-28)
+`--method manifold` slides along a curve fitted through the density bucket centroids,
+carrying the off-curve offset through unchanged. Four deltas, 1,000 prompts x 3, layer 14,
+paired against the same alpha=0 control as every other density arm.
+
+**Validity is completely fixed.** At matched displacement the manifold holds what
+pca_centroid destroyed:
+
+    run                 displacement   valid%
+    alpha0 control            0         96.3
+    manifold d=5           3.88         96.4
+    manifold d=10          6.44         96.5
+    manifold d=15          7.50         96.7
+    pca_centroid t=0.5     ~3.9         95.0
+    pca_centroid t=1.0     ~7.8         12.5   <- same displacement as d=15
+    pca_centroid t=2.0      --           0.0
+
+So the CIFs were breaking because the intervention left the data distribution, not
+because of how far it moved. That hypothesis is confirmed.
+
+**The property still does not move, and moves less than before.**
+
+    run           target   median   mean_diff   %of move      d        p
+    control          --    19.26
+    manifold d=2   21.5    19.24    -0.00107      -2.2%    -0.043    0.84
+    manifold d=5   25.8    19.18    -0.00062      -0.5%    -0.024    0.018
+    manifold d=10  34.4    19.31    +0.00049      +0.2%    +0.057    6.4e-07
+    manifold d=15  39.5    19.29    -0.00049      -0.2%    -0.020    0.00023
+    linear a=80      --    19.51    +0.00306      +1.6%    +0.165
+    pca_centroid t=0.5 --  19.36    +0.00181      +0.9%    +0.119
+
+|d| <= 0.057, signs inconsistent, no dose response. d=15 asks for 39.5 A^3/atom and
+returns 19.29 against a control of 19.26.
+
+**The reading.** The damage and the effect came from the same thing. pca_centroid's
+perturbation moved the written digits -- the causal probe measured 2.6x selectivity on
+the volume tokens -- by knocking the model off-distribution. Carrying the off-curve
+residual is exactly what keeps it in-distribution, and that is also what stops the output
+changing. An intervention gentle enough not to break the CIF is too gentle to matter.
+
+That strengthens rather than overturns the earlier conclusion: an intervention respecting
+the measured geometry produces NO effect, while every intervention that produced any
+effect did so by breaking the model. Decodable, not controllable.
+
+**Note for the results table:** `steering_ttest.py --all` does not pick these up.
+`discover_runs` keys on `alpha<N>` or `_t<N>_`, and `steered_manifold_test_d10_k64_layer14`
+matches neither, so the manifold arms are absent from `steering_runs.csv`. The numbers
+above came from a direct paired computation. Extending discovery is a small change nobody
+has made because the result is null.
+
 ## pca_centroid steering (branch `geometry_steering`, started 2026-08-25)
 Testing whether the property direction is curved rather than straight. Instead of
 `h + alpha * (mean_high - mean_low)`, project the layer-14 hidden state into the top-K
