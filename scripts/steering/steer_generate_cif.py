@@ -54,6 +54,7 @@ from extract_cif_embeddings import load_model, load_cifs
 # sys.path[0] is this script's own dir, so its neighbour imports directly.
 from compute_pca_basis import METHOD_DIR as PCA_DIR
 from compute_centroid_target import load_pca
+from manifold import Manifold
 
 RANDOM_SEED = 42
 CHECKPOINT_EVERY = 100  # write to parquet every N prompts
@@ -119,6 +120,29 @@ def local_centroid(z_prompt, bank, n_neighbours):
     d = torch.cdist(z_prompt.view(1, -1), bank).view(-1)
     idx = torch.topk(d, min(n_neighbours, bank.shape[0]), largest=False).indices
     return bank[idx].mean(0), float(d[idx].mean())
+
+
+def manifold_hook(mean, components, manifold, delta, device):
+    """Slide along a fitted curve instead of cutting across the space toward a centroid.
+
+    pca_centroid moves the subspace coordinate a fraction of the way to the class mean,
+    which at t=1 lands exactly ON the mean -- Mahalanobis 0, the emptiest place in a
+    64-dimensional distribution. This instead finds where the state sits along the
+    curve, steps `delta` in arc length, and adds the off-curve offset back, so the
+    result is the same distance off-manifold as the input was.
+    """
+    mu = torch.tensor(mean, dtype=torch.float32, device=device)          # (1024,)
+    W = torch.tensor(components, dtype=torch.float32, device=device)     # (k, 1024)
+    manifold = manifold.to(device)
+
+    def hook(module, inp, out):
+        h = out[0] if isinstance(out, tuple) else out
+        z = (h.float() - mu) @ W.T                     # (B, T, k)
+        u, r = manifold.encode(z)                      # (B, T, 1), (B, T, k)
+        z_new = manifold.decode(u + delta) + r
+        return rewrap(out, h + ((z_new - z) @ W).to(h.dtype))
+
+    return hook
 
 
 def generate(model, tokenizer, device, prompt_str, max_new_tokens, temperature, top_k,
@@ -201,17 +225,46 @@ def build_pca_local(args, device):
             torch.tensor(Z, device=device))
 
 
+def build_manifold(args, device):
+    """(hook, filename stem suffix) for the fitted-curve method."""
+    if args.manifold is None:
+        raise SystemExit("--method manifold needs --manifold <path to a fitted curve>")
+    mean, comps = load_pca(args.layer, args.k)
+    m = Manifold.load(args.manifold)
+    print(f"Manifold {args.manifold}: {m!r}")
+    delta = args.delta
+    if args.target is not None:
+        # a target property value is more legible than a raw arc-length step; convert it
+        # against the curve's own median position so the step means "move to 30"
+        u_med = m.property_to_arc(float(m.prop[m.n_samples // 2]))
+        delta = m.property_to_arc(args.target) - u_med
+        print(f"  --target {args.target:g} -> delta {delta:+.3f} in arc length "
+              f"(curve length {m.length:.2f})")
+    print(f"Method=manifold  delta={delta:+.3f}  layer={args.layer}  k={args.k}")
+    tag = f"target{args.target:g}" if args.target is not None else f"d{delta:g}"
+    return (manifold_hook(mean, comps, m, delta, device),
+            f"{tag}_k{args.k}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--pkl", required=True)
-    parser.add_argument("--method", choices=("linear", "pca_centroid", "pca_local"),
+    parser.add_argument("--method",
+                        choices=("linear", "pca_centroid", "pca_local", "manifold"),
                         default="linear",
                         help="linear: alpha * mean-difference vector. "
                              "pca_centroid: interpolate toward one global target centroid "
                              "inside the top-K PCA subspace. "
                              "pca_local: same, but the centroid is recomputed per prompt "
-                             "from the class members nearest that prompt.")
+                             "from the class members nearest that prompt. "
+                             "manifold: slide along a curve fitted through the property's "
+                             "bucket centroids, keeping the off-curve offset.")
+    parser.add_argument("--manifold", default=None,
+                        help="[manifold] path to a curve from fit_manifold.py")
+    parser.add_argument("--delta", type=float, default=0.0,
+                        help="[manifold] step in ARC LENGTH along the curve. Same units "
+                             "for every run, unlike a fraction. --target overrides it.")
     parser.add_argument("--neighbours", type=int, default=256,
                         help="[pca_local] class members averaged into each prompt's "
                              "local centroid")
@@ -261,6 +314,8 @@ def main():
         hook, run_tag = build_linear(args, device)
     elif args.method == "pca_centroid":
         hook, run_tag = build_pca_centroid(args, device)
+    elif args.method == "manifold":
+        hook, run_tag = build_manifold(args, device)
     else:
         local = build_pca_local(args, device)
         hook = None                      # rebuilt per prompt, once its centroid is known
@@ -292,7 +347,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     sg_tag = "" if args.with_spacegroup else "_nosg"
     prefix = {"linear": "steered", "pca_centroid": "steered_pca",
-              "pca_local": "steered_pcalocal"}[args.method]
+              "pca_local": "steered_pcalocal", "manifold": "steered_manifold"}[args.method]
     out_path = out_dir / f"{prefix}_{split}_{run_tag}_layer{args.layer}{sg_tag}.parquet"
 
     # resume: skip already-done ids
