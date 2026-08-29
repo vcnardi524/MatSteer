@@ -1,3 +1,0 @@
-when	job_id	experiment	git_sha	command
-2026-08-28T22:21:49Z	local	centroid_density_l14	fb70abc	python scripts/plots/centroid_pca_plots.py --partition train --property density_atomic --labels density_atomic_v1.parquet --dataset v1_all --layer 14 --width 1 --sample 5000 --max-per-bucket 5000 --layer 14 --sample 200 --min-count 5000
-2026-08-28T22:25:30Z	409032	centroid_density_l14	fb70abc	python scripts/plots/centroid_pca_plots.py --partition train --property density_atomic --labels density_atomic_v1.parquet --dataset v1_all --layer 14 --width 1 --sample 5000 --max-per-bucket 5000 --layer 10 --width 3 --sample 500
