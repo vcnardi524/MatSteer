@@ -40,7 +40,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d projection)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import analysis_dir, load_split_index, add_partition_args, embeddings_paths
+from utils import analysis_dir, load_split_index, add_partition_args
+from manifold import bucket_centroids, embedding_files
 
 DEFAULT_LABELS = "density_atomic_v1.parquet"
 DEFAULT_PROPERTY = "density_atomic"
@@ -48,51 +49,6 @@ DEFAULT_PROPERTY = "density_atomic"
 # the steering displacement lives in; the later ones say whether the property keeps
 # structure past the leading directions or dissolves into noise.
 DEFAULT_DIMS = [(0, 1, 2), (3, 4, 5), (6, 7, 8), (9, 10, 11)]
-
-
-def embedding_files(layer, dataset, variant):
-    single, ckpt = embeddings_paths(layer, dataset, variant)
-    if single.exists():
-        return [single]
-    files = sorted(ckpt.glob("checkpoint_*.parquet")) + sorted(ckpt.glob("batch_*.parquet"))
-    if not files:
-        raise FileNotFoundError(f"No embeddings for layer {layer} at {single} or {ckpt}/")
-    return files
-
-
-def bucket_centroids(labels, prop, width, layer, dataset, variant, batch_size,
-                     sample_ids=None):
-    """Per-bucket (sum, count) by streaming the layer, plus the raw rows for sample_ids.
-
-    The sample is drawn as ids up front rather than reservoir-sampled, so the same pass
-    that builds the centroids also collects the individual points to draw behind them.
-    """
-    idx = np.floor(labels[prop].to_numpy() / width).astype(np.int64)
-    bucket_of = dict(zip(labels["id"].to_numpy(), idx))
-    want = set() if sample_ids is None else set(sample_ids)
-
-    sums, counts, s_vec, s_id = {}, {}, [], []
-    for path in embedding_files(layer, dataset, variant):
-        for rb in pq.ParquetFile(path).iter_batches(batch_size=batch_size,
-                                                    columns=["id", "embedding"]):
-            df = rb.to_pandas()
-            b = df["id"].map(bucket_of)
-            df = df[b.notna()]
-            if df.empty:
-                continue
-            b = b[b.notna()].to_numpy().astype(np.int64)
-            X = np.vstack(df["embedding"].to_numpy()).astype(np.float64)
-            for u in np.unique(b):
-                m = b == u
-                sums[u] = sums.get(u, 0) + X[m].sum(0)
-                counts[u] = counts.get(u, 0) + int(m.sum())
-            if want:
-                m = df["id"].isin(want).to_numpy()
-                if m.any():
-                    s_vec.append(X[m])
-                    s_id.extend(df["id"].to_numpy()[m])
-    S = np.vstack(s_vec) if s_vec else np.empty((0, 1024))
-    return sums, counts, S, s_id
 
 
 def main():
