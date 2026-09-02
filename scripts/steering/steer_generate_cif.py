@@ -122,14 +122,27 @@ def local_centroid(z_prompt, bank, n_neighbours):
     return bank[idx].mean(0), float(d[idx].mean())
 
 
-def manifold_hook(mean, components, manifold, delta, device):
-    """Slide along a fitted curve instead of cutting across the space toward a centroid.
+def manifold_hook(mean, components, manifold, delta, device, scale=1.0,
+                  variant="residual"):
+    """Move a hidden state along a curve fitted through the property's bucket centroids.
 
-    pca_centroid moves the subspace coordinate a fraction of the way to the class mean,
-    which at t=1 lands exactly ON the mean -- Mahalanobis 0, the emptiest place in a
-    64-dimensional distribution. This instead finds where the state sits along the
-    curve, steps `delta` in arc length, and adds the off-curve offset back, so the
-    result is the same distance off-manifold as the input was.
+    Writing h = mu + z @ W + h_perp and z = decode(u) + r, the three variants differ only
+    in what they keep:
+
+      residual      h + scale * (decode(u+d) - decode(u)) @ W
+                    keeps mu, h_perp and r. The injection is ONLY the curve step, whose
+                    size is capped by the curve's own extent (19.47 end to end here), so
+                    `scale` is what lets it reach the magnitudes the linear method uses.
+      project       mu + z_new @ W
+                    keeps mu and r, discards h_perp. Its injection is the curve step
+                    MINUS h_perp, so it is dominated by the deletion, not the steering.
+      project_nomu  z_new @ W
+                    discards mu as well. Injection exceeds |h| itself, since |mu| alone
+                    is larger than the median hidden state.
+
+    Measured on real per-token states at layer 14 (|h| = 130.8), with delta=15:
+    residual 6.80 (5.2% of |h|), project 94.60 (72.3%), project_nomu 161.99 (124%).
+    For reference linear alpha=40 injects 30.6% and alpha=80 61.2%.
     """
     mu = torch.tensor(mean, dtype=torch.float32, device=device)          # (1024,)
     W = torch.tensor(components, dtype=torch.float32, device=device)     # (k, 1024)
@@ -140,7 +153,13 @@ def manifold_hook(mean, components, manifold, delta, device):
         z = (h.float() - mu) @ W.T                     # (B, T, k)
         u, r = manifold.encode(z)                      # (B, T, 1), (B, T, k)
         z_new = manifold.decode(u + delta) + r
-        return rewrap(out, h + ((z_new - z) @ W).to(h.dtype))
+        if variant == "project":
+            h_new = (mu + z_new @ W).to(h.dtype)
+        elif variant == "project_nomu":
+            h_new = (z_new @ W).to(h.dtype)
+        else:
+            h_new = h + (scale * ((z_new - z) @ W)).to(h.dtype)
+        return rewrap(out, h_new)
 
     return hook
 
@@ -240,9 +259,13 @@ def build_manifold(args, device):
         delta = m.property_to_arc(args.target) - u_med
         print(f"  --target {args.target:g} -> delta {delta:+.3f} in arc length "
               f"(curve length {m.length:.2f})")
-    print(f"Method=manifold  delta={delta:+.3f}  layer={args.layer}  k={args.k}")
+    print(f"Method=manifold  variant={args.variant}  delta={delta:+.3f}  "
+          f"scale={args.scale:g}  layer={args.layer}  k={args.k}")
     tag = f"target{args.target:g}" if args.target is not None else f"d{delta:g}"
-    return (manifold_hook(mean, comps, m, delta, device),
+    tag += f"_{args.variant}"
+    if args.variant == "residual" and args.scale != 1.0:
+        tag += f"_s{args.scale:g}"
+    return (manifold_hook(mean, comps, m, delta, device, args.scale, args.variant),
             f"{tag}_k{args.k}")
 
 
@@ -262,6 +285,17 @@ def main():
                              "bucket centroids, keeping the off-curve offset.")
     parser.add_argument("--manifold", default=None,
                         help="[manifold] path to a curve from fit_manifold.py")
+    parser.add_argument("--variant", choices=("residual", "project", "project_nomu"),
+                        default="residual",
+                        help="[manifold] what to keep. residual: add the curve step to h, "
+                             "keeping everything else (needs --scale to reach a useful "
+                             "magnitude). project: replace the in-subspace part, dropping "
+                             "h_perp. project_nomu: also drop mu.")
+    parser.add_argument("--scale", type=float, default=1.0,
+                        help="[manifold, residual variant] multiplies the curve step. The "
+                             "step is capped by the curve's extent, so scale is what sets "
+                             "the injection magnitude: ~6 matches linear alpha=40, ~12 "
+                             "matches alpha=80.")
     parser.add_argument("--delta", type=float, default=0.0,
                         help="[manifold] step in ARC LENGTH along the curve. Same units "
                              "for every run, unlike a fraction. --target overrides it.")

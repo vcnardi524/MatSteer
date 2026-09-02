@@ -43,13 +43,57 @@ os.environ directly. A loop is not a config.
 test with reduced settings will overwrite a committed figure. It happened while building
 this. `runs.tsv` records the clobbering command, and `git checkout` restores the file.
 
-## Manifold steering: validity solved, property still unmoved (2026-08-28)
+## Linear probe across all 16 layers, four properties (2026-09-01)
+`scripts/analysis/property_probe.py` -- the regression twin of `symmetry_probe.py`. Ridge
+on mean-pooled embeddings, scored on the `by_formula` split so no test formula appeared in
+training. Four baselines: mean, lookup, composition matrix, embedding.
+
+    property              composition   L0      peak         gain over L0
+    density_atomic           0.464     0.901   0.947 (L7)       +0.046
+    efermi                   0.316     0.764   0.808 (L9)       +0.044
+    energy_above_hull        0.041     0.619   0.715 (L10)      +0.096
+    dos_electronic.band_gap  0.150     0.202   0.227 (L3)       +0.025
+
+**Read the L0 column first.** Layer 0 is token embeddings plus position, mean-pooled -- no
+transformer block has run. It already gets R^2 = 0.901 on density, which is expected:
+density is `cell_volume / n_atoms` and the CIF text contains `_cell_volume` and the atom
+site lines outright. The depth curve adds only +0.046 on top. Same shape on efermi (0.764
+at L0) and energy_above_hull (0.619). These are largely surface-readable from the tokens,
+not properties the network computes -- the same trap as the Wyckoff t-SNE plots.
+
+Band gap is the exception and the honest case: L0 only reaches 0.202, and the whole model
+only gets to 0.227. It is the one property here that is neither surface-readable nor
+learned well.
+
+All four peak in the middle (L3-L10) and decline toward L15, consistent with the last
+layers specialising for next-token prediction rather than holding property information.
+
+CSVs: `analysis/v1_all/full/val/property_probe_{density_atomic,dos_electronic_band_gap}.csv`
+and `analysis/v1_mp/full/val/property_probe_{efermi,energy_above_hull}.csv`.
+
+## Manifold steering: property unmoved -- but the run was never magnitude-matched (2026-08-28)
 `--method manifold` slides along a curve fitted through the density bucket centroids,
 carrying the off-curve offset through unchanged. Four deltas, 1,000 prompts x 3, layer 14,
 paired against the same alpha=0 control as every other density arm.
 
-**Validity is completely fixed.** At matched displacement the manifold holds what
-pca_centroid destroyed:
+> **CORRECTION (2026-09-01).** The "matched displacement" claim below is wrong and the
+> validity conclusion does not survive it. The 7.50 for d=15 is the curve step; the ~7.8
+> for pca_centroid t=1.0 is the centroid OFFSET, not the injection norm. Measured on real
+> per-token states at layer 14 where |h| = 130.80, the actual injections are:
+>
+>     manifold d=15        6.80    5.2% of |h|
+>     pca_centroid t=0.5  55.60   29.3%
+>     linear alpha=40     40.00   30.6%
+>     linear alpha=80     80.00   61.2%
+>
+> So the manifold arm ran at a sixth of the magnitude of anything that ever had an effect
+> here. Validity was not "fixed" -- it was never stressed. Running the residual variant at
+> `--scale 12` (injection 82, matched to linear alpha=80) gives **50.1% valid against
+> linear's 88.4%**: at equal magnitude the manifold is WORSE, not better. The null below
+> is uninformative about curvature, and the "gentle enough not to break it is too gentle
+> to matter" reading is not supported by this run.
+
+**Validity, at the magnitudes actually run** (all far below the linear arms):
 
     run                 displacement   valid%
     alpha0 control            0         96.3
@@ -77,15 +121,35 @@ because of how far it moved. That hypothesis is confirmed.
 |d| <= 0.057, signs inconsistent, no dose response. d=15 asks for 39.5 A^3/atom and
 returns 19.29 against a control of 19.26.
 
-**The reading.** The damage and the effect came from the same thing. pca_centroid's
+**The reading (superseded -- see the correction above).** The damage and the effect came from the same thing. pca_centroid's
 perturbation moved the written digits -- the causal probe measured 2.6x selectivity on
 the volume tokens -- by knocking the model off-distribution. Carrying the off-curve
 residual is exactly what keeps it in-distribution, and that is also what stops the output
 changing. An intervention gentle enough not to break the CIF is too gentle to matter.
 
-That strengthens rather than overturns the earlier conclusion: an intervention respecting
-the measured geometry produces NO effect, while every intervention that produced any
-effect did so by breaking the model. Decodable, not controllable.
+That reading required the displacements to be matched. They were not, so it does not
+stand. What survives is narrower: at 5% of |h| the manifold does nothing, and at 62% it
+damages the CIF more than a straight line does.
+
+**Two findings that bear on every null in this section (2026-09-01):**
+
+*The stack is fitted pooled and injected per-token.* Every vector, centroid and curve here
+is fitted on mean-pooled whole-CIF embeddings, while the hook runs on individual token
+states. A ridge probe trained on pooled scores R^2 = 0.759 on pooled and **-22.193** on
+per-token; per-token spread is 140.91 against pooled's 13.04. This is the leading
+unrefuted explanation for the uniform nulls. Deferred deliberately -- there is literature
+precedent for using pooled contrast vectors per-token -- but it is not ruled out.
+
+*`encode` works on the bulk, fails on ~10%.* On 40,000 held-out structures at layer 14:
+spearman(true density, encoded density) = +0.660, MAE 3.44 A^3/atom, 57% within +-2, and
+every property band peaks on its own true centre. The defect is narrower than a broken
+projection: about 10% of structures collapse to arc ~6 regardless of true density, and the
+high tail clamps at the curve end. Plot and per-band numbers in
+`analysis/v1_all/full/val/plots/manifold_encoding_density_atomic_layer14.png`, from
+`scripts/plots/plot_manifold_encoding.py`. (An earlier note in conversation called `encode`
+globally broken on the strength of `bank[:8000]` -- an unshuffled leading block with a
+76.5% failure rate against a 10.1% base rate. The slice was real; the generalisation was
+not.)
 
 **Note for the results table:** `steering_ttest.py --all` does not pick these up.
 `discover_runs` keys on `alpha<N>` or `_t<N>_`, and `steered_manifold_test_d10_k64_layer14`
