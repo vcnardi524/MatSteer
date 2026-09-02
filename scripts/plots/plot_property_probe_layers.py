@@ -4,10 +4,14 @@
 Reads the CSVs that property_probe.py wrote and draws the depth curves side by side.
 Scored on `by_formula`, so no test formula appeared in training.
 
-Left panel is the raw R^2. Read it against the layer-0 marker, not against zero: layer 0
-is token embeddings plus position with no transformer block run, so whatever it scores is
-readable off the CIF text itself. Right panel subtracts it, leaving what the network
-actually adds.
+Left panel is the raw R^2. Read it against the layer-0 marker, not against zero. Right
+panel subtracts layer 0, leaving what depth adds.
+
+Layer L is the OUTPUT of transformer block L (extract_cif_embeddings.py hooks
+model.transformer.h[l]), so layer 0 already has one attention + MLP behind it. There is
+no pre-block extraction in this pipeline. The right panel is therefore "what blocks 1-15
+add over block 0" -- NOT "what the network adds over the raw text". It does not isolate
+how much of the property is simply printed in the CIF.
 
 Usage:
     python scripts/plots/plot_property_probe_layers.py
@@ -76,14 +80,14 @@ def main():
 
     ax = axes[0]
     ax.set_ylabel("probe $R^2$")
-    ax.set_title("probe $R^2$ by layer\nhollow marker = layer 0 (no transformer block run)")
+    ax.set_title("probe $R^2$ by layer\nhollow marker = layer 0 (output of the first block)")
     ax.set_ylim(0, 1)
     ax.legend(loc="lower right", frameon=False, fontsize=9)
 
     ax = axes[1]
     ax.axhline(0, color="#999", lw=1)
     ax.set_ylabel("$R^2$ minus layer 0")
-    ax.set_title("what the network adds\n(layer 0 subtracted: the surface-readable part)")
+    ax.set_title("what depth adds beyond the first block\n(layer 0 subtracted)")
 
     for ax in axes:
         ax.set_xlabel("layer")

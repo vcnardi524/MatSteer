@@ -54,12 +54,41 @@ training. Four baselines: mean, lookup, composition matrix, embedding.
     energy_above_hull        0.041     0.619   0.715 (L10)      +0.096
     dos_electronic.band_gap  0.150     0.202   0.227 (L3)       +0.025
 
-**Read the L0 column first.** Layer 0 is token embeddings plus position, mean-pooled -- no
-transformer block has run. It already gets R^2 = 0.901 on density, which is expected:
-density is `cell_volume / n_atoms` and the CIF text contains `_cell_volume` and the atom
-site lines outright. The depth curve adds only +0.046 on top. Same shape on efermi (0.764
-at L0) and energy_above_hull (0.619). These are largely surface-readable from the tokens,
-not properties the network computes -- the same trap as the Wyckoff t-SNE plots.
+**Read the L0 column first.** Layer L here is the OUTPUT of transformer block L --
+`extract_cif_embeddings.py` hooks `model.transformer.h[l]` -- so layer 0 already has one
+attention + MLP behind it. (An earlier version of this note said layer 0 was token
+embeddings plus position with no block run. That was wrong; there is no pre-block
+extraction in this pipeline.)
+
+Even so, block 0 alone gets R^2 = 0.901 on density, 0.764 on efermi and 0.619 on
+energy_above_hull, and the remaining fifteen blocks add only +0.046, +0.044 and +0.096.
+Almost everything these probes read is available after a single block.
+
+**For density, the answer is printed in the input.** `density_atomic` is defined as
+`cell_volume / n_atoms` (exact to 0.0 in `density_atomic_v1.parquet`), and both terms are
+literally in the CIF. Parsing them out -- no model, no regression, no fitting -- on 29,832
+corpus CIFs:
+
+    100% of corpus CIFs carry a literal _cell_volume tag
+    _cell_volume / (sum of _atom_site_symmetry_multiplicity)   R^2 = 1.000000, 100% exact
+    _cell_volume / (sum of counts in _chemical_formula_sum)     R^2 = 1.000000, 100% exact
+
+**What that does and does not mean.** It removes the probe as evidence: 0.947 cannot argue
+the model learned a density representation when a trivial parse gets 1.000. Any probe
+score at or below the parse ceiling is consistent with the embedding merely retaining two
+printed numbers.
+
+It does NOT show the model has no internal density representation, and it does not say
+density is unsteerable. A model can perfectly well build an internal representation of a
+quantity that is also written down, and steering could still change which digits it emits
+for `_cell_volume` and the multiplicity column. Both remain open; the probe just cannot
+settle them either way.
+
+**This is specific to density.** efermi, band gap and energy_above_hull are DFT labels
+that appear nowhere in a CIF, so their probes have no parse ceiling. That is also why
+efermi reaches 0.764 at block 0 while the composition baseline is only 0.316 -- the pooled
+embedding carries cell lengths, angles, space group and site positions, not just
+stoichiometry.
 
 Band gap is the exception and the honest case: L0 only reaches 0.202, and the whole model
 only gets to 0.227. It is the one property here that is neither surface-readable nor
