@@ -1,0 +1,5 @@
+property,composition_r2,layer0_r2,peak_layer,peak_r2,gain_over_layer0
+volume per atom,0.464038,0.901225,7,0.946845,0.04562
+Fermi level,0.315877,0.764111,9,0.807881,0.04377
+energy above hull,0.0409635,0.618557,10,0.714554,0.095997
+band gap,0.150118,0.202188,3,0.227302,0.025114
