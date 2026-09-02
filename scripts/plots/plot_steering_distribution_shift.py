@@ -176,6 +176,50 @@ def alpha_colour(alpha: float, positives: list) -> str:
 STRENGTH_RE = {"linear": re.compile(r"alpha(-?[\d.]+)"),
                "pca": re.compile(r"_t(-?[\d.]+)_")}
 
+# steered_manifold_<split>_d<delta>[_<variant>][_s<scale>]_k<k>_layer<N>.
+# project_nomu before project so the longer name wins.
+_MANIFOLD_RE = re.compile(
+    r"^steered_manifold_[a-z]+_d(-?[\d.]+)"
+    r"(?:_(residual|project_nomu|project))?(?:_s([\d.]+))?_k\d+_layer(\d+)")
+
+
+def kind_of(stem: str) -> str:
+    """Which steering method wrote this file, from its prefix.
+
+    Longest prefix first so steered_pcalocal_ is never read as steered_pca_. The
+    manifold variants are separate methods because five of them share delta 15 and
+    would otherwise collide on one (target, strength) key.
+    """
+    if stem.startswith("steered_pcalocal_"):
+        return "pca_local"
+    if stem.startswith("steered_pca_"):
+        return "pca_centroid"
+    if stem.startswith("steered_manifold_"):
+        m = _MANIFOLD_RE.match(stem)
+        variant = (m.group(2) if m and m.group(2) else "residual")
+        return "manifold" if variant == "residual" else f"manifold_{variant}"
+    return "linear"
+
+
+def sweep_target(stem: str, kind: str):
+    """The value identifying one sweep: the property target for pca runs, the arc step
+    `delta` for manifold runs (which have no property target when given --delta)."""
+    if kind.startswith("manifold"):
+        m = _MANIFOLD_RE.match(stem)
+        return float(m.group(1)) if m else None
+    m = re.search(r"_target([\d.]+)_t[\d.]+_k", stem)
+    return float(m.group(1)) if m else None
+
+
+def sweep_strength(stem: str, kind: str):
+    """The knob swept within one sweep. For manifold that is --scale, defaulting to 1.0
+    when the stem carries none."""
+    if kind.startswith("manifold"):
+        m = _MANIFOLD_RE.match(stem)
+        return float(m.group(3)) if m and m.group(3) else 1.0
+    m = STRENGTH_RE["linear" if kind == "linear" else "pca"].search(stem)
+    return float(m.group(1)) if m else None
+
 
 def discover_sweeps(results_dir: str, method: str) -> list:
     """The distinct (layer, target) sweeps on disk for a method, ascending.
@@ -187,14 +231,12 @@ def discover_sweeps(results_dir: str, method: str) -> list:
     out = set()
     for f in glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet"):
         b = _os.path.basename(f)
-        kind = ("pca_local" if b.startswith("steered_pcalocal_")
-                else "pca_centroid" if b.startswith("steered_pca_") else "linear")
+        kind = kind_of(b)
         if kind != method:
             continue
-        tm = re.search(r"_target([\d.]+)_t[\d.]+_k", b)
         lm = re.search(r"_layer(\d+)", b)
         if lm:
-            out.add((int(lm.group(1)), float(tm.group(1)) if tm else None))
+            out.add((int(lm.group(1)), sweep_target(b, kind)))
     return sorted(out, key=lambda p: (p[0], p[1] if p[1] is not None else -1))
 
 
@@ -204,8 +246,7 @@ def discover_targets(results_dir: str, family: str, method: str) -> list:
     for f in glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet"):
         m = re.search(r"_target([\d.]+)_t[\d.]+_k", _os.path.basename(f))
         b = _os.path.basename(f)
-        kind = ("pca_local" if b.startswith("steered_pcalocal_")
-                else "pca_centroid" if b.startswith("steered_pca_") else "linear")
+        kind = kind_of(b)
         if m and kind == method:
             tg.add(float(m.group(1)))
     return sorted(tg)
@@ -225,21 +266,18 @@ def discover_runs(results_dir: str, family: str, method: str = "linear",
         stem = _os.path.basename(f)
         if stem == "testset_baseline.parquet":
             continue
-        # Which method wrote this file is decided by its prefix, longest first so
-        # steered_pcalocal_ is never read as steered_pca_.
-        kind = ("pca_local" if stem.startswith("steered_pcalocal_")
-                else "pca_centroid" if stem.startswith("steered_pca_") else "linear")
+        kind = kind_of(stem)
         is_control = kind == "linear" and re.search(r"alpha-?0(\.0)?_", stem)
         # every method's t=0 is the same no-injection run, so the control is shared
         if kind != method and not (is_control and method != "linear"):
             continue
-        m = STRENGTH_RE["linear" if kind == "linear" else "pca"].search(stem)
-        if not m:
+        strength = sweep_strength(stem, kind)
+        if strength is None:
             continue
         if kind != "linear" and not is_control:
             if target is not None:
-                tm = re.search(r"_target([\d.]+)_t[\d.]+_k", stem)
-                if not tm or float(tm.group(1)) != target:
+                tgt = sweep_target(stem, kind)
+                if tgt is None or tgt != target:
                     continue
             if layer is not None:
                 lm = re.search(r"_layer(\d+)", stem)
@@ -253,7 +291,7 @@ def discover_runs(results_dir: str, family: str, method: str = "linear",
         if not _os.path.exists(f"steering_results/{results_dir}/validation/{stem}"):
             print(f"  ! {stem}: predictions but no validation -- skipped")
             continue
-        runs[float(m.group(1))] = stem
+        runs[strength] = stem
     return runs
 
 

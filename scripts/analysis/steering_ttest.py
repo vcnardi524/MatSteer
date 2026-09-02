@@ -61,28 +61,29 @@ from scipy.stats import levene, ttest_ind, ttest_rel, wilcoxon
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 from utils import analysis_dir, write_results_table, RESULT_UNITS, RESULT_COLUMNS
 
-# What a run stem says about itself. pca runs carry target/t/k, linear ones carry alpha.
+# Every method's stem grammar lives in the loader module (`_ds`, imported below), so it
+# is written once and both the plot and this table agree on what a filename means.
 # `family` (sg vs nosg) is part of the identity: the two are different prompt sets and a
 # run may only be paired against a control of its own.
-_PCA_RE = [
-    ("pca_local", re.compile(r"^steered_pcalocal_\w+?_target([\d.]+)_t[\d.]+_k\d+_nb\d+_layer(\d+)")),
-    ("pca_centroid", re.compile(r"^steered_pca_\w+?_target([\d.]+)_t[\d.]+_k\d+_layer(\d+)")),
-]
-_LINEAR_RE = re.compile(r"^steered_test_(?:clean_)?alpha-?[\d.]+_layer(\d+)")
+# Methods, in table order. The manifold variants are separate entries because five
+# manifold runs share delta 15 and would otherwise collide on one (target, strength) key.
+METHODS = ("linear", "pca_centroid", "pca_local",
+           "manifold", "manifold_project", "manifold_project_nomu")
 
 
 def run_meta(stem: str) -> dict:
-    """{method, target, layer, family} for a run stem."""
+    """{method, target, layer, family} for a run stem.
+
+    `target` means the property value aimed at for pca runs and the arc step `delta` for
+    manifold runs; it is NaN for linear, which has no per-sweep parameter.
+    """
     stem = stem[:-len(".parquet")] if stem.endswith(".parquet") else stem
     family = "nosg" if stem.endswith("_nosg") else "sg"
-    for method, rx in _PCA_RE:
-        m = rx.match(stem)
-        if m:
-            return dict(method=method, target=float(m.group(1)),
-                        layer=int(m.group(2)), family=family)
-    m = _LINEAR_RE.match(stem)
-    layer = int(m.group(1)) if m else 14
-    return dict(method="linear", target=float("nan"), layer=layer, family=family)
+    kind = _ds.kind_of(stem)
+    tgt = _ds.sweep_target(stem, kind)
+    lm = re.search(r"_layer(\d+)", stem)
+    return dict(method=kind, target=float("nan") if tgt is None else float(tgt),
+                layer=int(lm.group(1)) if lm else 14, family=family)
 
 # The loaders live in the plot script; load it by file path because `plots` is not a
 # package and the filename is not importable as a module name from here.
@@ -171,8 +172,13 @@ def analyse(prop: str, method: str, relaxed: bool, family: str = None,
             except ValueError:
                 p_w = 1.0                 # every pair identical: that IS the answer
             # how much of the way to the target it got, on the value scale
+            # `target` is a property value for pca runs but an ARC STEP for manifold
+            # runs, so "how far toward the target did it move" is undefined there --
+            # leave it NaN rather than scoring delta as though it were A^3/atom.
+            target_is_property = np.isfinite(meta["target"]) and \
+                not meta["method"].startswith("manifold")
             need = ((np.log10(meta["target"]) if scale == "log" else meta["target"])
-                    - ctrl_median) if np.isfinite(meta["target"]) else np.nan
+                    - ctrl_median) if target_is_property else np.nan
             r.update(mean_diff=float(diff.mean()), sd_diff=float(sd),
                      median_diff=float(np.median(diff)),
                      frac_of_target_move=float(diff.mean() / need) if need else np.nan,
@@ -196,7 +202,7 @@ def build_all(out_path=None) -> pd.DataFrame:
     """Every property x method x source, in one canonical table."""
     frames = []
     for prop in sorted(_ds.PROPS):
-        for method in ("linear", "pca_centroid", "pca_local"):
+        for method in METHODS:
             for relaxed in (False, True):
                 for family in (["sg", "nosg"] if prop == "band_gap" else [None]):
                     fam = family or _ds.PROPS[prop]["default_family"]

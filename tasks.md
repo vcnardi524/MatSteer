@@ -100,7 +100,7 @@ layers specialising for next-token prediction rather than holding property infor
 CSVs: `analysis/v1_all/full/val/property_probe_{density_atomic,dos_electronic_band_gap}.csv`
 and `analysis/v1_mp/full/val/property_probe_{efermi,energy_above_hull}.csv`.
 
-## Manifold steering: property unmoved -- but the run was never magnitude-matched (2026-08-28)
+## Manifold steering: null at scale 1, best-in-table at scale 6 (2026-08-28, revised 2026-09-01)
 `--method manifold` slides along a curve fitted through the density bucket centroids,
 carrying the off-curve offset through unchanged. Four deltas, 1,000 prompts x 3, layer 14,
 paired against the same alpha=0 control as every other density arm.
@@ -116,11 +116,9 @@ paired against the same alpha=0 control as every other density arm.
 >     linear alpha=80     80.00   61.2%
 >
 > So the manifold arm ran at a sixth of the magnitude of anything that ever had an effect
-> here. Validity was not "fixed" -- it was never stressed. Running the residual variant at
-> `--scale 12` (injection 82, matched to linear alpha=80) gives **50.1% valid against
-> linear's 88.4%**: at equal magnitude the manifold is WORSE, not better. The null below
-> is uninformative about curvature, and the "gentle enough not to break it is too gentle
-> to matter" reading is not supported by this run.
+> here. Validity was not "fixed" -- it was never stressed, and the null below is
+> uninformative about curvature. See the scale sweep at the end of this section for what
+> the same method does once the magnitude is matched.
 
 **Validity, at the magnitudes actually run** (all far below the linear arms):
 
@@ -159,6 +157,50 @@ changing. An intervention gentle enough not to break the CIF is too gentle to ma
 That reading required the displacements to be matched. They were not, so it does not
 stand. What survives is narrower: at 5% of |h| the manifold does nothing, and at 62% it
 damages the CIF more than a straight line does.
+
+### Matched-magnitude scale sweep (2026-09-01)
+
+`--variant residual --scale S` multiplies the curve step, which is otherwise capped by the
+curve's extent. Two runs at delta 15, layer 14, same 1,000 prompts x 3, same alpha=0
+control. Predictions are from the raw generated CIF; none of these were relaxed.
+
+    method          strength   injection   valid%   cohens_d    p_holm
+    manifold s=6       6          ~41       94.2%    +0.173    3.0e-07
+    linear            80          80        88.4%    +0.165    9.1e-07
+    pca_centroid       0.5        55.6      95.1%    +0.139    6.2e-05
+    linear            40          40        94.9%    +0.128    6.9e-05
+    manifold s=1       1           6.8      96.7%    -0.020    0.79
+    manifold s=12     12          ~82       50.1%    +0.033    0.79
+
+**`manifold s=6` is the largest effect size in the density table.** Against `linear
+alpha=40` -- the arm it is magnitude-matched to -- it is +0.173 vs +0.128 at 94.2% vs
+94.9% validity. Larger effect, same validity. It also beats `linear alpha=80`, which needs
+twice the injection and drops to 88.4% valid.
+
+**What that supports.** Following the fitted curve does better than a straight line at
+equal injection, on this property at this layer. That is the first result here where the
+geometry earns its cost.
+
+**What it does not support.** The effect is small in absolute terms: median 19.258 ->
+19.292 A^3/atom, +0.17%. And it is a narrow window, not a trend -- s=12 doubles the
+injection and the effect vanishes (d +0.033, p 0.79) while validity halves to 50.1%. Two
+points do not establish a dose response; s=2, s=4, s=8 would.
+
+`frac_of_target_move` is NaN for every manifold row on purpose. `target` holds an ARC STEP
+for these runs, not a property value, so scoring "how far toward the target" would read
+delta 15 as 15 A^3/atom -- below the 19.26 control -- and report a spurious negative.
+
+**The two projection variants produce nothing.** `project` and `project_nomu` are 0/600
+valid, so they contribute no rows. Both were run at 200 prompts rather than 1,000. Their
+injection is dominated by DELETING h_perp (and mu), not by steering, so 0% valid is the
+expected outcome rather than an informative one.
+
+**Discovery.** `steered_manifold_*` stems used to fall through to `kind="linear"`, whose
+strength regex does not match them, so every manifold arm was silently dropped from
+`steering_runs.csv`. The stem grammar now lives once in
+`plot_steering_distribution_shift.py` (`kind_of` / `sweep_target` / `sweep_strength`) and
+`steering_ttest.py` delegates to it. The manifold variants are separate methods because
+five runs share delta 15 and would otherwise collide on one (target, strength) key.
 
 **Two findings that bear on every null in this section (2026-09-01):**
 
