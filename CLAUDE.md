@@ -140,6 +140,17 @@ in the README; do not copy their approach.
 `metadata.parquet` and is **silently dropped**. `load_labeled_embeddings` therefore
 never returns a gap — join it yourself.
 
+`cif_layer<N>` is the **output of transformer block N**, not an input embedding.
+`extract_cif_embeddings.py` registers a forward hook on `model.transformer.h[N]`, and
+there is no `wte`/`wpe` extraction anywhere in the repo. So layer 0 already has one
+attention + MLP behind it. A high layer-0 probe score means "one block suffices", **not**
+"no computation needed" — it cannot show a property is read straight off the text. For
+that, use a model-free baseline: parse the value out of the CIF and compare. Done for
+density on 2026-09-01 — `_cell_volume / sum(_atom_site_symmetry_multiplicity)` reproduces
+`density_atomic` exactly (R^2 = 1.000000 on 29,832 CIFs), so its probe scores have a
+parse ceiling. The DFT labels (band gap, efermi, energy_above_hull) appear nowhere in a
+CIF and have no such ceiling.
+
 Probes must be evaluated on the `by_formula` split, not `random`. Chemical formulas
 repeat across the corpus, so about half of val shares a formula with train and can be
 answered by memorisation. `by_formula` scores only rows whose formula never appeared in
