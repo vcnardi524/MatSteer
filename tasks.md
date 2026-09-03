@@ -100,6 +100,61 @@ layers specialising for next-token prediction rather than holding property infor
 CSVs: `analysis/v1_all/full/val/property_probe_{density_atomic,dos_electronic_band_gap}.csv`
 and `analysis/v1_mp/full/val/property_probe_{efermi,energy_above_hull}.csv`.
 
+## Layer 7, no space group: the first dose response (2026-09-02)
+Density steering at layer 7 -- where the property probe peaks -- with the space group
+withheld from the prompt. 11 runs, 1,000 prompts x 3, jobs 453318-453328. These are a
+`nosg` family of their own; every earlier density arm used `--with-spacegroup`, so an
+alpha=0 nosg control had to be generated alongside them.
+
+    label             valid%   n_paired   control   median   cohens_d    p_holm
+    linear a0          95.7%      --       19.25    19.25       --         --
+    linear a16         93.3%     974       19.25    19.31    +0.104    1.2e-03
+    linear a40         33.6%     580       19.25    19.71    +0.181    3.0e-05
+    linear a80          0.0%      --       19.25      --        --         --
+    manifold d2  s6    93.7%     976       19.25    19.40    +0.192    2.7e-09
+    manifold d15 s2    87.0%     938       19.25    19.46    +0.150    2.1e-05
+    manifold d5  s6    39.9%     551       19.25    20.78    +0.112    8.8e-03
+    manifold d15 s4    29.5%     422       19.25    21.30    +0.155    4.8e-03
+    manifold d15 s6     9.5%     132       19.25    26.08    +0.115    0.38
+    manifold d10 s6     8.3%     132       19.25    25.05    +0.064    0.46
+    manifold d15 s8     5.7%      93       19.25    27.59    +0.088    0.40
+
+**`manifold d2 s6` is the largest effect in the density table**: d +0.192 at 93.7% valid,
+p_holm 2.7e-09, against a control at 95.7%. The linear arm at comparable validity (a16,
+93.3%) reaches +0.104. Linear only gets to +0.181 by falling to 33.6% validity.
+
+**Both sweeps are monotone in the median, which layer 14 never showed:**
+
+    delta at s=6:   19.40 -> 20.78 -> 25.05            (d = 2, 5, 10)
+    scale at d=15:  19.46 -> 21.30 -> 26.08 -> 27.59   (s = 2, 4, 6, 8)
+
+The property moves the way it was asked to and keeps moving as the push increases. First
+ordered response in this project.
+
+**Survivorship caps how far that reads.** Every large median shift is on a run that
+destroyed 90%+ of its output: d15 s8 reaching 27.59 is 93 surviving prompts out of 1,000,
+and those rows have small d with p ~ 0.4 because the variance is enormous. The monotone
+ladder may be selection -- harder steering surviving only where it did least, or most --
+rather than steering. These numbers cannot separate the two. The two rows that carry
+weight are `d2 s6` and `d15 s2`: near-full validity, tight p-values, modest shifts.
+
+**Not comparable to layer 14.** These ran nosg; every layer-14 density arm ran sg.
+Different prompts, different task, different control, so "+0.192 at layer 7 beats +0.173
+at layer 14" conflates layer with prompt format. Settling it needs layer 14 rerun nosg or
+layer 7 rerun sg.
+
+**Layer 7 is much more fragile to linear steering.** alpha=80 produced zero valid output
+-- median CIF 111 characters against the control's 843, and the job finished in 11 minutes
+against ~1h50 for everything else -- where layer 14 held 88.4%. alpha=40 fell to 33.6%
+against layer 14's 94.9%.
+
+**The curvature argument for picking layer 7 did not survive.** An earlier reading of the
+layer-7 centroid plot gave a count-weighted turning angle of 58.5 degrees against ~34 at
+layers 9/10/14. That was an artifact: the rerun applied `centroid_density_l14.conf`'s
+`--max-per-bucket 5000`, which the committed layer-7 file never used, flattening every
+large bucket to weight 5,000. Uncapped it is 34.7 degrees. All four layers are the same
+curve -- tortuosity 12.2-13.0x, turning ~34 degrees, pc2 at rho -0.95.
+
 ## Manifold steering: null at scale 1, best-in-table at scale 6 (2026-08-28, revised 2026-09-01)
 `--method manifold` slides along a curve fitted through the density bucket centroids,
 carrying the off-curve offset through unchanged. Four deltas, 1,000 prompts x 3, layer 14,
