@@ -34,6 +34,7 @@ import torch
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.transforms import blended_transform_factory
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))                       # scripts/
@@ -161,26 +162,34 @@ def main():
     print("\n" + d[["label", "layer", "injection", "pct_of_h", "valid_pct",
                     "cohens_d"]].to_string(index=False))
 
-    fig, axes = plt.subplots(1, len(layers), figsize=(5.2 * len(layers), 6.4),
+    fig, axes = plt.subplots(1, len(layers), figsize=(6.4 * len(layers), 6.4),
                              squeeze=False)
     for ax, lay in zip(axes[0], layers):
-        s = d[d.layer == lay].sort_values("pct_of_h")
+        # ordered by effect size, so the question the plot answers is "what did each
+        # arm cost to achieve what it achieved" read top to bottom
+        s = d[d.layer == lay].sort_values("cohens_d")
         ax.barh(range(len(s)), s.pct_of_h,
                 color=[COLOR[m] for m in s.method], height=0.72,
                 xerr=[s.pct_of_h - s.pct_p25, s.pct_p75 - s.pct_of_h],
                 error_kw=dict(ecolor="#333", capsize=3, lw=1.1))
         ax.set_yticks(range(len(s)))
         ax.set_yticklabels(s.label, fontsize=9)
-        for i, (p75, v) in enumerate(zip(s.pct_p75, s.valid_pct)):
-            ax.text(p75 + 2.0, i, f"{v*100:.0f}% valid", va="center", fontsize=8.5,
-                    color="#555")
+        # labels in fixed columns (axes fraction in x, data in y) so they line up and
+        # cannot collide with a long whisker
+        tr = blended_transform_factory(ax.transAxes, ax.transData)
+        for i, (v, cd) in enumerate(zip(s.valid_pct, s.cohens_d)):
+            ax.text(0.74, i, f"$d$ {cd:+.3f}", transform=tr, va="center", fontsize=9.5,
+                    fontweight="bold", color="#222" if cd > 0 else "#b3261e")
+            ax.text(0.93, i, f"{v*100:.0f}% valid", transform=tr, va="center",
+                    fontsize=8.5, color="#777")
         ax.set_xlabel("injection as % of $|h|$")
         ax.set_title(f"layer {lay}   (median $|h|$ = {s.h_norm.iloc[0]:.1f})")
         ax.grid(axis="x", alpha=0.25, lw=0.6)
-        ax.set_xlim(0, max(d.pct_p75) * 1.30)
+        ax.set_xlim(0, max(d.pct_p75) / 0.68)
         for sp in ("top", "right", "left"):
             ax.spines[sp].set_visible(False)
-    fig.suptitle("How hard each density intervention actually pushes\n"
+    fig.suptitle("What each density intervention cost, and what it bought\n"
+                 "bars ordered by effect size (largest at top); "
                  f"median |h_new - h| over {states[layers[0]].shape[0]:,} real per-token "
                  "states, as a share of the state's own norm; whiskers = "
                  "inter-quartile range across tokens\n"
