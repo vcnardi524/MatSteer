@@ -109,7 +109,7 @@ def holm(p: np.ndarray) -> np.ndarray:
 
 def analyse(prop: str, method: str, relaxed: bool, family: str = None,
             x_scale: str = "auto", verbose: bool = True,
-            target: float = None, layer: int = None) -> pd.DataFrame:
+            target: float = None, layer: int = None, agg: str = "mean") -> pd.DataFrame:
     """Paired stats for every run of one (property, method, source), in the canonical
     schema. Returns an empty frame when the family has no alpha=0 control to pair on.
 
@@ -127,7 +127,7 @@ def analyse(prop: str, method: str, relaxed: bool, family: str = None,
     for a, stem in runs.items():
         try:
             per[a] = _ds.load_alpha(spec["results_dir"], stem, spec["col"],
-                                    relaxed, "mean", spec["measure"])
+                                    relaxed, agg, spec["measure"])
         except (SystemExit, FileNotFoundError):
             continue                      # not scored on this source yet
     per = {a: d for a, d in per.items() if not d.empty}
@@ -154,10 +154,12 @@ def analyse(prop: str, method: str, relaxed: bool, family: str = None,
     rows = []
     for a in sorted(series):
         s_a, meta = series[a], run_meta(runs[a])
-        r = dict(property=prop, source=source, run=runs[a][:-len(".parquet")],
+        r = dict(property=prop, source=source, agg=agg,
+                 run=runs[a][:-len(".parquet")],
                  strength=a, unit=RESULT_UNITS[prop], control_median=ctrl_median,
                  median=float(s_a.median()),
                  valid_pct=float(per[a].attrs.get("valid_frac", np.nan)),
+                 samples_per_prompt=float(per[a].attrs.get("samples_per_prompt", np.nan)),
                  n_prompts=len(s_a), **meta)
         if a == 0.0:
             r["method"] = "linear"        # the no-injection control belongs to no method
@@ -191,6 +193,7 @@ def analyse(prop: str, method: str, relaxed: bool, family: str = None,
         rows.append(r)
 
     out = pd.DataFrame(rows).reindex(columns=RESULT_COLUMNS + [
+        "samples_per_prompt",
         "sd_diff", "median_diff", "t", "p_welch", "sd_zero", "sd_alpha", "p_levene"])
     m = out["p_paired"].notna()
     if m.any():
@@ -204,20 +207,26 @@ def build_all(out_path=None) -> pd.DataFrame:
     for prop in sorted(_ds.PROPS):
         for method in METHODS:
             for relaxed in (False, True):
-                for family in (["sg", "nosg"] if prop == "band_gap" else [None]):
-                    fam = family or _ds.PROPS[prop]["default_family"]
+                # Split every property by family, not just band_gap. density gained a
+                # nosg arm at layer 7, and family=None disables the filter in
+                # discover_runs -- so sg and nosg runs collided on `strength` and the
+                # nosg ones won on sort order, dropping the layer-14 linear baselines.
+                for family in ("sg", "nosg"):
+                    fam = family
                     # a run is keyed by (layer, target, strength), so each sweep is
                     # discovered and paired separately
                     sweeps = _ds.discover_sweeps(_ds.PROPS[prop]["results_dir"], method)
                     for lay, tgt in (sweeps or [(None, None)]):
-                        f = analyse(prop, method, relaxed, family, verbose=False,
-                                    target=tgt, layer=lay)
-                        if not f.empty:
-                            frames.append(f)
-    df = pd.concat(frames, ignore_index=True).drop_duplicates(
-        subset=["property", "source", "family", "method", "layer", "target", "strength"])
-    df = df.sort_values(["property", "source", "family", "method", "layer",
-                         "target", "strength"], na_position="first").reset_index(drop=True)
+                        # mean over the 3 samples, and best-of-3. Both are paired the
+                        # same way; agg is part of a row's identity, not a variant of it.
+                        for agg in ("mean", "max"):
+                            f = analyse(prop, method, relaxed, family, verbose=False,
+                                        target=tgt, layer=lay, agg=agg)
+                            if not f.empty:
+                                frames.append(f)
+    key = ["property", "source", "agg", "family", "method", "layer", "target", "strength"]
+    df = pd.concat(frames, ignore_index=True).drop_duplicates(subset=key)
+    df = df.sort_values(key, na_position="first").reset_index(drop=True)
     path = write_results_table(df, out_path or
                                analysis_dir("v1_all", None, "test") / "steering_runs.csv")
     print(f"Wrote {path}  ({len(df)} rows)")
@@ -227,6 +236,9 @@ def build_all(out_path=None) -> pd.DataFrame:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--agg", choices=["mean", "max"], default="mean",
+                    help="How the 3 samples per prompt collapse to one value: their mean, "
+                         "or the best of the 3. Ignored by --all, which writes both.")
     ap.add_argument("--all", action="store_true",
                     help="Every property x method x source into one canonical table, "
                          "analysis/v1_all/test/steering_runs.csv, instead of a single "
@@ -256,7 +268,7 @@ def main():
         return
 
     out = analyse(args.property, args.method, args.relaxed, args.family,
-                  args.x_scale, target=args.target, layer=args.layer)
+                  args.x_scale, target=args.target, layer=args.layer, agg=args.agg)
     if out.empty:
         raise SystemExit(f"No runs found for {args.property} (method={args.method}).")
 

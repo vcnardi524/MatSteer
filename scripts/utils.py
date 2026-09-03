@@ -151,7 +151,7 @@ ANALYSIS_ROOT = Path("analysis")
 #   stats        cohens_d first: with ~1000 paired prompts a 0.5% shift reaches
 #                p=1e-20, so the p-values rank runs but only d says whether one matters.
 RESULT_COLUMNS = [
-    "property", "method", "layer", "family", "target", "strength", "source", "run",
+    "property", "method", "layer", "family", "target", "strength", "source", "agg", "run",
     "valid_pct", "n_prompts", "n_paired",
     "unit", "control_median", "median", "mean_diff", "frac_of_target_move",
     "cohens_d", "p_paired", "p_holm", "p_wilcoxon",

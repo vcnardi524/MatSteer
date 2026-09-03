@@ -131,7 +131,22 @@ p_holm 2.7e-09, against a control at 95.7%. The linear arm at comparable validit
 The property moves the way it was asked to and keeps moving as the push increases. First
 ordered response in this project.
 
-**Survivorship caps how far that reads.** Every large median shift is on a run that
+**Best-of-3 does not overturn it.** Collapsing each prompt's three samples by max
+instead of mean shrinks every effect (the control gains most: 19.25 -> 19.85, since it has
+the most draws to pick from), but the three runs whose surviving-draw count matches the
+control keep significant positive effects in the same order:
+
+    arm                smp/prompt   d mean    d max     p max
+    manifold d2 s6        2.87      +0.192   +0.142     1e-05
+    manifold d15 s2       2.77      +0.150   +0.112    0.0025
+    linear a16            2.86      +0.104   +0.096    0.0055
+    (control a0)          2.92
+
+Runs below ~2.2 draws per prompt are NOT interpretable under max -- `linear a40` at 1.73
+draws is being asked to win best-of-1.7 against the control's best-of-2.9, and its effect
+duly vanishes (+0.181 -> +0.020, p 0.63). Read the mean column for those.
+
+**Survivorship caps how far the large shifts read.** Every large median shift is on a run that
 destroyed 90%+ of its output: d15 s8 reaching 27.59 is 93 surviving prompts out of 1,000,
 and those rows have small d with p ~ 0.4 because the variance is enormous. The monotone
 ladder may be selection -- harder steering surviving only where it did least, or most --
@@ -155,7 +170,7 @@ layers 9/10/14. That was an artifact: the rerun applied `centroid_density_l14.co
 large bucket to weight 5,000. Uncapped it is 34.7 degrees. All four layers are the same
 curve -- tortuosity 12.2-13.0x, turning ~34 degrees, pc2 at rho -0.95.
 
-## Manifold steering: null at scale 1, best-in-table at scale 6 (2026-08-28, revised 2026-09-01)
+## Manifold steering at layer 14: strong under mean, second under max (2026-08-28, revised 2026-09-02)
 `--method manifold` slides along a curve fitted through the density bucket centroids,
 carrying the off-curve offset through unchanged. Four deltas, 1,000 prompts x 3, layer 14,
 paired against the same alpha=0 control as every other density arm.
@@ -227,10 +242,26 @@ control. Predictions are from the raw generated CIF; none of these were relaxed.
     manifold s=1       1           6.8      96.7%    -0.020    0.79
     manifold s=12     12          ~82       50.1%    +0.033    0.79
 
-**`manifold s=6` is the largest effect size in the density table.** Against `linear
+**Under the mean, `manifold s=6` is the largest effect in the table.** Against `linear
 alpha=40` -- the arm it is magnitude-matched to -- it is +0.173 vs +0.128 at 94.2% vs
-94.9% validity. Larger effect, same validity. It also beats `linear alpha=80`, which needs
-twice the injection and drops to 88.4% valid.
+94.9% validity. Larger effect, same validity. It also edges `linear alpha=80` (+0.165),
+which needs twice the injection and drops to 88.4% valid.
+
+> **That ranking does not survive best-of-3 (2026-09-02).** Collapsing each prompt's three
+> samples by their max instead of their mean reverses it:
+>
+>     arm                 smp/prompt   d mean    d max     p max
+>     linear alpha=80        2.80      +0.165   +0.217   8.9e-11
+>     linear alpha=40        2.89      +0.128   +0.141   1.1e-05
+>     manifold d15 s6        2.91      +0.173   +0.125   3.3e-04
+>     pca_local t0.5         2.92      +0.130   +0.108    0.0022
+>
+> `linear alpha=80` is the only arm that STRENGTHENS under max, and it does so with fewer
+> surviving draws per prompt than the manifold arm (2.80 vs 2.91), so the draw-count
+> advantage runs against it. The manifold arm weakens to second. So "manifold beats linear
+> at layer 14" is true of the mean and false of the max, and should not be stated without
+> naming the aggregation. Note this is the opposite of layer 7, where `manifold d2 s6`
+> stays on top under both -- see the layer-7 section.
 
 **What that supports.** Following the fitted curve does better than a straight line at
 equal injection, on this property at this layer. That is the first result here where the

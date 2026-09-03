@@ -322,9 +322,17 @@ def load_alpha(results_dir: str, stem: str, col: str, relaxed: bool,
     frac = len(df) / n_all if n_all else float("nan")
     print(f"    valid+scored samples: {len(df):,}/{n_all:,} ({frac:.1%})  "
           f"prompts surviving: {df['id'].nunique():,}")
+    # How many of the 3 samples each surviving prompt kept. Under agg="max" this is a
+    # confound, not a footnote: max-of-3 beats max-of-1 by construction, and a 95%-valid
+    # control keeps ~3 per prompt while a 10%-valid run keeps ~1. Carried out so the
+    # comparison can be read with that in view.
+    per_prompt = df.groupby("id").size()
     if agg == "mean":
         df = df.groupby("id", as_index=False)["value"].mean()
+    elif agg == "max":
+        df = df.groupby("id", as_index=False)["value"].max()
     df.attrs["valid_frac"] = frac
+    df.attrs["samples_per_prompt"] = float(per_prompt.mean()) if len(per_prompt) else float("nan")
     return df
 
 
@@ -414,7 +422,7 @@ def main():
                     help="band_gap only: prompts without/with a space-group header")
     ap.add_argument("--relaxed", action="store_true",
                     help="Read the M3GNet-relaxed value instead of the raw generated one")
-    ap.add_argument("--agg", choices=["mean", "all"], default="mean",
+    ap.add_argument("--agg", choices=["mean", "max", "all"], default="mean",
                     help="One point per prompt (mean of its valid samples), or every sample")
     ap.add_argument("--truth", choices=["matched", "dft"], default="matched",
                     help="band_gap only: MEGNet-on-original (matched) or the DFT column")
