@@ -6,6 +6,7 @@
 #   ./run.sh <name> --layer 9           submit, overriding a flag
 #   ./run.sh --local <name> --sample 100    run inline (laptop / dev pod / debugging)
 #   ./run.sh --dry-run <name>           print the resolved commands and stop
+#   ./run.sh --after 12345 <name>       queue it to start only if job 12345 succeeds
 #   ./run.sh --list                     list available experiments
 #
 # Overrides are appended to the config's ARGS. That works because argparse takes the
@@ -31,11 +32,14 @@ list_experiments() {
     done
 }
 
-local_run=0; dry_run=0
+local_run=0; dry_run=0; after=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --local)    local_run=1; shift ;;
         --dry-run)  dry_run=1;   shift ;;
+        # afterok, not afterany: a validation chained behind a generation that crashed
+        # would read a half-written parquet and record its failure as a low valid%.
+        --after)    after="$2"; shift 2 ;;
         --list)     list_experiments; exit 0 ;;
         -h|--help)  usage ;;
         *) break ;;
@@ -84,7 +88,16 @@ cmd="$(echo "$cmd" | tr '\n' ' ' | tr -s ' ' | sed 's/ *$//')"
 # telling apart in squeue. Overrides are flattened, e.g. --layer 9 --width 2 -> l9-w2.
 job_name="$name"
 if [ $# -gt 0 ]; then
-    suffix="$(printf '%s ' "$@" | sed -E 's/--([a-z])[a-z-]*[= ]/\1/g; s/ +/-/g; s/-+$//')"
+    # A path override (--input steering_results/.../foo.parquet) would otherwise put the
+    # whole path in the name and squeue would show 40 identical prefixes. Keep the stem.
+    parts=()
+    for a in "$@"; do
+        case "$a" in
+            */*) parts+=("$(basename "$a" | sed 's/\.[a-z.]*$//')") ;;
+            *)   parts+=("$a") ;;
+        esac
+    done
+    suffix="$(printf '%s ' "${parts[@]}" | sed -E 's/--([a-z])[a-z-]*[= ]/\1/g; s/ +/-/g; s/-+$//')"
     job_name="${name}-${suffix}"
 fi
 job_name="${job_name:0:60}"
@@ -96,6 +109,7 @@ if [ "$dry_run" -eq 1 ]; then
     echo "command:  $cmd"
     if [ "$local_run" -eq 0 ]; then
         line="sbatch:   --job-name=$job_name --partition=$QUEUE --time=$TIME --mem=$MEM --cpus-per-task=$CPUS"
+        [ -n "$after" ] && line="$line --dependency=afterok:$after"
         [ "${GPUS:-0}" != "0" ] && line="$line --gres=gpu:$GPUS"
         [ -n "$EXCLUDE" ] && line="$line --exclude=$EXCLUDE"
         echo "$line"
@@ -131,6 +145,7 @@ sb=(--job-name="$job_name"
     --export=ALL)
 [ "${GPUS:-0}" != "0" ] && sb+=(--gres="gpu:${GPUS}")
 [ -n "$EXCLUDE" ] && sb+=(--exclude="$EXCLUDE")
+[ -n "$after" ] && sb+=(--dependency="afterok:$after")
 
 job_id="$(sbatch --parsable "${sb[@]}" "$TEMPLATE")"
 record_run "$job_id"
