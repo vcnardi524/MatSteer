@@ -100,6 +100,55 @@ layers specialising for next-token prediction rather than holding property infor
 CSVs: `analysis/v1_all/full/val/property_probe_{density_atomic,dos_electronic_band_gap}.csv`
 and `analysis/v1_mp/full/val/property_probe_{efermi,energy_above_hull}.csv`.
 
+## Linear compresses, the manifold shifts (2026-09-03)
+`scripts/analysis/stratified_effect.py`. The pooled Cohen's d asks whether the whole
+distribution moved. It cannot say whether a prompt whose true structure sits at 14
+A^3/atom responds like one already at 32, and steering density UPWARD has obviously
+different headroom in those two cases. This runs the same paired comparison inside
+buckets of the prompt's true density, width 1.
+
+**Buckets are on GROUND TRUTH, not on the alpha=0 generation.** Control and steered are
+both noisy draws from the same prompt. Bucketing on the realised control value enriches
+low buckets for prompts whose control happened to sample low, while the steered draw does
+not share that noise -- the difference would then trend downward across buckets from
+regression to the mean alone, with no steering effect required. Ground truth is fixed and
+cannot do that. The first version of this analysis was going to bucket on the control;
+that was caught before it ran.
+
+Best arm of each method with the sample size to stratify: `manifold d2 s9` (n=936,
+d +0.254 pooled) and `linear a32` (n=861, d +0.158 pooled). Both layer 7, nosg.
+
+    true density bucket:   12     13     14     15    ...    21     22     24     25     26
+    linear a32      d:   +1.07  +0.80  +0.69  +0.61   ...  +0.02  -0.18  -0.01  -0.15  -0.14
+    manifold d2 s9  d:   +0.63  +0.34  +0.55  +0.32   ...  +0.06  +0.27  +0.08  +0.40  +0.54
+
+**Linear does not steer density up -- it compresses the distribution inward.** The effect
+decays monotonically from d +1.07 at bucket 12 to zero around bucket 21, then turns
+NEGATIVE: on prompts whose true density is above ~21 it pushes density down. The pooled
++0.158 is a strong low-density effect averaged against a high-density anti-effect.
+
+**The manifold shifts without that reversal.** Positive in 15 of 16 buckets, no trend with
+starting density.
+
+**But linear is better where it works.** It beats the manifold in every bucket up to 15 --
+d 1.07 vs 0.63 at bucket 12. The manifold wins pooled because it does not collapse at the
+top, not because it is uniformly stronger. For pushing low-density structures higher,
+linear alpha 32 is the better tool.
+
+**A consistent mechanism, not a demonstrated one.** linear adds the same fixed vector to
+every token regardless of where the state sits; the manifold's step is computed from the
+token's own position on the curve (encode -> step -> decode). The injection-magnitude
+plot shows this directly -- linear's inter-quartile whisker is near zero because
+|injection| is constant, while the manifold's spans a wide range. An adaptive step should
+be less prone to helping one end of the range and hurting the other. Not tested causally.
+
+**Limits.** Tail buckets rest on 21-28 prompts, so bumpiness above bucket 22 is partly
+noise; buckets below 12 and above 27 fell under the 20-prompt floor and are absent, so
+this says nothing about the extremes.
+
+Plot and per-bucket numbers:
+`analysis/v1_all/test/plots/density_stratified_effect.{png,csv}`.
+
 ## Layer 7, no space group: the first dose response (2026-09-02)
 Density steering at layer 7 -- where the property probe peaks -- with the space group
 withheld from the prompt. 11 runs, 1,000 prompts x 3, jobs 453318-453328. These are a
