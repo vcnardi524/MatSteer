@@ -1,0 +1,28 @@
+run,label,method,layer,target,strength,valid_pct,cohens_d,h_norm,injection,pct_of_h
+steered_test_alpha16.0_layer7_nosg,linear a16,linear,7,,16,0.933333,0.104339,83.7204,16,19.1112
+steered_test_alpha40.0_layer7_nosg,linear a40,linear,7,,40,0.336,0.181325,83.7204,40,47.7781
+steered_manifold_test_d2_residual_s6_k64_layer7_nosg,manifold d2 s6,manifold,7,2,6,0.937333,0.19218,83.7204,11.6886,11.5164
+steered_manifold_test_d15_residual_s2_k64_layer7_nosg,manifold d15 s2,manifold,7,15,2,0.870333,0.149745,83.7204,17.2324,10.3739
+steered_manifold_test_d5_residual_s6_k64_layer7_nosg,manifold d5 s6,manifold,7,5,6,0.398667,0.111945,83.7204,23.2617,20.5626
+steered_manifold_test_d15_residual_s4_k64_layer7_nosg,manifold d15 s4,manifold,7,15,4,0.295,0.154668,83.7204,34.4649,20.7477
+steered_manifold_test_d10_residual_s6_k64_layer7_nosg,manifold d10 s6,manifold,7,10,6,0.0826667,0.064193,83.7204,42.261,29.252
+steered_manifold_test_d15_residual_s6_k64_layer7_nosg,manifold d15 s6,manifold,7,15,6,0.095,0.115268,83.7204,51.6973,31.1215
+steered_manifold_test_d15_residual_s8_k64_layer7_nosg,manifold d15 s8,manifold,7,15,8,0.057,0.0884774,83.7204,68.9297,41.4954
+steered_pca_test_target30_t0.25_k64_layer9,pca_cent 30/t0.25,pca_centroid,9,30,0.25,0.951,-0.0914762,94.0609,17.8916,18.4943
+steered_pca_test_target30_t0.5_k64_layer9,pca_cent 30/t0.5,pca_centroid,9,30,0.5,0.753333,-0.0848009,94.0609,35.7832,36.9886
+steered_pca_test_target30_t0.75_k64_layer9,pca_cent 30/t0.75,pca_centroid,9,30,0.75,0.00733333,-0.143882,94.0609,53.6748,55.4829
+steered_test_alpha40.0_layer14,linear a40,linear,14,,40,0.948667,0.127697,118.444,40,33.7712
+steered_test_alpha80.0_layer14,linear a80,linear,14,,80,0.884333,0.165167,118.444,80,67.5423
+steered_manifold_test_d2_k64_layer14,manifold d2 s1,manifold,14,2,1,0.964,-0.042959,118.444,1.97637,1.47566
+steered_manifold_test_d5_k64_layer14,manifold d5 s1,manifold,14,5,1,0.963667,-0.0244546,118.444,4.60616,3.30781
+steered_manifold_test_d10_k64_layer14,manifold d10 s1,manifold,14,10,1,0.965333,0.0574292,118.444,7.38568,5.41875
+steered_manifold_test_d15_k64_layer14,manifold d15 s1,manifold,14,15,1,0.966667,-0.0203029,118.444,10.363,5.80561
+steered_manifold_test_d15_residual_s6_k64_layer14,manifold d15 s6,manifold,14,15,6,0.942,0.172608,118.444,62.1778,34.8337
+steered_manifold_test_d15_residual_s12_k64_layer14,manifold d15 s12,manifold,14,15,12,0.501,0.0331576,118.444,124.356,69.6674
+steered_pca_test_target30_t0.25_k64_layer14,pca_cent 30/t0.25,pca_centroid,14,30,0.25,0.960667,0.112625,118.444,21.1372,17.3297
+steered_pca_test_target22.5_t0.25_k64_layer14,pca_cent 22.5/t0.25,pca_centroid,14,22.5,0.25,0.962667,0.0693334,118.444,21.205,17.3755
+steered_pca_test_target30_t0.5_k64_layer14,pca_cent 30/t0.5,pca_centroid,14,30,0.5,0.949667,0.118882,118.444,42.2745,34.6594
+steered_pca_test_target22.5_t0.5_k64_layer14,pca_cent 22.5/t0.5,pca_centroid,14,22.5,0.5,0.950667,0.139073,118.444,42.4101,34.751
+steered_pca_test_target22.5_t0.75_k64_layer14,pca_cent 22.5/t0.75,pca_centroid,14,22.5,0.75,0.824667,0.122924,118.444,63.6151,52.1265
+steered_pca_test_target30_t1.0_k64_layer14,pca_cent 30/t1,pca_centroid,14,30,1,0.124667,-0.00426983,118.444,84.5489,69.3188
+steered_pca_test_target22.5_t1.0_k64_layer14,pca_cent 22.5/t1,pca_centroid,14,22.5,1,0.130667,0.0568219,118.444,84.8202,69.502
