@@ -118,14 +118,28 @@ that was caught before it ran.
 Best arm of each method with the sample size to stratify: `manifold d2 s9` (n=936,
 d +0.254 pooled) and `linear a32` (n=861, d +0.158 pooled). Both layer 7, nosg.
 
-    true density bucket:   12     13     14     15    ...    21     22     24     25     26
-    linear a32      d:   +1.07  +0.80  +0.69  +0.61   ...  +0.02  -0.18  -0.01  -0.15  -0.14
-    manifold d2 s9  d:   +0.63  +0.34  +0.55  +0.32   ...  +0.06  +0.27  +0.08  +0.40  +0.54
+The prompt set thins to a handful per unit below 12 and above 28, so those are POOLED
+into one bucket at each end rather than dropped -- otherwise the plot stops at 26, which
+is exactly where linear gets interesting.
 
-**Linear does not steer density up -- it compresses the distribution inward.** The effect
-decays monotonically from d +1.07 at bucket 12 to zero around bucket 21, then turns
-NEGATIVE: on prompts whose true density is above ~21 it pushes density down. The pooled
-+0.158 is a strong low-density effect averaged against a high-density anti-effect.
+    true density bucket:  <12     12     13    ...    21     22     25     26    >28
+    linear a32      d:   +1.64  +1.07  +0.80   ...  +0.02  -0.18  -0.15  -0.14  -0.63
+    manifold d2 s9  d:   +0.09  +0.63  +0.34   ...  +0.06  +0.27  +0.40  +0.54  +0.27
+
+The two pooled ends, in A^3/atom:
+
+    bucket   run              n    truth   control  steered   diff
+    <12      linear a32      30    10.38    10.42    11.42   +1.00
+    <12      manifold d2 s9  40    10.52    10.54    10.74   +0.20
+    >28      linear a32     100    36.06    33.73    32.54   -1.19
+    >28      manifold d2 s9 105    36.98    34.81    35.33   +0.52
+
+**Linear does not steer density up -- it compresses the distribution toward ~21.** The
+effect decays monotonically from d +1.64 in the pooled low tail to zero around bucket 21,
+then turns NEGATIVE, reaching d -0.63 and -1.19 A^3/atom in the pooled high tail. It drags
+low structures up by a full A^3/atom and high structures down by more than that. The
+pooled +0.158 is a strong low-density effect averaged against a strong high-density
+anti-effect, and the two nearly cancel.
 
 **The manifold shifts without that reversal.** Positive in 15 of 16 buckets, no trend with
 starting density.

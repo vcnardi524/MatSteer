@@ -62,6 +62,12 @@ def main():
     ap.add_argument("--width", type=float, default=1.0)
     ap.add_argument("--min-per-bucket", type=int, default=20,
                     help="drop buckets thinner than this; a d on 6 prompts is noise")
+    ap.add_argument("--tail-lo", type=float, default=12.0)
+    ap.add_argument("--tail-hi", type=float, default=28.0,
+                    help="Below --tail-lo and above --tail-hi the prompt set thins to a "
+                         "handful per unit, so those are pooled into one bucket at each "
+                         "end rather than dropped. Gives the extremes a real number "
+                         "instead of a gap.")
     ap.add_argument("--out-stem", default="density_stratified_effect")
     args = ap.parse_args()
 
@@ -74,6 +80,13 @@ def main():
           f"{len(shared):,} with a ground-truth density")
 
     bucket = np.floor(truth[shared] / args.width) * args.width
+    # Pool the sparse tails. Placed one step outside the fixed-width range so they sit at
+    # the ends of a numeric axis; the tick labels name them for what they are.
+    lo_edge, hi_edge = args.tail_lo - args.width, args.tail_hi + args.width
+    bucket = bucket.where(bucket >= args.tail_lo, lo_edge)
+    bucket = bucket.where(bucket <= args.tail_hi, hi_edge)
+    print(f"  pooled tails: {(bucket == lo_edge).sum()} prompts below {args.tail_lo:g}, "
+          f"{(bucket == hi_edge).sum()} above {args.tail_hi:g}")
     rows = []
     for stem in args.runs:
         s = per_prompt(stem)
@@ -125,7 +138,17 @@ def main():
                    "(grey = prompts in bucket)", fontsize=11, loc="left")
     ax_m.set_ylabel("mean(steered) - mean(control)   (Å³/atom)")
     ax_m.set_xlabel(f"ground-truth density of the source structure "
-                    f"(Å³/atom, bucket width {args.width:g})")
+                    f"(Å³/atom, bucket width {args.width:g}; ends are pooled)")
+    ticks = [t for t in sorted(d.bucket.unique())]
+    ax_m.set_xticks(ticks)
+    ax_m.set_xticklabels([f"<{args.tail_lo:g}" if t == lo_edge
+                          else f">{args.tail_hi:g}" if t == hi_edge
+                          else f"{t:g}" for t in ticks], fontsize=8)
+    for ax in (ax_d, ax_m):
+        for e in (lo_edge, hi_edge):
+            if e in set(d.bucket):
+                ax.axvspan(e - args.width / 2, e + args.width / 2,
+                           color="#888", alpha=0.10, zorder=0)
     ax_m.set_title("difference of means, same buckets", fontsize=11, loc="left")
 
     fig.suptitle("Steering effect stratified by the prompt's true density\n"
