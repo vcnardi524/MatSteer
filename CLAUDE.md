@@ -136,6 +136,15 @@ Ground-truth band gap is `metadata.parquet:dos_electronic.band_gap` (eV). **Not*
 difference is a corrupt LUMO-HOMO gap. Three legacy scripts still use it and are named
 in the README; do not copy their approach.
 
+Every steering arm generates from the **same 1,000 test structures**,
+`CrystaLLM/cifs_v1_test_sample1000.pkl.gz` (fingerprint `cccf9b87455ac110`). That shared
+prompt set is what makes the paired t-test valid — each arm and the alpha=0 control pair
+on `id`, so prompt-to-prompt variance differences out. It is gitignored inside the
+submodule, so `scripts/data/make_test_sample.py` reproduces it
+(`random.Random(42).sample`, verified exact) and `data/test_sample1000_ids.csv` tracks the
+ids. Run it with `--verify` before trusting a comparison against older results; it refuses
+to overwrite a subset that differs from what it would draw.
+
 `utils.py:DEFAULT_LABEL_COLS` asks for `band_gap_ev`, which does not exist in
 `metadata.parquet` and is **silently dropped**. `load_labeled_embeddings` therefore
 never returns a gap — join it yourself.
