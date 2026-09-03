@@ -149,7 +149,12 @@ def main():
                          valid_pct=r.valid_pct, cohens_d=r.cohens_d,
                          h_norm=float(hn.median()),
                          injection=float(inj.median()),
-                         pct_of_h=float((inj / hn).median() * 100)))
+                         pct_of_h=float((inj / hn).median() * 100),
+                         # linear adds one fixed vector to every token, so its spread is
+                         # ~0; the other two are token-dependent. Same median can mean a
+                         # very different intervention.
+                         pct_p25=float((inj / hn).quantile(0.25) * 100),
+                         pct_p75=float((inj / hn).quantile(0.75) * 100)))
     d = pd.DataFrame(rows).sort_values(["layer", "method", "injection"])
     OUT.mkdir(parents=True, exist_ok=True)
     d.to_csv(OUT / "density_injection_magnitude.csv", index=False, float_format="%.6g")
@@ -161,21 +166,29 @@ def main():
     for ax, lay in zip(axes[0], layers):
         s = d[d.layer == lay].sort_values("pct_of_h")
         ax.barh(range(len(s)), s.pct_of_h,
-                color=[COLOR[m] for m in s.method], height=0.72)
+                color=[COLOR[m] for m in s.method], height=0.72,
+                xerr=[s.pct_of_h - s.pct_p25, s.pct_p75 - s.pct_of_h],
+                error_kw=dict(ecolor="#333", capsize=3, lw=1.1))
         ax.set_yticks(range(len(s)))
         ax.set_yticklabels(s.label, fontsize=9)
-        for i, (p, v) in enumerate(zip(s.pct_of_h, s.valid_pct)):
-            ax.text(p + 1.5, i, f"{v*100:.0f}% valid", va="center", fontsize=8.5,
+        for i, (p75, v) in enumerate(zip(s.pct_p75, s.valid_pct)):
+            ax.text(p75 + 2.0, i, f"{v*100:.0f}% valid", va="center", fontsize=8.5,
                     color="#555")
         ax.set_xlabel("injection as % of $|h|$")
         ax.set_title(f"layer {lay}   (median $|h|$ = {s.h_norm.iloc[0]:.1f})")
         ax.grid(axis="x", alpha=0.25, lw=0.6)
-        ax.set_xlim(0, max(d.pct_of_h) * 1.32)
+        ax.set_xlim(0, max(d.pct_p75) * 1.30)
         for sp in ("top", "right", "left"):
             ax.spines[sp].set_visible(False)
     fig.suptitle("How hard each density intervention actually pushes\n"
                  f"median |h_new - h| over {states[layers[0]].shape[0]:,} real per-token "
-                 "states, as a share of the state's own norm", fontsize=13)
+                 "states, as a share of the state's own norm; whiskers = "
+                 "inter-quartile range across tokens\n"
+                 "linear's |injection| is constant across tokens -- its whisker is only "
+                 "|h| varying; the other two vary in both\n"
+                 "all three inject almost entirely inside the same top-64 PCA subspace "
+                 "(linear: 96-98% of its vector), so the bars are comparable",
+                 fontsize=12)
     fig.tight_layout()
     fig.savefig(OUT / "density_injection_magnitude.png", dpi=150,
                 bbox_inches="tight", facecolor="white")
