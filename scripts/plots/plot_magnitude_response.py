@@ -79,47 +79,51 @@ def main():
     if not series:
         raise SystemExit(f"no sweeps with more than one point at layer {args.layer}")
 
-    fig, (ax_d, ax_v) = plt.subplots(2, 1, figsize=(12, 9), sharex=True,
-                                     gridspec_kw={"height_ratios": [1, 1]})
-    for name, colour, marker, f, lab in series:
-        for ax, col in ((ax_d, "cohens_d"), (ax_v, "valid_pct")):
-            y = f[col] * (100 if col == "valid_pct" else 1)
-            ax.plot(f.pct_of_h, y, "-", color=colour, lw=2, marker=marker, ms=7,
-                    label=name if ax is ax_d else None, zorder=3)
-        # Skip a label that would land on the previous one. The arc-step sweep piles a
-        # dozen points into 1% of the x range -- that crowding IS the result, but every
-        # label drawn would be unreadable.
-        span = d.pct_of_h.max() - d.pct_of_h.min()
-        last = None
-        for _, r in f.iterrows():
-            if last is not None and abs(r.pct_of_h - last) < span * 0.018:
-                continue
-            last = r.pct_of_h
-            ax_d.annotate(lab(r), (r.pct_of_h, r.cohens_d), textcoords="offset points",
-                          xytext=(0, 9), ha="center", fontsize=8, color=colour)
+    # Two columns rather than one crowded panel: the two families answer different
+    # questions (does scale matter at a fixed arc step / does arc step matter at a fixed
+    # scale) and the linear baseline is repeated in both so each is self-contained.
+    lin = [t for t in series if t[0].startswith("linear")]
+    cols = [("scale swept (arc step fixed)",
+             [t for t in series if t[0].startswith("scale")] + lin),
+            ("arc step swept (scale fixed)",
+             [t for t in series if t[0].startswith("arc")] + lin)]
 
-    ax_d.axhline(0, color="#999", lw=1)
-    ax_d.set_ylabel("Cohen's $d$ vs the no-injection control")
-    ax_d.legend(frameon=False, fontsize=9, loc="upper left", ncol=2)
-    ax_d.set_title("effect: how far the property moved", fontsize=11, loc="left")
-
-    ctrl = d.attrs.get("control_valid")
-    ax_v.set_ylabel("valid output (%)")
-    ax_v.set_ylim(0, 100)
-    ax_v.set_xlabel("injection magnitude  |$h_{new}-h$| as % of |$h$|   "
-                    "(measured on real per-token states)")
-    ax_v.set_title("cost: how much output survived", fontsize=11, loc="left")
-
-    for ax in (ax_d, ax_v):
-        ax.grid(alpha=0.25, lw=0.6)
-        for sp in ("top", "right"):
-            ax.spines[sp].set_visible(False)
+    fig, axes = plt.subplots(2, 2, figsize=(16, 9), sharex=True, sharey="row")
+    for col, (title, members) in enumerate(cols):
+        ax_d, ax_v = axes[0][col], axes[1][col]
+        for name, colour, marker, f, lab in members:
+            for ax, c in ((ax_d, "cohens_d"), (ax_v, "valid_pct")):
+                y = f[c] * (100 if c == "valid_pct" else 1)
+                ax.plot(f.pct_of_h, y, "-", color=colour, lw=2, marker=marker, ms=6,
+                        label=name if ax is ax_d else None, zorder=3)
+            span = d.pct_of_h.max() - d.pct_of_h.min()
+            last = None
+            for _, r in f.iterrows():
+                if last is not None and abs(r.pct_of_h - last) < span * 0.022:
+                    continue
+                last = r.pct_of_h
+                ax_d.annotate(lab(r), (r.pct_of_h, r.cohens_d),
+                              textcoords="offset points", xytext=(0, 9), ha="center",
+                              fontsize=7.5, color=colour)
+        ax_d.axhline(0, color="#999", lw=1)
+        ax_d.set_title(title, fontsize=12, loc="left")
+        ax_d.legend(frameon=False, fontsize=9, loc="upper left")
+        ax_v.set_ylim(0, 100)
+        ax_v.set_xlabel("injection magnitude  |$h_{new}-h$| as % of |$h$|")
+        for ax in (ax_d, ax_v):
+            ax.grid(alpha=0.25, lw=0.6)
+            for sp in ("top", "right"):
+                ax.spines[sp].set_visible(False)
+    axes[0][0].set_ylabel("Cohen's $d$ vs the no-injection control")
+    axes[1][0].set_ylabel("valid output (%)")
 
     hnorm = d[d.layer == args.layer].h_norm.iloc[0]
-    fig.suptitle(f"Layer {args.layer}, no space group: both manifold sweeps against the "
-                 f"linear baseline\n"
-                 f"x is the measured push, not each method's own knob, so the three are "
-                 f"comparable (median |$h$| = {hnorm:.1f})", fontsize=13)
+    fig.suptitle(f"Layer {args.layer}, no space group: manifold sweeps against the linear "
+                 f"baseline (repeated in both columns)\n"
+                 f"x is the measured push, not each method's own knob, so the methods are "
+                 f"comparable (median |$h$| = {hnorm:.1f}).  "
+                 f"top row: effect.  bottom row: how much output survived",
+                 fontsize=13)
     fig.tight_layout()
     path = OUT / f"density_magnitude_response_layer{args.layer}.png"
     fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="white")
