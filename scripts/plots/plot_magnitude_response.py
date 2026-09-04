@@ -33,24 +33,36 @@ MAG = "analysis/v1_all/test/plots/density_injection_magnitude.csv"
 OUT = Path("analysis/v1_all/test/plots")
 
 
-def series_for(d, layer):
-    """(name, colour, marker, frame, hyperparameter-label-fn) per sweep, ascending in x."""
+def series_for(d, layer, min_points=4):
+    """Every ladder on this layer, as (name, colour, marker, frame, label-fn).
+
+    A ladder is a set of runs that hold one manifold knob fixed and vary the other:
+    arc-step sweeps at a fixed scale, and scale sweeps at a fixed arc step. Both are
+    discovered rather than named, so new sweeps appear without editing this.
+
+    Within a family the colour is sequential in the FIXED parameter (the ladders are
+    ordered by it); between families the hue changes. Linear is its own hue.
+    """
     man = d[(d.layer == layer) & (d.method == "manifold")]
     lin = d[(d.layer == layer) & (d.method == "linear")]
     out = []
-    # arc step swept with the scale pinned at 1
-    s1 = man[man.strength == 1]
-    if len(s1) > 1:
-        out.append(("manifold: arc step (scale 1)", "#0072B2", "s", s1,
-                    lambda r: f"d{r.target:g}"))
-    # scale swept with the arc step pinned at 2
-    d2 = man[man.target == 2]
-    if len(d2) > 1:
-        out.append(("manifold: scale (arc step 2)", "#56B4E9", "D", d2,
-                    lambda r: f"s{r.strength:g}"))
+
+    steps = sorted(v for v in man.strength.unique()
+                   if man[man.strength == v].target.nunique() >= min_points)
+    scales = sorted(v for v in man.target.unique()
+                    if man[man.target == v].strength.nunique() >= min_points)
+
+    def ramp(cmap, i, n):
+        return plt.get_cmap(cmap)(0.35 + 0.5 * (i / max(n - 1, 1)))
+
+    for i, sc in enumerate(steps):
+        out.append((f"arc step swept, scale {sc:g}", ramp("Blues", i, len(steps)), "s",
+                    man[man.strength == sc], lambda r: f"d{r.target:g}"))
+    for i, dl in enumerate(scales):
+        out.append((f"scale swept, arc step {dl:g}", ramp("Greens", i, len(scales)), "D",
+                    man[man.target == dl], lambda r: f"s{r.strength:g}"))
     if len(lin) > 1:
-        out.append(("linear (baseline)", "#D55E00", "o", lin,
-                    lambda r: f"α{r.strength:g}"))
+        out.append(("linear (baseline)", "#D55E00", "o", lin, lambda r: f"α{r.strength:g}"))
     return [(n, c, m, f.sort_values("pct_of_h"), lab) for n, c, m, f, lab in out]
 
 
@@ -58,12 +70,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mag", default=MAG)
     ap.add_argument("--layer", type=int, default=7)
-    ap.add_argument("--label-every", type=int, default=1,
-                    help="annotate every Nth point; raise it if the labels crowd")
+    ap.add_argument("--min-points", type=int, default=4,
+                    help="a ladder needs this many runs to be drawn as a series")
     args = ap.parse_args()
 
     d = pd.read_csv(args.mag)
-    series = series_for(d, args.layer)
+    series = series_for(d, args.layer, args.min_points)
     if not series:
         raise SystemExit(f"no sweeps with more than one point at layer {args.layer}")
 
@@ -88,7 +100,7 @@ def main():
 
     ax_d.axhline(0, color="#999", lw=1)
     ax_d.set_ylabel("Cohen's $d$ vs the no-injection control")
-    ax_d.legend(frameon=False, fontsize=10, loc="upper left")
+    ax_d.legend(frameon=False, fontsize=9, loc="upper left", ncol=2)
     ax_d.set_title("effect: how far the property moved", fontsize=11, loc="left")
 
     ctrl = d.attrs.get("control_valid")
