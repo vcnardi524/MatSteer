@@ -66,6 +66,53 @@ def series_for(d, layer, min_points=4):
     return [(n, c, m, f.sort_values("pct_of_h"), lab) for n, c, m, f, lab in out]
 
 
+def pareto(d, series, layer, path):
+    """Effect against validity: the trade every method actually offers.
+
+    Magnitude is the knob, but nobody wants magnitude -- they want effect without
+    breaking the output. Plotting those two directly makes the frontier the shape of the
+    picture: up and to the RIGHT is better, and a method is dominated wherever another
+    sits above and to the right of it. Same split as the magnitude figure.
+    """
+    lin = [t for t in series if t[0].startswith("linear")]
+    cols = [("scale swept (arc step fixed)",
+             [t for t in series if t[0].startswith("scale")] + lin),
+            ("arc step swept (scale fixed)",
+             [t for t in series if t[0].startswith("arc")] + lin)]
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
+    for ax, (title, members) in zip(axes, cols):
+        for name, colour, marker, f, lab in members:
+            g = f.sort_values("valid_pct")
+            ax.plot(g.valid_pct * 100, g.cohens_d, "-", color=colour, lw=2,
+                    marker=marker, ms=7, label=name, zorder=3)
+            last = None
+            for _, r in g.iterrows():
+                if last is not None and abs(r.valid_pct * 100 - last) < 3.5:
+                    continue
+                last = r.valid_pct * 100
+                ax.annotate(lab(r), (r.valid_pct * 100, r.cohens_d),
+                            textcoords="offset points", xytext=(0, 9), ha="center",
+                            fontsize=7.5, color=colour)
+        ax.axhline(0, color="#999", lw=1)
+        ax.set_xlim(0, 100)
+        ax.set_xlabel("valid output (%)")
+        ax.set_title(title, fontsize=12, loc="left")
+        ax.legend(frameon=False, fontsize=9, loc="upper left")
+        ax.grid(alpha=0.25, lw=0.6)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+        ax.annotate("better \u2197", (0.97, 0.03), xycoords="axes fraction",
+                    ha="right", fontsize=10, color="#777", style="italic")
+    axes[0].set_ylabel("Cohen's $d$ vs the no-injection control")
+    fig.suptitle(f"Layer {layer}, no space group: effect against how much output survived\n"
+                 "up and to the RIGHT is better; a point is dominated if another sits "
+                 "above and to its right", fontsize=13)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="white")
+    print(f"Saved {path}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mag", default=MAG)
@@ -128,6 +175,8 @@ def main():
     path = OUT / f"density_magnitude_response_layer{args.layer}.png"
     fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="white")
     print(f"Saved {path}")
+    pareto(d, series, args.layer,
+           OUT / f"density_pareto_layer{args.layer}.png")
     for name, _, _, f, _ in series:
         print(f"\n{name}")
         print(f[["label", "pct_of_h", "cohens_d", "valid_pct"]].to_string(index=False))
