@@ -1,57 +1,57 @@
-column,dtype,n_rows,n_present,pct_present,n_usable,pct_usable,n_unique,verdict
-chemsys,large_string,154879,154879,100,154879,100,4.948e+04,ok
-composition,"struct<V: double, H: double, O: double",154879,154879,100,154879,100,,ok
-composition_reduced,"struct<V: double, H: double, O: double",154879,154879,100,154879,100,,ok
-database_IDs,"struct<icsd: list<element: string>, pf",154879,154879,100,154879,100,,ok
-density,double,154879,154879,100,154879,100,1.546e+05,ok
-density_atomic,double,154879,154879,100,154879,100,1.546e+05,ok
-energy_per_atom,double,154879,154879,100,154879,100,1.549e+05,ok
-formula_anonymous,large_string,154879,154879,100,154879,100,7004,ok
-formula_pretty,large_string,154879,154879,100,154879,100,1.048e+05,ok
-has_props,"struct<materials: bool, thermo: bool, ",154879,154879,100,154879,100,,ok
-id,large_string,154879,154879,100,154879,100,1.549e+05,ok
-is_gap_direct,bool,154879,154879,100,154879,100,2,ok
-is_magnetic,bool,154879,154879,100,154879,100,2,ok
-is_metal,bool,154879,154879,100,154879,100,2,ok
-is_stable,bool,154879,154879,100,154879,100,2,ok
-material_id,large_string,154879,154879,100,154879,100,1.549e+05,ok
-nelements,int64,154879,154879,100,154879,100,9,ok
-nsites,int64,154879,154879,100,154879,100,242,ok
-ordering,large_string,154879,154879,100,154879,100,5,ok
-property_name,large_string,154879,154879,100,154879,100,1,constant
-structure,large_string,154879,154879,100,154879,100,1.549e+05,ok
-task_ids,list<element: string>,154879,154879,100,154879,100,,ok
-theoretical,bool,154879,154879,100,154879,100,2,ok
-uncorrected_energy_per_atom,double,154879,154879,100,154879,100,1.549e+05,ok
-volume,double,154879,154879,100,154879,100,1.546e+05,ok
-cif_token_len,double,154879,154871,99.99,154871,99.99,2232,ok
-efermi,double,154879,154825,99.97,154825,99.97,1.548e+05,ok
-formation_energy_per_atom,double,154879,154879,100,154790,99.94,1.548e+05,ok
-total_magnetization,double,154879,154879,100,130494,84.26,9.085e+04,ok
-total_magnetization_normalized_formula_units,double,154879,154879,100,130494,84.26,9.482e+04,ok
-decomposes_to,list<element: struct<material_id: stri,154879,120906,78.06,120906,78.06,,ok
-energy_above_hull,double,154879,154879,100,120906,78.06,1.209e+05,ok
-possible_species,list<element: string>,154879,154795,99.95,115111,74.32,,ok
-cbm,double,154879,89339,57.68,89339,57.68,5.437e+04,ok
-vbm,double,154879,89339,57.68,89338,57.68,5.56e+04,ok
-band_gap,double,154879,154879,100,82239,53.1,5.032e+04,ok
-num_magnetic_sites,int64,154879,154879,100,71447,46.13,107,ok
-num_unique_magnetic_sites,int64,154879,154879,100,71447,46.13,92,ok
-dos,struct<total: struct<1: struct<task_id,154879,62930,40.63,62930,40.63,,ok
-equilibrium_reaction_energy_per_atom,double,154879,33973,21.94,33883,21.88,3.388e+04,sparse
-bulk_modulus,"struct<voigt: double, reuss: double, v",154879,13045,8.423,13045,8.423,,ok
-shear_modulus,"struct<voigt: double, reuss: double, v",154879,13045,8.423,13045,8.423,,ok
-universal_anisotropy,double,154879,13045,8.423,12958,8.367,5473,sparse
-e_electronic,double,154879,7327,4.731,7327,4.731,7327,sparse
-e_total,double,154879,7327,4.731,7327,4.731,7327,sparse
-n,double,154879,7327,4.731,7326,4.73,7327,sparse
-e_ionic,double,154879,7327,4.731,7320,4.726,7320,sparse
-has_reconstructed,bool,154879,137,0.08846,137,0.08846,2,sparse
-shape_factor,double,154879,132,0.08523,132,0.08523,132,sparse
-weighted_surface_energy,double,154879,132,0.08523,132,0.08523,132,sparse
-weighted_surface_energy_EV_PER_ANG2,double,154879,132,0.08523,132,0.08523,132,sparse
-weighted_work_function,double,154879,132,0.08523,132,0.08523,132,sparse
-surface_anisotropy,double,154879,132,0.08523,129,0.08329,130,sparse
-deprecation_reasons,null,154879,0,0,0,0,0,empty
-dos_energy_down,null,154879,0,0,0,0,0,empty
-dos_energy_up,null,154879,0,0,0,0,0,empty
+column,dtype,n_rows,n_present,pct_present,n_zero,n_unique,pct_zero,verdict
+band_gap,double,154879,154879,100,7.264e+04,5.032e+04,46.9,ok
+chemsys,large_string,154879,154879,100,,4.948e+04,,ok
+composition,"struct<V: double, H: double, O: double",154879,154879,100,,,,ok
+composition_reduced,"struct<V: double, H: double, O: double",154879,154879,100,,,,ok
+database_IDs,"struct<icsd: list<element: string>, pf",154879,154879,100,,,,ok
+density,double,154879,154879,100,0,1.546e+05,0,ok
+density_atomic,double,154879,154879,100,0,1.546e+05,0,ok
+energy_above_hull,double,154879,154879,100,3.397e+04,1.209e+05,21.94,ok
+energy_per_atom,double,154879,154879,100,0,1.549e+05,0,ok
+formation_energy_per_atom,double,154879,154879,100,89,1.548e+05,0.05746,ok
+formula_anonymous,large_string,154879,154879,100,,7004,,ok
+formula_pretty,large_string,154879,154879,100,,1.048e+05,,ok
+has_props,"struct<materials: bool, thermo: bool, ",154879,154879,100,,,,ok
+id,large_string,154879,154879,100,,1.549e+05,,ok
+is_gap_direct,bool,154879,154879,100,,2,,ok
+is_magnetic,bool,154879,154879,100,,2,,ok
+is_metal,bool,154879,154879,100,,2,,ok
+is_stable,bool,154879,154879,100,,2,,ok
+material_id,large_string,154879,154879,100,,1.549e+05,,ok
+nelements,int64,154879,154879,100,0,9,0,ok
+nsites,int64,154879,154879,100,0,242,0,ok
+num_magnetic_sites,int64,154879,154879,100,8.343e+04,107,53.87,ok
+num_unique_magnetic_sites,int64,154879,154879,100,8.343e+04,92,53.87,ok
+ordering,large_string,154879,154879,100,,5,,ok
+property_name,large_string,154879,154879,100,,1,,constant
+structure,large_string,154879,154879,100,,1.549e+05,,ok
+task_ids,list<element: string>,154879,154879,100,,,,ok
+theoretical,bool,154879,154879,100,,2,,ok
+total_magnetization,double,154879,154879,100,2.438e+04,9.085e+04,15.74,ok
+total_magnetization_normalized_formula_units,double,154879,154879,100,2.438e+04,9.482e+04,15.74,ok
+uncorrected_energy_per_atom,double,154879,154879,100,0,1.549e+05,0,ok
+volume,double,154879,154879,100,0,1.546e+05,0,ok
+cif_token_len,double,154879,154871,99.99,0,2232,0,ok
+efermi,double,154879,154825,99.97,0,1.548e+05,0,ok
+decomposes_to,list<element: struct<material_id: stri,154879,120906,78.06,,,,ok
+possible_species,list<element: string>,154879,115111,74.32,,,,ok
+cbm,double,154879,89339,57.68,0,5.437e+04,0,ok
+vbm,double,154879,89339,57.68,1,5.56e+04,0.0006457,ok
+dos,struct<total: struct<1: struct<task_id,154879,62930,40.63,,,,ok
+equilibrium_reaction_energy_per_atom,double,154879,33973,21.94,90,3.388e+04,0.05811,sparse
+bulk_modulus,"struct<voigt: double, reuss: double, v",154879,13045,8.423,,,,ok
+shear_modulus,"struct<voigt: double, reuss: double, v",154879,13045,8.423,,,,ok
+universal_anisotropy,double,154879,13045,8.423,87,5473,0.05617,sparse
+e_electronic,double,154879,7327,4.731,0,7327,0,sparse
+e_ionic,double,154879,7327,4.731,7,7320,0.00452,sparse
+e_total,double,154879,7327,4.731,0,7327,0,sparse
+n,double,154879,7327,4.731,1,7327,0.0006457,sparse
+has_reconstructed,bool,154879,137,0.08846,,2,,sparse
+shape_factor,double,154879,132,0.08523,0,132,0,sparse
+surface_anisotropy,double,154879,132,0.08523,3,130,0.001937,sparse
+weighted_surface_energy,double,154879,132,0.08523,0,132,0,sparse
+weighted_surface_energy_EV_PER_ANG2,double,154879,132,0.08523,0,132,0,sparse
+weighted_work_function,double,154879,132,0.08523,0,132,0,sparse
+deprecation_reasons,null,154879,0,0,,0,,empty
+dos_energy_down,null,154879,0,0,,0,,empty
+dos_energy_up,null,154879,0,0,,0,,empty
