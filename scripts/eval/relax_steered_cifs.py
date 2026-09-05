@@ -8,6 +8,42 @@ parquet, joins them on (id, sample), skips invalid CIFs, relaxes each valid
 structure with M3GNet-PES, and writes a relaxed CIF store. Resumes from a
 previous partial output; checkpoints periodically.
 
+WHAT CONTROLS SPEED AND ACCURACY
+--------------------------------
+Three flags, and they interact. `Relaxer.relax(struct, fmax=..., steps=...)` runs an ASE
+optimiser until the largest force falls below `--fmax` OR it has taken `--steps` steps,
+whichever comes first; `--timeout` then caps the wall clock independently of both.
+
+  --fmax     eV/Å, default 0.05. The convergence criterion, and the only one of the
+             three that sets the QUALITY of a converged structure. Lower is a tighter
+             relaxation and costs more steps -- roughly, halving fmax adds steps until
+             the forces are that much smaller. 0.05 is the usual materials-informatics
+             default and matches what MP-style workflows accept. Raising it to 0.1 is
+             noticeably faster and gives structures that are still near equilibrium;
+             dropping to 0.01 mostly buys precision the downstream property models
+             cannot resolve.
+  --steps    default 200 here, 500 in experiments_configs/relax_steered.conf. A ceiling,
+             not a target: most structures converge well inside it and stop early. It
+             only binds on hard cases, and a structure that hits the ceiling is returned
+             UNCONVERGED with no error -- it is counted as a success. Raising it trades
+             time for fewer silently-unconverged rows.
+  --timeout  seconds per structure, default 120, 60 in the conf. A SIGALRM wall-clock
+             cap that abandons the structure and counts it under "Timed out". This is
+             what bounds the tail: a few pathological cells would otherwise run for
+             minutes each. With --steps 500 and --timeout 60 the timeout is usually the
+             binding constraint, so raising steps alone changes little.
+
+The model itself is the fourth lever and is not a flag: M3GNet-PES-MatPES-PBE-2025.2,
+loaded at line ~108. A different potential changes both cost and the forces being
+minimised.
+
+Observed rate on this cluster: ~3.5 s/structure at fmax 0.05, steps 500, timeout 60
+(2,515 structures in 2h46m; 2,819 in 2h19m). Budget from that, not from --steps.
+
+Read the tail line -- "Success / Failed / Timed out" -- before trusting a run: a high
+timeout count means the settings were too tight for that arm, and those rows carry no
+relaxed CIF, so they silently drop out of any downstream join.
+
 Usage:
     python scripts/eval/relax_steered_cifs.py \
         --input steering_results/validation/steered_test_clean_alpha16.0_layer14.parquet
@@ -61,11 +97,16 @@ def main():
     parser.add_argument("--out", default=None,
                         help="Output parquet path (default: steering_results/relaxed/<stem>.parquet)")
     parser.add_argument("--fmax", type=float, default=0.05,
-                        help="Force convergence criterion for relaxation (eV/Å)")
+                        help="Force convergence criterion, eV/Å. Sets the quality of a "
+                             "converged structure; lower is tighter and slower. See the "
+                             "module docstring.")
     parser.add_argument("--steps", type=int, default=200,
-                        help="Max relaxation steps")
+                        help="Max optimiser steps. A ceiling, not a target -- a structure "
+                             "that hits it is returned UNCONVERGED and still counted a "
+                             "success.")
     parser.add_argument("--timeout", type=int, default=120,
-                        help="Per-structure timeout in seconds (0 = no timeout)")
+                        help="Per-structure wall-clock cap in seconds (0 = none). Bounds "
+                             "the tail; usually the binding constraint, not --steps.")
     parser.add_argument("--checkpoint-every", type=int, default=10)
     parser.add_argument("--results-dir", default="steering_results",
                         help="Base results dir; <results-dir>/{relaxed,generated_cifs}")
