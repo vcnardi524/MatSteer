@@ -68,6 +68,10 @@ def main():
                          "handful per unit, so those are pooled into one bucket at each "
                          "end rather than dropped. Gives the extremes a real number "
                          "instead of a gap.")
+    ap.add_argument("--diff-stat", default="median_diff_A3",
+                    choices=("median_diff_A3", "mean_diff_A3"),
+                    help="bottom panel statistic; median by default because a single "
+                         "runaway structure can dominate a 20-prompt bucket's mean")
     ap.add_argument("--out-stem", default="density_stratified_effect")
     args = ap.parse_args()
 
@@ -99,10 +103,16 @@ def main():
             if len(g) < args.min_per_bucket:
                 continue
             sd = g.diff_log.std(ddof=1)
+            # median_diff alongside the mean: a single runaway structure can dominate a
+            # 20-prompt bucket. Bucket 27 here holds one prompt whose steered value is
+            # 127 A^3/atom against a control of 25, which alone turns that bucket's mean
+            # from -1.17 to +3.74. cohens_d is computed in log space and divided by the
+            # spread, so it is far less exposed -- but the raw mean is not.
             rows.append(dict(run=stem, bucket=b, n=len(g),
                              truth_mean=g.truth.mean(), ctrl_mean=g.ctrl.mean(),
                              steer_mean=g.steer.mean(),
                              mean_diff_A3=g.steer.mean() - g.ctrl.mean(),
+                             median_diff_A3=(g.steer - g.ctrl).median(),
                              cohens_d=g.diff_log.mean() / sd if sd else np.nan))
         print(f"  {stem}: {len(ids):,} paired prompts, "
               f"{sum(r['run'] == stem for r in rows)} buckets kept")
@@ -118,7 +128,7 @@ def main():
                      .replace("steered_test_", "linear ")
                      .replace("_k64_layer7_nosg", "").replace("_layer7_nosg", "")
                      .replace("_residual", ""))
-        for ax, col in ((ax_d, "cohens_d"), (ax_m, "mean_diff_A3")):
+        for ax, col in ((ax_d, "cohens_d"), (ax_m, args.diff_stat)):
             ax.plot(g.bucket, g[col], "-", color=COLOR[i % 4], lw=2,
                     marker=MARKER[i % 4], ms=6, label=short if ax is ax_d else None)
     # how many prompts each bucket rests on -- the tails are thin
@@ -136,7 +146,8 @@ def main():
     ax_d.legend(frameon=False, fontsize=10, loc="upper right")
     ax_d.set_title("effect size, by where the prompt started "
                    "(grey = prompts in bucket)", fontsize=11, loc="left")
-    ax_m.set_ylabel("mean(steered) - mean(control)   (Å³/atom)")
+    ax_m.set_ylabel(("median" if args.diff_stat.startswith("median") else "mean")
+                    + "(steered - control)   (Å³/atom)")
     ax_m.set_xlabel(f"ground-truth density of the source structure "
                     f"(Å³/atom, bucket width {args.width:g}; ends are pooled)")
     ticks = [t for t in sorted(d.bucket.unique())]
@@ -149,7 +160,8 @@ def main():
             if e in set(d.bucket):
                 ax.axvspan(e - args.width / 2, e + args.width / 2,
                            color="#888", alpha=0.10, zorder=0)
-    ax_m.set_title("difference of means, same buckets", fontsize=11, loc="left")
+    ax_m.set_title(f"per-prompt difference ({args.diff_stat.split('_')[0]}), same buckets",
+                   fontsize=11, loc="left")
 
     fig.suptitle("Steering effect stratified by the prompt's true density\n"
                  "buckets are on ground truth, not on the control generation, so "
