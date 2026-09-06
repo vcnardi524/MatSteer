@@ -240,6 +240,22 @@ def resolve(results_dir: str, sub: str, stem: str) -> str:
     return shared if _os.path.exists(shared) else own
 
 
+def prediction_files(results_dir: str) -> list:
+    """Every predictions parquet for a property, from its own tree AND from baseline/.
+
+    Runs are DISCOVERED by their predictions, so a control whose predictions live in the
+    shared baseline tree would otherwise be invisible and every arm would lose its
+    pairing. Predictions are keyed by stem, and a stem appears in at most one tree, so
+    concatenating cannot double-count. The property tree wins if a stem somehow appears
+    in both.
+    """
+    own = {_os.path.basename(f): f
+           for f in glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet")}
+    for f in glob.glob(f"steering_results/{BASELINE_DIR}/property_predictions/*.parquet"):
+        own.setdefault(_os.path.basename(f), f)
+    return sorted(own.values())
+
+
 def discover_sweeps(results_dir: str, method: str) -> list:
     """The distinct (layer, target) sweeps on disk for a method, ascending.
 
@@ -248,7 +264,7 @@ def discover_sweeps(results_dir: str, method: str) -> list:
     share a key and silently overwrite each other.
     """
     out = set()
-    for f in glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet"):
+    for f in prediction_files(results_dir):
         b = _os.path.basename(f)
         kind = kind_of(b)
         if kind != method:
@@ -262,7 +278,7 @@ def discover_sweeps(results_dir: str, method: str) -> list:
 def discover_targets(results_dir: str, family: str, method: str) -> list:
     """The distinct target values swept for a pca method, ascending."""
     tg = set()
-    for f in glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet"):
+    for f in prediction_files(results_dir):
         m = re.search(r"_target([\d.]+)_t[\d.]+_k", _os.path.basename(f))
         b = _os.path.basename(f)
         kind = kind_of(b)
@@ -281,7 +297,7 @@ def discover_runs(results_dir: str, family: str, method: str = "linear",
     alpha=0 control has no target and is always included, whatever layer it names.
     """
     runs = {}
-    for f in sorted(glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet")):
+    for f in prediction_files(results_dir):
         stem = _os.path.basename(f)
         if stem == "testset_baseline.parquet":
             continue
@@ -327,8 +343,7 @@ def load_alpha(results_dir: str, stem: str, col: str, relaxed: bool,
         pred[value_col] = gen[cif_col].map(text_volume_per_atom)
     else:
         value_col = col if relaxed else f"{col}_raw"
-        pred = pd.read_parquet(
-            f"steering_results/{results_dir}/property_predictions/{stem}")
+        pred = pd.read_parquet(resolve(results_dir, "property_predictions", stem))
         if value_col not in pred.columns:
             raise SystemExit(f"{stem}: no column {value_col!r} (have {list(pred.columns)})")
     valid = pd.read_parquet(resolve(results_dir, "validation", stem),
