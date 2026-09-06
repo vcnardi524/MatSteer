@@ -13,8 +13,17 @@ WHAT IS SHARED AND WHAT IS NOT
     validation       shared -- "does this CIF parse" has no property in it
     relaxed          shared -- M3GNet relaxation is property-independent, and this is
                                the expensive one: relax the baseline once, not per property
-    property_predictions   NOT shared -- density_atomic vs band_gap vs energy_above_hull
-                               are different numbers for the same structure. Stays put.
+    property_predictions   NOT shared. Tried and reverted 2026-09-06: runs are
+                               DISCOVERED from this directory and then keyed by
+                               (family, strength), which cannot separate two different
+                               controls. steered_test_alpha0.0_layer7_nosg and
+                               steered_test_clean_alpha0.0_layer14_nosg are both nosg
+                               with strength 0 but are different PROMPT SETS (1,000
+                               density prompts vs 10,286 bandgap ones); sharing the
+                               directory made them collide and density's nosg arms
+                               silently paired against the bandgap control. Sharing works
+                               for the other three because resolve() looks those up by
+                               exact stem -- no discovery, no collision.
 
 A baseline is keyed on the PROMPT SET, not on the property or the layer. alpha=0 means no
 injection at any layer, so layer14 and layer7 controls on the same prompts are the same
@@ -34,9 +43,12 @@ import shutil
 from collections import defaultdict
 from pathlib import Path
 
+import pandas as pd
+
 ROOT = Path("steering_results")
 BASELINE = ROOT / "baseline"
 SHARED = ("generated_cifs", "validation", "relaxed")
+MERGED = ()   # see the docstring: property_predictions must NOT be shared
 CONTROL = re.compile(r"alpha-?0(\.0)?_")
 
 
@@ -58,7 +70,7 @@ def main():
     for prop_dir in sorted(ROOT.iterdir()):
         if not prop_dir.is_dir() or prop_dir.name == "baseline":
             continue
-        for sub in SHARED:
+        for sub in SHARED + MERGED:
             d = prop_dir / sub
             if not d.is_dir():
                 continue
@@ -71,10 +83,22 @@ def main():
         return
 
     total_freed = 0
-    plan = []
+    plan, merges = [], []
     for stem, subs in sorted(found.items()):
         print(f"\n{stem}")
         for sub, paths in sorted(subs.items()):
+            if sub in MERGED:
+                # different properties hold different COLUMNS for the same rows, so
+                # identity is not expected and de-duplication is the wrong operation
+                cols = {}
+                for q in paths:
+                    for c in pd.read_parquet(q).columns:
+                        if c not in ("id", "sample"):
+                            cols.setdefault(c, q)
+                print(f"  {sub:<16} {len(paths)} file(s) -> merge "
+                      f"{len(cols)} column(s): {', '.join(sorted(cols))}")
+                merges.append((BASELINE / sub / stem, paths))
+                continue
             digests = {md5(p): p for p in paths}
             size = paths[0].stat().st_size
             if len(digests) > 1:
@@ -103,7 +127,20 @@ def main():
         for p in paths:
             p.unlink()
     print(f"Moved {len(plan)} files into {BASELINE}/ and removed the per-property copies.")
-    print("property_predictions were left in place -- they are property-specific.")
+
+    for dest, paths in merges:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        out = pd.read_parquet(dest) if dest.exists() else None
+        for q in paths:
+            df = pd.read_parquet(q)
+            out = df if out is None else out.merge(
+                df, on=["id", "sample"], how="outer",
+                suffixes=("", "_dup")).filter(regex=r"^(?!.*_dup$)")
+        out.to_parquet(dest, index=False)
+        for q in paths:
+            q.unlink()
+        print(f"  merged {len(paths)} file(s) -> {dest}  "
+              f"({len(out):,} rows, {len(out.columns)} cols)")
 
 
 if __name__ == "__main__":

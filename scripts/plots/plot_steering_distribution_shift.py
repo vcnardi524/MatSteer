@@ -241,19 +241,21 @@ def resolve(results_dir: str, sub: str, stem: str) -> str:
 
 
 def prediction_files(results_dir: str) -> list:
-    """Every predictions parquet for a property, from its own tree AND from baseline/.
+    """Every predictions parquet for one property -- ITS OWN TREE ONLY.
 
-    Runs are DISCOVERED by their predictions, so a control whose predictions live in the
-    shared baseline tree would otherwise be invisible and every arm would lose its
-    pairing. Predictions are keyed by stem, and a stem appears in at most one tree, so
-    concatenating cannot double-count. The property tree wins if a stem somehow appears
-    in both.
+    Deliberately does not fall back to baseline/, unlike resolve(). Runs are DISCOVERED
+    here and then keyed by (family, strength), which cannot tell two different controls
+    apart: steered_test_alpha0.0_layer7_nosg and steered_test_clean_alpha0.0_layer14_nosg
+    are both nosg with strength 0, but they are different PROMPT SETS (1,000 density
+    prompts vs 10,286 bandgap ones). Merging baseline predictions into this listing made
+    them collide, and density's nosg arms silently paired against the bandgap control.
+
+    Generation, validation and relaxation ARE shared, because resolve() looks those up by
+    exact stem -- no discovery, no collision. Predictions stay per-property, which also
+    keeps each property's model version with its own numbers.
     """
-    own = {_os.path.basename(f): f
-           for f in glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet")}
-    for f in glob.glob(f"steering_results/{BASELINE_DIR}/property_predictions/*.parquet"):
-        own.setdefault(_os.path.basename(f), f)
-    return sorted(own.values())
+    return sorted(glob.glob(
+        f"steering_results/{results_dir}/property_predictions/*.parquet"))
 
 
 def discover_sweeps(results_dir: str, method: str) -> list:
@@ -343,7 +345,8 @@ def load_alpha(results_dir: str, stem: str, col: str, relaxed: bool,
         pred[value_col] = gen[cif_col].map(text_volume_per_atom)
     else:
         value_col = col if relaxed else f"{col}_raw"
-        pred = pd.read_parquet(resolve(results_dir, "property_predictions", stem))
+        pred = pd.read_parquet(
+            f"steering_results/{results_dir}/property_predictions/{stem}")
         if value_col not in pred.columns:
             raise SystemExit(f"{stem}: no column {value_col!r} (have {list(pred.columns)})")
     valid = pd.read_parquet(resolve(results_dir, "validation", stem),
