@@ -1,0 +1,246 @@
+sg_sites,n_materials
+F-43m | 4a 4b 4c 4d,573
+Cm | 2a 2a 2a 2a,268
+F-43m | 4a 4c 16e,261
+I-4m2 | 2a 2b 2c 2d,243
+R-3m | 3a 3b 6c,241
+P4mm | 1a 1a 1b 1b,231
+I4/mmm | 2a 2b 4d,216
+C2/m | 2a 2d 4i,188
+Pm | 1a 1a 1b 1b,178
+Immm | 2a 2c 4j,176
+Cmm2 | 2a 2a 2b 2b,159
+Pmmm | 1a 1d 1f 1g,159
+Imm2 | 2a 2a 2b 2b,154
+Cmmm | 2a 2b 4f,149
+P4/mmm | 1a 1c 2e,142
+Cmmm | 2a 2d 4l,110
+P2/m | 1a 1c 2n,109
+Pmm2 | 1a 1a 1d 1d,108
+P2/m | 1a 1g 2n,103
+Fm-3m | 4a 4b 8c,101
+I4mm | 2a 2a 2a,86
+C2/m | 2a 2b 4f,85
+P3m1 | 1a 1b 1c,77
+P4/mmm | 1a 1b 2h,76
+R3m | 3a 3a 3a 3a,70
+Fmm2 | 4a 4a 4a,62
+Pmmm | 1a 1c 2t,60
+Amm2 | 2a 2a 2b 2b,50
+Imm2 | 2a 2a 2a,41
+P-6m2 | 1a 1c 1f,26
+Cm | 2a 2a 2a 2a 2a 2a,26
+Pmm2 | 1a 1b 1c 1d,21
+F-43m | 4a 4c 4d,19
+I4/mmm | 2a 4d 4e,18
+P6_3/mmc | 2a 2c 6g 6h,13
+I4/mmm | 2a 8h 8i,13
+I4/mmm | 2a 4e,13
+Pa-3 | 4a 8c,13
+Imm2 | 2a 2b 4d,12
+Pmmn | 2a 2b 4e 4e 4f 8g,12
+P-3m1 | 1a 2d,12
+F-43m | 4a 4b 4c,11
+Fdd2 | 8a 16b 16b,11
+Fm-3m | 4a 4b 24d,11
+I4/mmm | 2a 4e 4e 4e,11
+R-3m | 3a 9e,11
+Cmmm | 2a 2b 2c 2d 4i 4j 4k 4l 8n 16r 16r,11
+Pnnm | 2a 4g,11
+I4/mcm | 4a 8h,11
+Fm-3m | 4a 8c,11
+P6_3/mmc | 4e 4f 4f 6g 6h,11
+Pm-3m | 1a 1b 3d,10
+R-3m | 3a 6c 6c,10
+P6_3/mmc | 2a 2c 2d,10
+P-6m2 | 1a 1d 1f,10
+P-3m1 | 1a 2d 2d,10
+C2/m | 4i 4i 4i,10
+R-3m | 3a 3b,9
+Pm-3n | 2a 6c,9
+I-43m | 2a 8c 24g 24g,9
+I4_1/amd | 4a 8e,8
+Cmmm | 2a 2c 4i 4j,8
+P6_3/mcm | 4d 6g 6g,8
+P-6m2 | 1a 1b 2h,8
+P6_3/mmc | 2a 4f 6h,8
+P4/mmm | 1a 1d,7
+C2/m | 2a 2b 4e,7
+P6/mmm | 1a 2d,7
+P4/mmm | 1a 1d 2g 2h,7
+Immm | 2a 4i,7
+P6/mmm | 1a 2c 3g,7
+Cmcm | 4c 4c 4c,7
+Imma | 4e 4e 4e,7
+Pnma | 4c 4c 8d,7
+I4/mmm | 4c 4d 4e 4e,7
+P4/mmm | 1a 2e,7
+Im-3m | 2a 8c,7
+P6_3mc | 2b 2b,6
+P6_3/mmc | 2c 6h,6
+P-62m | 1a 2d 3f 3g,6
+P6/mmm | 2c 2e 3g,6
+I4/m | 2a 8h,6
+Amm2 | 2a 2a 2a 2b 2b 2b,6
+P6_3/mcm | 2b 4d 6g 6g,6
+I-43m | 8c 8c 12d 12e,6
+Imma | 4e 4e,6
+Cmcm | 4c 4c 8g,6
+Fmmm | 4a 8i,5
+Cmmm | 2a 2c,5
+Fd-3m | 16c 32e 48f,5
+P4/nmm | 2c 2c,5
+P-62m | 1a 2c 3g,5
+Cmcm | 4c 4c,5
+P-6m2 | 1a 1f,5
+P6_3/mmc | 2b 4f 6h 12k,5
+P-3m1 | 2d 2d,5
+C2/m | 4i 4i,5
+P4_2/mnm | 2a 4f,4
+P-6m2 | 1a 1d,4
+Pnma | 4c 4c 4c,4
+Cmme | 4g 4g,4
+Pmmn | 2a 2b 4e,4
+R-3m | 6c 6c,4
+Cmmm | 2a 2b 4e 4h 4j,3
+Fmmm | 4a 4b 8c,3
+Pnma | 4c 4c,3
+Amm2 | 2a 2a 2b 2b 4d 4e,3
+Pm-3m | 1a 1b 3c,3
+P4/mmm | 1a 1b 2g 2h 2h,3
+P2_1/m | 2e 2e,3
+I4/mcm | 4a 4b 8h 16k,3
+P1 | 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a,3
+I4_1/amd | 4a 4b,3
+Fm-3m | 4a 4b 8c 24e,2
+C2/m | 2a 4i 4i,2
+Fm-3c | 8a 8b 96i,2
+C2/m | 2a 2c 4i 4i,2
+Pmmm | 1a 1e 2p,2
+P4/mbm | 2a 4g 4h,2
+P6_3/mmc | 2b 2c 4f,2
+P4/nmm | 2a 2c,2
+P4mm | 1a 1b 2c,2
+R-3m | 3a 6c 6c 6c 18h,2
+P6_3/mmc | 2a 2c,2
+Pmma | 2e 2f,2
+Fd-3m | 8a 8b,2
+I4/mmm | 2a 2b 4c,2
+P2/m | 1a 1d 2n,2
+Pbcm | 4c 4c 4d 4d 4d 4d,2
+P-3m1 | 2c 2c 2d 2d 2d 2d,2
+P1 | 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a,2
+Cmcm | 4c 8g,2
+P2_1/c | 4e 4e 4e,2
+I4_1/amd | 8e 8e 8e,2
+I23 | 8c 8c 12d 12e,2
+P2_1/c | 4e 4e 4e 4e 4e 4e 4e 4e 4e 4e 4e 4e 4e,1
+I4mm | 2a 2a 4b 8c 8c 8c 8d 8d 8d 8d 16e,1
+P2_1/c | 4e 4e 4e 4e 4e,1
+Cmmm | 2a 4i 4j,1
+Pbam | 4g 4g 4g 4g 4h 4h 4h 4h,1
+P4/nmm | 2a 2b 2c 2c 2c 8j,1
+P2_1/m | 2a 2e 2e 2e 2e 4f 4f 4f 4f 4f 4f 4f,1
+I4/mmm | 2a 2b 4e 4e 4e 8g,1
+I4_1/acd | 16e 16f 32g,1
+P6_3/m | 2a 4f 6h 6h 6h 6h 12i,1
+I4/mmm | 2a 2b,1
+Pm-3m | 1a 1b,1
+P4_2/mmc | 2a 2c 2f,1
+P-6c2 | 2a 2c 2f 12l,1
+Pmmm | 1a 1c 1f 1h,1
+Pm-3m | 1a 3c 3d,1
+Cmmm | 2a 4i,1
+C2/c | 4e 4e 4e,1
+P6/mmm | 1a 2d 3f,1
+P4/nmm | 2c 2c 2c,1
+P4/mnc | 4d 4e 8g 8h 8h 8h,1
+Cmmm | 2a 2c 4i,1
+Pmmn | 2a 2b,1
+R-3m | 3a 6c 9d,1
+Pmm2 | 1a 1b 1c 1c,1
+P2_1/m | 2e 2e 2e 4f 4f,1
+C2/c | 4e 4e 8f 8f 8f 8f 8f,1
+R-3 | 3a 6c 18f 18f,1
+P6_3/mmc | 2a 2b 4e 4f 4f 4f 4f 4f 6h 12k 12k,1
+Pbcm | 4c 4c 4d 4d 4d 8e,1
+P31c | 2a 2b 2b 2b 6c,1
+P6_3/mmc | 2a 2c 4f,1
+Immm | 2a 4h 4i 4j 8l,1
+C2/c | 4e 8f 8f 8f 8f,1
+Fm-3m | 4a 4b,1
+R-3m | 3a 3b 6c 6c 18h,1
+P2/m | 1a 1b 1g 1h 4o,1
+Pnna | 4c 4d 8e 8e,1
+Pnnm | 2a 4g 4g 4g 4g 4g 4g 4g 4g 4g 4g,1
+Pmm2 | 1a 1b 1b 1c,1
+C2/m | 2a 2c 4i,1
+P2/m | 1a 1f 2m 2n,1
+P6_3/m | 2c 6h 6h,1
+Pm | 1a 1a 1a 1a 1b 1b 1b 1b,1
+Pm | 1a 1a 1a 1b 1b 1b,1
+Immm | 2a 4i 4i,1
+P-1 | 1a 1e 2i 2i,1
+P4_2/nmc | 4c 4d 8f 8g 8g 16h 16h,1
+P2/c | 2e 2e 2f 4g 4g 4g 4g 4g,1
+Pmn2_1 | 2a 2a 2a 2a 2a 2a 2a 2a 4b 4b 4b 4b 4b 4b 4b 4b 4b,1
+P4_2/m | 2e 4j 8k 8k 8k,1
+C2 | 2a 2a 2b 4c 4c 4c,1
+P-1 | 2i 2i 2i 2i 2i 2i 2i 2i 2i 2i 2i 2i,1
+Pbcm | 4c 4d 4d 4d 4d 8e 8e,1
+P6_3/mmc | 2c 6h 6h,1
+Pbca | 8c 8c 8c 8c 8c 8c 8c 8c,1
+F-43m | 4a 4d,1
+Pm | 1a 1a 1a 1a 1a 1b 1b 1b 2c 2c,1
+Ima2 | 4a 4b 8c 8c 8c 8c 8c,1
+Pnma | 4a 4c 4c 4c 4c 4c 4c 4c 4c 4c 8d 8d,1
+Cmmm | 2a 4j,1
+P4_132 | 8c 12d,1
+P-4m2 | 1a 1c 2g,1
+Pmmm | 1a 1g 2t,1
+Cm | 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,1
+Pm-3m | 1a 3c 3d 8g,1
+Cmmm | 2a 2d 4i 4j,1
+P-3m1 | 1a 1b 2d 2d,1
+P-4m2 | 1a 1b 2g,1
+Cm | 2a 2a 2a 2a 4b 4b 4b 4b 4b 4b,1
+P6_3/mmc | 2b 2c 12k,1
+Pmm2 | 1a 1a 1b 1d,1
+C2/m | 2a 4i,1
+Pnma | 4a 4c 4c 8d,1
+Pbam | 2a 4g 4g 4h 4h 4h,1
+P1 | 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a,1
+R3m | 3a 3a 3a,1
+R-3m | 3a 6c 6c 6c,1
+I4_1/amd | 8c 8e 16h 16h 16h 16h,1
+Cm | 2a 2a 2a 4b,1
+R3 | 3a 3a 3a 3a 3a 3a 9b 9b 9b 9b 9b 9b 9b 9b 9b 9b,1
+Pm-3m | 1a 3c,1
+P4/nmm | 2a 2c 2c,1
+C2/m | 2a 4h 4i 4i 8j,1
+P-1 | 2i 2i 2i 2i 2i 2i 2i 2i 2i 2i,1
+C2/c | 4c 4e 8f 8f 8f 8f 8f 8f 8f 8f,1
+P-1 | 1a 2i 2i 2i 2i 2i 2i 2i 2i 2i 2i 2i 2i 2i,1
+P-6m2 | 1a 1d 2g 2h,1
+P1 | 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a 1a,1
+I4/mmm | 2a 4d,1
+P2_1/m | 2e 2e 2e 2e 2e 2e 2e,1
+P-43m | 3c 4e,1
+P-31m | 1a 2d 6k,1
+C2/c | 4e 8f 8f,1
+Pmmm | 1a 1d 2t,1
+P6_3mc | 2a 2b 2b 6c 6c 6c,1
+P-6m2 | 1a 1d 2i,1
+Pmmn | 2a 2a,1
+P-3m1 | 1a 2d 3e 6i,1
+Im-3m | 2a 8c 12d 12e,1
+P-4m2 | 1a 1b 1c 1d 2g 2g 2g 4j 4k 8l,1
+P4_2/mnm | 2a 4f 8i 8i 8j,1
+Cmmm | 2a 2b 4j,1
+P-3m1 | 1a 1b 2d,1
+P3_121 | 3a,1
+P3m1 | 1a 1a 1b 1c,1
+P6_3mc | 2b 2b 6c 6c 6c,1
+I4cm | 4a 4b 8c 16d,1
+Immm | 2a 2c,1
+P2_1/c | 2a 4e 4e 4e 4e,1

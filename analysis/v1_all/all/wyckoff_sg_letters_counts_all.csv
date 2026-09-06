@@ -1,0 +1,1827 @@
+sg_letters,n_materials
+F-43m | a b c d,126455
+Cm | a,63155
+F-43m | a c e,58262
+R-3m | a b c,56886
+I-4m2 | a b c d,51185
+P4mm | a b,49707
+I4/mmm | a b d,43480
+C2/m | a d i,42439
+Pm | a b,40201
+Immm | a c j,39177
+Imm2 | a b,36902
+Cmm2 | a b,36528
+P4/mmm | a c e,34430
+Cmmm | a b f,33093
+Pmmm | a d f g,31642
+P2/m | a g n,26990
+Pmm2 | a d,26217
+Cmmm | a d l,21502
+P2/m | a c n,20330
+Fm-3m | a b c,19917
+I4mm | a,18956
+P3m1 | a b c,18198
+P4/mmm | a b h,17679
+C2/m | a b f,17197
+Pmmm | a c t,16785
+R3m | a,15788
+Amm2 | a b,13826
+Fmm2 | a,12370
+Imm2 | a,9753
+Pmm2 | a b c d,5628
+I4/mmm | a d e,5177
+P-6m2 | a c f,4616
+P-3m1 | a d,4201
+I4/mmm | a e,3671
+F-43m | a c d,3564
+I4/mmm | a h i,3379
+C2/m | i,3324
+Cmcm | c,2811
+Pnma | c,2766
+F-43m | a b c,2568
+I-43m | a c g,2490
+P-6m2 | a b h,2263
+R-3m | a c,2107
+Cmcm | c g,2107
+P6_3/mmc | a c d,2013
+P6/mmm | a d,1963
+Imma | e,1955
+Imm2 | a b d,1951
+P-62m | a d f g,1938
+I4/mcm | a h,1921
+Pnma | c d,1887
+P-6m2 | a d f,1854
+Im-3m | a c,1853
+I4_1/amd | a e,1849
+Cmmm | a b c d i j k l n r,1837
+Pnnm | a g,1810
+Pm-3n | a c,1780
+P6_3/mcm | b d g,1767
+Fm-3m | a b d,1762
+P6_3/mmc | a c g h,1750
+Fd-3m | c e f,1746
+P4/mmm | a e,1722
+P6/mmm | a c g,1679
+P6/mmm | c e g,1672
+P6_3/mmc | a f h,1671
+Cmmm | a c i j,1664
+I4/mmm | c d e,1664
+Pmmn | a b e,1652
+I4/m | a h,1651
+Cmmm | a b e h j,1633
+Immm | a i,1613
+P1 | a,1577
+P6_3/mcm | d g,1558
+R-3m | a e,1553
+P6_3/mmc | b f h k,1544
+Fmmm | a i,1529
+P4/mmm | a d g h,1505
+Pa-3 | a c,1504
+P6_3/mmc | e f g h,1487
+Pmmn | a b e f g,1403
+C2/m | a b e,1387
+Fdd2 | a b,1373
+I-43m | c d e,1371
+P6_3/mmc | c h,1358
+R-3m | a b,1337
+Pm-3m | a b d,1330
+P-62m | a c g,1321
+R-3m | c,1199
+P-3m1 | d,1188
+Fm-3m | a c,1179
+R-3m | a c h,1160
+P2_1/m | e,1159
+Fd-3m | a b,1113
+I4_1/amd | a b,1067
+P6_3/mmc | b c f,986
+Pmma | e f,931
+I4/mcm | a b h k,923
+I4_1/amd | e,916
+Cmmm | a c,908
+P6_3/mmc | a c,895
+C2/m | a c i,865
+P4/mmm | a d,862
+Cmme | g,835
+P4/nmm | c,820
+P2_13 | a,782
+Fmmm | a b c,729
+P6_3mc | b,728
+Pmmn | a b,720
+P4/nmm | a c,674
+P2_1/c | e,671
+Pbcm | c d,657
+C2/m | a i,625
+Pm-3m | a c,564
+Pm-3m | a b c,554
+Pm-3m | a b,554
+P-1 | i,541
+P-6m2 | a d,539
+P-6m2 | a f,521
+P4_2/mnm | a f,492
+Cmmm | a b j,463
+C2/c | e f,411
+Cm | a b,406
+Fd-3m | a c d f g,395
+P-3m1 | c d,395
+Fm-3c | a b i,388
+P4mm | a b c,372
+Pmmm | a d t,358
+Pmmn | a,332
+Amm2 | a b d e,325
+I4/mmm | a b c,287
+R-3c | c e,272
+Fd-3m | a d,253
+P2/m | a d n,247
+Fm-3m | a b,229
+P4/mmm | a b g h,222
+P6_3/mmc | b f,218
+I23 | c d e,203
+P4/nmm | a b c,199
+Pm-3m | a c d,199
+P-43m | c e,192
+Pmmm | a d r,192
+Cmc2_1 | a,189
+P-3m1 | a c d,189
+I4mm | a b c d,185
+Pnma | a c d,184
+Pbam | a g h,180
+Pmmm | a c f h,175
+P4/mbm | a g h,173
+Cmcm | a c f,169
+P4/mmm | a b c d e f g h i j k l m n o r s t,167
+P2/m | a e f g,166
+P-31m | a d k,164
+Cmcm | c f,160
+Fmmm | a b d,160
+P4_2/mnm | a f i j,158
+P-3m1 | a b d,156
+P6_3mc | a b,154
+P2_1/m | e f,152
+Pmm2 | a b d,149
+Pmmm | a e p,148
+P-1 | a i,144
+C2 | a b c,141
+Im-3m | a b,141
+Pbam | g h,141
+R3m | a b,140
+P-6m2 | a d g h,140
+Fm-3m | a d e f,139
+P-4m2 | a b c d g j k l,134
+Pmm2 | a c d,131
+P6_3/mmc | a c f,120
+P2_1 | a,119
+P2_1/c | a e,118
+R-3m | a b c h,117
+Pna2_1 | a,114
+R32 | a c e,114
+P-6m2 | a h,109
+P6_3/mmc | c d,106
+Immm | g i j,105
+F-43m | a c,104
+I4/mmm | a b e g,103
+P6/mmm | a d f,102
+Amm2 | a b c d e f,100
+Immm | a d h,100
+P-4m2 | a c g,99
+R3 | a b,98
+Pm-3m | c d,97
+P4/mmm | a b e f,96
+Immm | a j,93
+P-62m | a d f,91
+Fm-3m | a b c e,89
+Pbam | a c g h,89
+Pbcm | c d e,88
+Pm | a b c,86
+I4mm | a b,85
+P6_3/m | c h,84
+P2/c | e f g,82
+P-4m2 | a b g,82
+P2_1/c | a d e,80
+P4/mmm | a e g h i,80
+R-3 | a b f,79
+Pbcn | c d,79
+Pbca | c,79
+Pmn2_1 | a b,78
+Cmcm | a c,78
+I4/mmm | a f i j,78
+Pmmm | a g s,76
+C2/c | a e f,75
+F-43m | a d e,75
+P2_12_12_1 | a,74
+Pc | a,74
+Pmmm | a g t,74
+C2/c | c e f,72
+P2_1/m | a e f,71
+P-3m1 | a d e i,70
+Imm2 | a d,70
+Cc | a,69
+P-6m2 | a i,69
+P6_3mc | a b c,67
+P-6m2 | a d e,67
+Cmc2_1 | a b,66
+P4/mmm | a b h i,65
+Fmm2 | a b c d,65
+Cmcm | c e g,64
+Pmma | a e f j,64
+C2/m | g h i j,63
+Fddd | a g,63
+Immm | a c,62
+P6/mmm | a c d e i,62
+P6_3/mmc | a c h k,61
+P6_3 | a b c,60
+P6_3/mmc | a c h,60
+Fm-3m | a c e,59
+Cmcm | a c g,57
+C2/m | a h i j,54
+Pm-3n | a c e k,54
+P4/mmm | a c,54
+R-3m | a c d h,53
+P3m1 | a b,53
+P6_3/mmc | a b f,51
+P4/mmm | a b c d e f j k l m n o,49
+Cmmm | a i j,49
+R3c | a b,49
+R-3 | a c f,49
+Pmmn | a b f,49
+Ima2 | a b c,48
+R-3m | a c d,48
+I4/mcm | a h l,48
+Pmmm | a b c d e f g h m n o p q r s t u v,46
+Fd-3m | a,46
+I-42d | a b d,45
+I4cm | a b c d,45
+P-1 | a e i,44
+P6_3cm | a b c,44
+P4_132 | c d,44
+P-6m2 | a b i,44
+F-43m | a d,43
+C2/m | i j,43
+I4/mmm | a j,43
+P-6m2 | a d i,43
+Imma | a c e h i,42
+I4/mmm | a d h,42
+Pmmm | a h q t,42
+Ibam | a j,41
+Pmma | a e f,41
+P2_13 | a b,40
+Pmc2_1 | a b,39
+P-62m | c f g,38
+I4/mmm | a c e,37
+P6_3/mmc | b c f g j k,37
+Cmmm | a d i j,37
+R-3m | a,37
+Immm | a d i l,36
+P2/m | a c e h,36
+Pmmn | e,36
+P4_2/mnm | d f g j,35
+P4/mmm | a b c i,35
+P4/mmm | a b c d,35
+Immm | a d j l,35
+Pmm2 | a b c d g h,34
+Immm | a h j,34
+P6_3mc | b c,33
+Pnna | c d e,33
+Pbam | a d g h,33
+P-1 | a b i,33
+P2/m | a e m n,33
+P4/mmm | a b c,33
+C2 | a c,32
+Ibam | a b g j,32
+P6/mmm | a b h,32
+P4/mmm | a c d i,32
+R-3m | c h,31
+Pm-3m | a c d g,31
+C2/m | a d i j,30
+R-3 | c f,30
+Imma | e g,30
+Im-3m | a,29
+P2/m | a f m n,29
+Im-3 | a c g,29
+Pnnm | g,29
+P6_3/mmc | c f,29
+P-6m2 | a d j k,29
+P-6 | a c f j k,28
+I4/mmm | a b,28
+Imma | e h,27
+P4/mmm | a b d i,27
+Cmm2 | a b c d e,27
+C2/c | f,26
+Cmce | f,26
+P-1 | a c i,26
+Immm | a c i,26
+Pmn2_1 | a,25
+P4_2/mnm | a f i,25
+P6_3/mmc | a b c d f k,25
+I4/mmm | e,25
+C2/m | a i j,25
+P4_2/mnm | a e f j,25
+P6/mmm | a c f m,24
+P3_121 | a,24
+P-1 | a h i,23
+P-62c | b f g h,23
+P6/mmm | a d f k l,23
+I4/mcm | a c h l,23
+C2/m | g i j,23
+Pbam | e g h i,23
+P6/mmm | a c,23
+Cmmm | a c i,23
+Pm-3m | a b c d,22
+Pca2_1 | a,22
+Fd-3m | a d e,22
+P4_2/nmc | a g,22
+P-6m2 | a b g h,22
+I4/mmm | a b e,22
+Cmmm | a j,22
+I4/mmm | a e g,21
+P-42_1c | a e,21
+P2/m | m n,21
+C2/c | e,21
+Immm | a c i j,21
+R-3 | a b c f,20
+P6_3/mmc | c,20
+Fmmm | f g h i m,20
+Cmmm | a b c d,20
+Immm | a i j,20
+P4/ncc | b c f g,19
+Pbam | e f g h i,19
+P4/mbm | a c g j,19
+R-3c | a b e f,19
+I4_1/amd | a,19
+P2/m | a c m n,19
+C2/m | a d g h,19
+P-6m2 | a b h i,19
+Pmm2 | a b c d e f g h i,18
+Cmmm | e g j,18
+Fm-3m | a,18
+R-3c | b c e f,18
+Fd-3m | c d e f,18
+P4/mnc | d e g h,18
+P4/ncc | c f g,18
+I4/mmm | a d,17
+P2_1/c | a b e,17
+P-1 | a f i,17
+Cmcm | c f g h,17
+I4/mmm | a,17
+P-1 | a g i,17
+R-3m | c d,17
+C2/m | a c i j,16
+Cmmm | i j,16
+I4/mmm | a b d e,16
+P3m1 | a b c d,16
+Fmmm | i,16
+P2/m | a g m n,16
+Cmcm | c e f,16
+F-43m | a b c e g,16
+C222_1 | a b c,15
+Immm | a h i j l,15
+F-43m | e f g,15
+I-4 | a b c g,15
+R-3m | a c e h,15
+P-43m | a d e,15
+I4/mmm | e h i j k,15
+Cmce | a e f,15
+R3m | a b c,15
+Fddd | a f g,15
+P4_2/n | a g,15
+Pmm2 | a b c,15
+P6/mmm | a d k,15
+Fmmm | a f i,15
+Cmmm | a b h,15
+Im-3m | a c d e,15
+P6/mmm | a b c d i,14
+P4_12_12 | a b,14
+P2/c | e g,14
+Im-3 | a b c g,14
+Fd-3m | a c d f,14
+Cmce | e f,14
+P4_2/mnm | f g i,14
+Imma | a e g,14
+P4/mbm | a g h i j,14
+P4/mbm | a c g j k,14
+Immm | i j,14
+P-6m2 | a b c f,14
+Cmmm | a c k l,14
+R-3 | a f,14
+P4/mbm | a d h,14
+I-42m | a b d i,13
+P4/n | a c g,13
+I4/mmm | c e,13
+I-43d | a b c,13
+P-62m | a c f g j k,13
+I4/mcm | a b c h l,13
+R-3m | c d f h,13
+Pbca | a c,13
+P4/mnc | a e g h,13
+P6_3/mmc | a b f h k,13
+P2/m | a h m n,13
+C2 | a b,13
+Cmce | a f,13
+Pmmm | a c f h r s,13
+Amm2 | a b c,13
+Pbcn | a c d,13
+I4_1/amd | a b h,12
+C2/c | a c e f,12
+P-3m1 | a b d i,12
+I4_1/a | a b f,12
+P4/nmm | a b c j,12
+P-31m | a b d h k,12
+P4/mmm | a b c d e f g h i,12
+Fdd2 | b,12
+Im-3m | c e h,12
+P6_3/m | f h,12
+P2 | a b c d,12
+C2/m | a b e i j,12
+P-6m2 | a c e,12
+Cmmm | a b e j,12
+Fmm2 | a b c d e,12
+P3_2 | a,12
+I4/m | a d h,11
+Pmmn | a b c e g,11
+I4_1/a | a d f,11
+C2 | c,11
+P-6m2 | a c j k,11
+Imma | a b c h i,11
+Pmmn | a b e f,11
+I4/mcm | a d k l,11
+Ama2 | a b c,11
+P-3m1 | a d i,11
+P4/mnc | a d e h,11
+F-43m | a b d,11
+P6_3/m | h,11
+Cmmm | a b e,11
+Pmmm | a f p,11
+P31m | a b c,11
+I-43m | c e g,11
+I-4 | a b c d g,11
+C2/m | e g i j,10
+R-3m | a b h,10
+Pmma | a e f i j,10
+Cmce | d f g,10
+P2_12_12 | a b c,10
+I4/mmm | a c d e,10
+P2/c | g,10
+P2/m | a e f g m n,10
+Cmcm | a c f g,10
+Immm | g h i,10
+P2/m | a d m n,10
+Cmmm | a i j k l m,10
+Cmmm | a i,10
+Pm-3n | a c d i k,10
+Immm | a h,10
+P4/mmm | a e j,10
+P-6 | g h j k,10
+Pmma | a e f i,10
+Amm2 | a d e,10
+Immm | a d l,10
+P4/mmm | a b c g h i,10
+P6/mmm | a c e g h i,9
+R-3m | a b c d h,9
+Cmcm | a c f h,9
+P4_2/nmc | a d f g,9
+Pnnm | a c g,9
+I4_1/amd | a b e,9
+P2/m | a m n,9
+P-3m1 | a b c d,9
+P4/mmm | a c f k,9
+R-3 | f,9
+Pnnm | e g h,9
+C2/m | a g i j,9
+Cmcm | a c e g,9
+Cmcm | a c f g h,9
+P6_3/mmc | a c e f,9
+Cmmm | a h j q,9
+Pmmm | a c q t,9
+R-3m | a b d e,9
+Fmm2 | a b,9
+P2_1/m | a d e f,9
+Immm | a g h i j k,9
+P-6m2 | a c f g h i,9
+Pmmm | a e p q r v,9
+P6_3/mmc | a b c f,9
+R-3m | a b c d,9
+P6_3/mmc | c e f,9
+I4/mmm | a c e g,8
+I-4 | g,8
+P321 | a d e f g,8
+Fm-3m | a c e f h,8
+P4_2/mmc | a c f,8
+Imm2 | a b c d,8
+P6_3/m | f h i,8
+C2/m | a d g h i j,8
+Pmma | e f i j,8
+P2 | a b c d e,8
+P4/mmm | a d e g h i,8
+P-6m2 | a b h j k n,8
+P2_1/m | a c e f,8
+P4mm | a b c d e f,8
+P-3 | a d g,8
+R-3m | c d e g h,8
+P6_3/m | b c h,8
+Cmmm | a j l,8
+Pbam | a g h i,8
+P4/mmm | a b c d i,8
+Pmm2 | a b,8
+P4/mmm | a e h,8
+P6_3/mmc | b c,8
+P4/mcc | a c m,8
+Pmma | e,8
+P4_2/mmc | e k m,8
+C222 | a b i j k,8
+Im-3m | a b c,8
+Pmmm | a b c h,8
+I4/mmm | a d j,8
+I4/mmm | a d e j,8
+P-42_1m | a c e f,8
+I4/m | a b h i,8
+I4_1md | a,8
+F-43m | a b d e g,8
+Ama2 | b,8
+P6/mmm | a d i,8
+P4/nmm | a c f,7
+P4/mmm | a c d g i,7
+P4_2/n | g,7
+Pmna | e g h,7
+I4_1/amd | a d h,7
+P6_3/m | c h i,7
+P4/nmm | c f,7
+P4/m | a c f j k,7
+Immm | a d h j l,7
+Pbcm | d e,7
+C2/m | a b i j,7
+Ibam | a b j,7
+P-62m | e f g h,7
+P6_3/mmc | c e,7
+C2/m | a c e i j,7
+I2_13 | a b,7
+I4_1/acd | b g,7
+Pm-3m | a,7
+Pmmm | a c r,7
+Cmmm | a b i q,7
+P-4m2 | a b c d g,7
+Pmma | e f k,7
+P-42_1m | a c e,7
+Amm2 | a e,7
+P6_3/mmc | a f,7
+P4/mmm | a d i,7
+P-1 | a d i,7
+Pmma | a c f,7
+Fmmm | a b i j,7
+Pmmn | a e,7
+Cmmm | a c j,7
+P6_3cm | a b c d,7
+I-4m2 | a b e f,7
+Pmc2_1 | a b c,7
+Pmna | e g h i,7
+P2_1/c | a c e,7
+P4/nmm | a c i,7
+I-43d | b c,7
+P2 | a d e,7
+Pbam | e g h,7
+C2/m | g i,7
+C2/m | a g,7
+Amm2 | a b e,6
+C2/m | a f i j,6
+Pa-3 | a b c d,6
+P4_332 | a c d e,6
+C2/c | a f,6
+I4_1/amd | a b e f g h i,6
+I23 | a c f,6
+P3 | a b c d,6
+Fm-3m | a c d e,6
+Fddd | a d g h,6
+P4_2/mbc | d g h,6
+Pa-3 | c d,6
+I-42m | a d i,6
+Cmcm | a b c g h,6
+Fddd | a b g h,6
+I4_1md | a b,6
+P-43m | a b c d e,6
+Cmce | d e f,6
+Amm2 | a b d,6
+I-42d | a d,6
+Cmcm | a c d f g h,6
+P6/mmm | a c d,6
+Ama2 | a b,6
+P4/mnc | a b g h i,6
+Pmmm | a g s t,6
+P-6m2 | a c g h i k,6
+I4/mmm | d e,6
+P3_121 | a b c,6
+Fddd | a f,6
+P3m1 | a b d,6
+Fmm2 | a c,6
+Cmm2 | a b c,6
+Immm | a d j,6
+P4_132 | a c d,6
+P4/mnc | e g h i,6
+P6/mmm | c d e,6
+P4_2/mnm | e f g k,6
+P2/c | a e f g,6
+Imma | c e h j,6
+P6/mmm | a d f m,6
+I4/mcm | a b h,6
+R-3c | a b e,5
+Pmmm | a d e q r s t,5
+I4/m | a b d h i,5
+I-4 | a b d g,5
+P6_3/mmc | a c d f,5
+P6_3/mmc | a b c f k,5
+Cmmm | a c e j,5
+I4/mcm | a b c h,5
+P4/mmm | a b f h,5
+P4bm | a b c d,5
+I4_1/acd | a b e g,5
+P6_3/m | b f h i,5
+P-31m | c e k,5
+R-3c | c e f,5
+P4/mmm | a d f g h i,5
+I4/mmm | a b d e h,5
+Ia-3 | b d e,5
+P4_2/mnm | a f g i,5
+I4_132 | a g h,5
+Cmcm | c e f g,5
+Pbcm | d,5
+Fm-3m | a b e,5
+Cmm2 | a b c d e f,5
+P-62m | a b c g i,5
+Ia-3 | a c d e,5
+Fm-3m | a c e f,5
+P4/mbm | a b c g k,5
+Immm | a b d i l,5
+Im-3m | a c e h,5
+P4_32_12 | a b,5
+Pbcm | a c d e,5
+P4_2/mbc | g h,5
+Cmce | a d e f g,5
+P-42m | a b m n,5
+P4_1 | a,5
+P-6m2 | a d h,5
+C2/m | a b c d j,5
+Fmmm | e f i,5
+Pmmm | a d l,5
+Pmmn | a b c e f,5
+Cmme | a g,5
+Cmmm | a f h i,5
+Pbam | a f g h i,5
+Pmmm | a f n,5
+P-6m2 | a b c d i,5
+I-4c2 | a h i,5
+I4/mmm | a b d e g,5
+P-6m2 | a d h i,5
+I4/m | a b d e h,5
+P4/mmm | a b d,5
+F222 | a b c d g h,5
+P-43m | a c e,5
+Pbcm | a c d,5
+P4/nbm | a c d m,5
+P-62m | a c f g k,5
+P6_3/mmc | b c h k,5
+Pmmm | a g p,5
+P-43m | a e f g i,5
+I4/mmm | a d e g,5
+Fddd | e g h,5
+P4/mmm | a c g h i,5
+P4_122 | a b c d,5
+Aea2 | a b,5
+Fm-3m | a i,5
+I4_1/amd | a b c i,5
+P6/mmm | a,5
+Cmmm | a c g i p q,5
+Fmmm | a b f i j,5
+P6_3/mmc | a c f g h,5
+C2/m | a b e h i,5
+P6_322 | a c f i,5
+P4/mbm | e g h i,4
+I4mm | a b c d e,4
+P4mm | a b c d,4
+Cccm | a k l,4
+P-42m | a f n,4
+I4/mcm | b c f g h l,4
+P-43m | e f g i,4
+P-3 | a b d g,4
+Cmcm | a c e f g h,4
+P4/nmm | a c e i,4
+P4/mmm | a d g h i,4
+Cmmm | g h i j p,4
+P-3m1 | a d f i,4
+P4/nbm | a e l m n,4
+Pn-3m | a b,4
+C2/m | a g h i j,4
+P-4c2 | a d e i j,4
+Cmce | e f g,4
+P6_3/mmc | a f h k,4
+R-3m | a c g,4
+Ibca | d e f,4
+P-3m1 | a c d f i,4
+Ima2 | b c,4
+P4/n | c g,4
+C2/m | a b d h i j,4
+I-4m2 | a b c e f,4
+P-6 | a j k,4
+I-43m | b c,4
+P6_3/m | a f h i,4
+Ibam | a g j,4
+I-42d | a d e,4
+Fddd | a g h,4
+P4/n | a b c g,4
+I-43m | a c d g,4
+P6/mmm | a d e h i j k o,4
+Pmm2 | a d g h,4
+Fmmm | f g h i,4
+P4_2/ncm | c h i j,4
+P4/mmm | a b c h i,4
+Pnnm | a f g h,4
+P4/mmm | e f g h,4
+P6_222 | c d j,4
+P4_2/m | c e j k,4
+P2/m | a b g h o,4
+C2/m | a b h i j,4
+P4/mmm | g,4
+Imma | a e,4
+P6_3/mmc | b f g h k,4
+Pba2 | a c,4
+Pmm2 | a b h,4
+Fmmm | a b c d e,4
+I-42m | a b c i j,4
+P4_332 | a c d,4
+P-6m2 | a d g,4
+I4/mmm | d e g,4
+P-31m | a c k,4
+Pmma | a f i,4
+C2/c | a b e f,4
+Pbcn | d,4
+P4_2mc | a c e f,4
+P-62m | a c f g,4
+Im-3m | a c k,4
+Cmmm | a,4
+P6_3/mmc | c d e f g h k,4
+P2/c | e f,4
+Fm-3m | a b d e f,4
+Cmcm | a c e f g,4
+P4/mmm | a b c d e f j k r s t,4
+Imm2 | a b c d e,4
+Cmcm | c d e f g,4
+Imma | a e h,4
+Cmce | a e f g,4
+P4/mmm | a b g h i,4
+P-42_1m | e f,4
+P4/mmm | a b c d g i,4
+C2/c | a b c e f,4
+Imma | a e g h,4
+P4_2/mmc | c e,4
+P-62m | c f g k,4
+C2/m | a b c e i j,4
+I4/mmm | a d e h,4
+P6_3/mmc | a e f h k,4
+P4/mmm | a b d h i,4
+Immm | i,4
+Cmmm | a b e i j q,4
+P4_2/m | a c j k,4
+Cmcm | c f g,4
+Fd-3m | c d f,4
+Pmmm | a g o,4
+Fmmm | a f h i j m,4
+Cmme | a e g m o,4
+P2_1/m | a e,4
+Pma2 | a b c d,4
+P-43m | a b e,4
+I2_13 | a b c,4
+P6_3/mmc | a c d e f,4
+P-3m1 | a d f,3
+Im-3 | a g,3
+R-3m | a g h,3
+I4/mmm | h i j,3
+Cmce | f g,3
+P6_3/mcm | a d g,3
+P-62c | a b f g h,3
+P-31m | a c h k,3
+Fd-3m | a b c,3
+F-43m | a e,3
+C2/m | e i j,3
+C2/m | a d e i j,3
+P6_222 | c i,3
+Cmmm | i,3
+R32 | a b d e f,3
+Immm | a i j l,3
+P6/mmm | a b c d e h i,3
+P-4m2 | a b c e f g,3
+Immm | a h j l,3
+I-43d | a c,3
+I4/mcm | a c g h l m,3
+I4_1/acd | e f g,3
+I4/m | h,3
+Imma | c e h i,3
+Imma | a c e g h,3
+P6/mmm | c,3
+Im-3 | b c g,3
+Pbam | a b c g h i,3
+R-3c | a b c f,3
+Immm | a d i j,3
+I4/m | a b h,3
+I-43m | a c d e g,3
+P6_3/mmc | a b c e f h k,3
+P-3c1 | a d f g,3
+Fddd | f g,3
+I4/m | a b d e h i,3
+P4_132 | a b,3
+P-42c | b e n,3
+F222 | a b g h,3
+I4/mmm | a b d h i,3
+P4/mbm | a f g h l,3
+Immm | a g,3
+Pnc2 | a c,3
+P6_3/mmc | a b f g h k,3
+Pccn | a e,3
+Pmmm | a g,3
+P4/mbm | e g h,3
+P2/m | a n,3
+I4_1/amd | a b f,3
+Ima2 | b,3
+P6_222 | a d f i,3
+Cmmm | a b h j p,3
+P-1 | a b e h i,3
+I4 | a b c,3
+C2/m | a c g h i j,3
+P-1 | a c d e i,3
+Cmmm | a e h j,3
+Pn-3m | a b c d,3
+P4/mmm | a d f g,3
+Cmmm | a d i j l m,3
+Cmm2 | a b e f,3
+P4/mbm | e f g h k,3
+Cmcm | g,3
+Cmce | c d e f,3
+I4_1/amd | a d e,3
+Pmma | a d e f,3
+Fm-3m | a b c d,3
+Fd-3m | c d e,3
+Pmmm | a c o p r v,3
+P2/c | a d e f g,3
+I4/mcm | a f h l,3
+P6_3/mmc | a c e f g h k,3
+P-3m1 | a b c d i,3
+Fddd | f g h,3
+P4/nnc | c d e k,3
+Fddd | e f g h,3
+P6_3/mmc | a b e f h k,3
+Immm | a f h j,3
+P4/mmm | a b i,3
+P4/mmm | a c d g h i,3
+F-43m | a e f h,3
+P-31c | a c f i,3
+I4/mcm | a h k,3
+Cmmm | a e f h i j p,3
+Immm | a d i,3
+Pm-3m | a f,3
+P-3c1 | c d f g,3
+P6_3/mmc | a b c e f,3
+C2/m | e h i j,3
+R-3m | c d h,3
+P4/mmm | a b e f g h i,3
+Pmmm | a c e g v,3
+P-1 | a b c g i,3
+P4/mmm | a d e f g h i,3
+Pm-3n | a c e,3
+Pm-3 | a f g h i j,3
+C222 | a b c d k,3
+I4/mmm | a h i j,3
+Amm2 | a c,3
+P-62m | f g h,3
+I4/mmm | a i,3
+I4/mmm | a h,3
+Ia-3d | a f g,3
+P4_2/mmc | c d e f,3
+Pmm2 | a b c d e f g h,3
+Fmmm | a e i m,3
+Cmce | a d e f,3
+Ia-3 | a d e,3
+R-3m | a d h,3
+R-3c | c f,3
+P4/mmm | a d f,3
+P4/mmm | a d e,3
+Immm | g i j l,3
+P-3m1 | a c d i,3
+Cmmm | a d k l,3
+Fddd | a d g,3
+P4_2/m | c j,3
+Cmcm | a c d,3
+Pmma | a f i j k l,3
+Pmmm | a f l,3
+I4/mmm | d e i l m,3
+Ibam | a g j k,2
+P-3c1 | b d f g,2
+P6_3/mmc | a g h k,2
+Immm | a b i l m n,2
+P-62c | b c g h,2
+P4_2/nmc | a b d e f g,2
+Immm | a b c j,2
+I4/m | d e h i,2
+Pmma | e f g i j k,2
+P6/mmm | a g,2
+P-62c | a c d f g,2
+P3_112 | a b c,2
+I4/m | d e h,2
+P-1 | a b d f i,2
+P-4n2 | a f g i,2
+Amm2 | a b c e f,2
+I-43m | a b c,2
+P4/mbm | a c d g h i j,2
+P2/m | a c e h m n,2
+I4/mmm | a c d,2
+I4_1 | b,2
+P-62c | a f h i,2
+Pn-3m | b d,2
+P4_2/mnm | e f g h j,2
+Imma | a e g h i j,2
+I4/m | a b e h i,2
+Fmmm | f g h i m n p,2
+I-4 | a c g,2
+Fm-3m | a b d f,2
+P6_422 | c d k,2
+P6_3mc | b c d,2
+P-6m2 | a b c,2
+C2/m | a d g i j,2
+P31c | b c,2
+F-43m | a b e f g,2
+I4/mmm | a b d m,2
+I4/mmm | d e h i m n,2
+C2/m | a c g i j,2
+P4/nmm | c d e i,2
+P3_221 | a b c,2
+R32 | a c e f,2
+F-43m | a b e,2
+I4_1cd | b,2
+P6_322 | a c d i,2
+P4_322 | a b c d,2
+Pcca | c d e f,2
+C2/m | a b i,2
+P-4 | a c g h,2
+P-3m1 | d i,2
+Imma | a e h i,2
+P6_3mc | a b c d,2
+P6_3/mmc | g h k,2
+Pm-3m | a b c d e f g h,2
+P4/nbm | a c d g h m,2
+P-1 | a e f i,2
+Cmmm | a b f i,2
+Cmce | d e f g,2
+P4_2/mnm | d e f g j k,2
+Cmmm | a f h i j p,2
+P6_322 | c g,2
+P6_3/mmc | a c g h k,2
+P-31c | b c d i,2
+R-3m | a c d g,2
+P4_2/mnm | a d e f,2
+Pm-3m | a c g,2
+P31c | a b c,2
+P4/mmm | a b c e g h i,2
+Cccm | l,2
+P4/mbm | a b d h,2
+P6_3/mcm | a b c k,2
+I4_1/a | a f,2
+Pmma | a c e f j,2
+P2/m | a b j m n o,2
+P6_3/mcm | b d g j,2
+Cmmm | a b c d m,2
+P6_3/mcm | d e g h,2
+I4/mmm | a b c f,2
+I4/mcm | a d l,2
+Pnnm | a d g,2
+Ama2 | b c,2
+P6/mmm | a f,2
+Im-3 | a e g,2
+Cmmm | a d n,2
+I4/m | a d e h,2
+Pmmm | a d k,2
+P4/mmm | a c d e g h i,2
+P4_2/m | e h i j k,2
+P-42_1m | a b c e,2
+P4/nmm | a b c i j,2
+Pmmm | a d q r s t,2
+P-3m1 | a b d g i,2
+Pnnm | e f g h,2
+Fmmm | e i j,2
+Cmce | d f,2
+P4/mmm | a b d e,2
+Cmmm | a f i,2
+Pmmm | a f j,2
+Cmcm | a e f g,2
+Cmcm | c e,2
+I4_1/a | f,2
+P-3m1 | a d g i,2
+I-4 | a d g,2
+Fd-3m | e f g,2
+Pnnm | a g h,2
+Ccce | a i,2
+Fddd | a f h,2
+P-4c2 | a d e j,2
+Imma | a b c d e h j,2
+P4/nmm | a c e i j,2
+I4_1/amd | e g h,2
+Cmcm | c e g h,2
+P4_2/mnm | c f j,2
+Cmce | a b d e f g,2
+Fd-3m | a d f,2
+I-42m | a b c i,2
+Imma | c e f h,2
+I4_1/amd | a e h,2
+P-4c2 | a c e h i j,2
+I-42d | a b e,2
+P-6c2 | a c g h k l,2
+Immm | g i,2
+I-42m | a c i,2
+Cmce | a d f g,2
+P4/nnc | a b d k,2
+I-42d | a b d e,2
+P6_422 | c i,2
+Immm | a g h i j k l o,2
+Imma | e h i,2
+I422 | a c j,2
+Fmmm | f h i n,2
+P4/mbm | a b c g h k,2
+P6_3/mmc | a c e,2
+P4/mcc | a m,2
+C2/m | a b f g i,2
+I4/mmm | d e i m,2
+R-3c | b e,2
+Pmmm | a e q r s t,2
+P4_2/ncm | a c e i,2
+Imma | a c d h i,2
+Cmmm | a b f j p,2
+Im-3m | a b c d e,2
+Ibam | a b j k,2
+P2 | e,2
+Immm | a e f h i l m o,2
+P-1 | a d g h i,2
+I-42d | a c d e,2
+C2/m | a b c d e i j,2
+Fd-3m | c d,2
+Immm | g l,2
+P-6 | a h j k l,2
+P6_3/mmc | f h,2
+P4_2/nnm | a b c e f,2
+Imma | a c e,2
+Amm2 | a d,2
+I4_1/amd | a c e f g h,2
+Pmna | e h,2
+Cmcm | a b g,2
+Cmmm | a c h j p q,2
+P-31m | a b d k,2
+Pm-3m | a b c d g,2
+Pnma | a c,2
+P2/c | a c f,2
+P4_122 | a b d,2
+P4/mbm | c g j,2
+Immm | a d h i j l,2
+P4/m | a c j k,2
+C2/m | a c f i j,2
+P-43m | a e,2
+C2/m | a d,2
+I4_1/amd | c h,2
+P4/mmm | a b c e h i,2
+R-3m | a b c e h,2
+P6_3/mmc | a h k,2
+Pmma | e f g i j k l,2
+Pcca | c d f,2
+P4_332 | c d e,2
+P4_2mc | a b c d e f,2
+P6_3/mcm | a d g k,2
+Im-3m | a b h,2
+Pmmm | a g q r s t,2
+I4_1/amd | c d,2
+C2/m | e i,2
+I-43m | c g,2
+Cmmm | a g h i j p q,2
+Pmm2 | a c g h,2
+Ibam | j k,2
+P-1 | a e f g i,2
+C2/c | c d e f,2
+I4/mmm | a c e m,2
+Immm | a c g j l m n,2
+I-43d | c d,2
+P4_2/mnm | c e f j,2
+Im-3m | a b e h,2
+Imma | e g h i j,2
+P-4m2 | a g,2
+P4/mbm | a h,2
+P31m | a b c d,2
+P-4m2 | a e f g,2
+R3c | b,2
+R32 | c d e f,2
+R32 | c d f,2
+P6_3/m | b c h i,2
+P4/mcc | a e n,2
+P4/mmm | a f g h i,2
+Pccn | c d e,2
+Pmmm | a c q r s t,2
+I4_1/a | a b e f,2
+P6_322 | b f g h,2
+P-62m | f g h i j k,2
+F-43m | a e f g,2
+Pmmn | a b c e,2
+Immm | a f,2
+P6/mmm | a b c i,2
+F-43m | e,2
+C2/m | a b g j,2
+I4_1/amd | a b d i,2
+P6_322 | c d f g i,2
+Fmmm | f g h i p,2
+P2_1/m | a b c d e f,2
+C2/m | e f h i j,2
+P6_3/mmc | e f,2
+Pmma | a d e f i j,2
+I-4 | a c d g,2
+I-42m | a c e i,2
+P4/mmm | a c d e g h,2
+P321 | a c d e f g,2
+C2/c | c d e,2
+P-3m1 | a b d h i,2
+Immm | e f g i j k l,2
+P4_2/ncm | i,1
+P3 | a b d,1
+I2_12_12_1 | a b c,1
+P-62c | c g h i,1
+I4/mmm | a b d e h i m n,1
+P-6 | a i j k l,1
+Fm-3m | a d,1
+P4/mmm | a b c d e f i r,1
+Cmmm | a c i p,1
+I4/mcm | a b d h,1
+P6/mmm | a n,1
+I4/mcm | b c f h,1
+Cmmm | a b c i j,1
+P6_322 | b c g i,1
+Immm | g h i m,1
+P-42_1c | a b d e,1
+C2/c | a c d e f,1
+Pbam | g h i,1
+P6_3/mcm | e g k,1
+P2/m | a b c h m n o,1
+P6/mmm | a b,1
+Cmmm | a c e f i j,1
+P4_2/mnm | f,1
+P-62m | a d f g i k l,1
+Ibam | a d e f g k,1
+I4_1/a | e f,1
+P-42_1c | c d e,1
+R-3m | f h,1
+Pmmm | a c e g h,1
+I4_122 | a b f,1
+R-3m | a b f g h,1
+Cmmm | a g j,1
+Pmmn | a b e g,1
+P-4m2 | a b c g,1
+P-3 | a b c d g,1
+P312 | a d f l,1
+I-4 | a d f g,1
+I4/mmm | a b c d h i j k m,1
+Pmm2 | a c d e f g h i,1
+Fm-3m | a b c e f g h,1
+Cmcm | c f h,1
+C2/m | a b c f i j,1
+Pn-3 | e f g h,1
+C2/m | a d f i j,1
+P4/mbm | a g h j,1
+P-3m1 | a c d e i,1
+Pmna | a c g,1
+P4/mmm | a b e g h i,1
+Cmm2 | a b c e,1
+R-3m | a b d,1
+P-6 | a h i j k l,1
+P6mm | a,1
+C2/m | g h i,1
+Fmmm | a e f i m,1
+R-3m | a c d f h,1
+I4/mmm | h l,1
+F-43m | a b d f,1
+R-3m | h i,1
+P4/mmm | a c e g h i,1
+P321 | a b d g,1
+P6/mmm | a b d,1
+P2 | a c e,1
+F-43c | a b e h,1
+I222 | a d h i j k,1
+P-31m | f g i k,1
+P2/c | a f g,1
+C2/c | a c d f,1
+C2/m | a g i,1
+Ccce | e f h i,1
+C222 | a i j k,1
+Immm | a b d g i l,1
+I2_12_12_1 | a b c d,1
+P222_1 | a b c d e,1
+Cmmm | a c k,1
+Pmmm | a h r,1
+Immm | e f i j l o,1
+I4/mmm | c d e m,1
+I4_1/amd | c d e g h i,1
+Cccm | a e g h l,1
+Imma | a c e j,1
+P4/nmm | a b c f,1
+Cmmm | a c j q,1
+I4_1/amd | a c e,1
+I4/mcm | a c e h i k l,1
+P2/m | a g j m n o,1
+Cmce | a b e f g,1
+P-1 | a b g h i,1
+Fd-3m | a b d f,1
+I-42m | a d i j,1
+Fmmm | f g i m n p,1
+P321 | a d e f,1
+I4/mcm | a b c f h l,1
+P4_2/mmc | c j,1
+I4mm | a c,1
+Pmmm | a h s,1
+P4/mnc | a d e h i,1
+Pnn2 | a b c,1
+P4_2/mnm | a d f,1
+P-62m | a f g,1
+Immm | e i k l m,1
+Pm-3n | c e,1
+P-1 | a b d f g h i,1
+I4mm | a b c,1
+I4_1 | a b,1
+Imma | a c d e j,1
+C2/m | e g h i,1
+P-62m | c f g j k,1
+I4_1/acd | e g,1
+P4/m | a b c j k,1
+Pm-3n | a b c e f,1
+Immm | a g h i l,1
+P-6c2 | a c f l,1
+P3_221 | a c,1
+Fmmm | a i m o p,1
+Pmma | a k,1
+Amm2 | a b c d,1
+I4/mcm | c h,1
+I4mm | a d,1
+P4/mbm | a e h k,1
+Fd-3m | a c e f,1
+Pmmn | a b c,1
+C222_1 | b c,1
+Cmm2 | c d e,1
+Fmmm | a e i,1
+P-62m | a d f g j,1
+P4/mbm | a c e g j k,1
+Fm-3m | a b c e f i,1
+Fmmm | a h i,1
+P4_2/ncm | b e i,1
+Fddd | a e g,1
+P-6m2 | a b c i,1
+P6_3/mmc | c d e f,1
+P-31c | b c h i,1
+Pnna | a c d e,1
+R32 | a c d f,1
+P4_2/mmc | a b c e n,1
+C2/c | c f,1
+P-6m2 | a f g i,1
+P4/mnc | a b c e g h i,1
+Cmcm | c d,1
+P4_2/nbc | a c j k,1
+C2/m | a b g h i j,1
+P-1 | a b c f i,1
+Pmmm | a d g,1
+I4/m | c h,1
+P4_132 | c e,1
+C2/m | a g h i,1
+P6_422 | a d f i,1
+P4/ncc | a g,1
+Pmmm | a b c h t,1
+Fmmm | a,1
+R-3m | a c f g h,1
+Pmmm | a b e h,1
+Imma | c e,1
+P-62m | a d g j,1
+P-62c | e f g h,1
+I-43m | a b c g,1
+P4/mbm | a g h i,1
+Immm | a b h j l,1
+P6_422 | c d,1
+P-31c | c d i,1
+C2/m | a b e h i j,1
+Ibam | a e i j k,1
+R-3 | d e f,1
+R-3c | b e f,1
+I4_1/amd | c e g h i,1
+P4/mmm | a b c d e f g h i l m n o r,1
+Pmna | a e h,1
+C222 | a k,1
+P4/mbm | a b h,1
+P6/mmm | a k,1
+P6/mmm | c g,1
+Imma | e h j,1
+I4_1/amd | a b c d e g,1
+Pmma | a c e f g j k l,1
+P-6c2 | a e k l,1
+P-6m2 | a f h,1
+Amm2 | a b c d e,1
+P6_3/mmc | b c d,1
+F-43m | a c d e f h,1
+Immm | a b j l,1
+P-42m | a c e n,1
+P2/m | a f g m n,1
+Cmce | a f g,1
+Imma | a c e h j,1
+P-4m2 | a c d g h i j k l,1
+Ibam | a b g j k,1
+P-4 | g h,1
+P222 | a c d r s u,1
+Fd-3m | a b e,1
+P6_3/m | a b c h i,1
+P-4m2 | a b g j,1
+P6_3/mmc | a c e f h k,1
+P4_2/n | a e g,1
+P4/ncc | c g,1
+I4/mcm | a c h,1
+I23 | d f,1
+I-42d | d e,1
+P3_121 | c,1
+I4_1/amd | a c h,1
+Pmma | a d e k,1
+P4_2/mbc | b d h i,1
+P4/nmm | c i j,1
+P4/nmm | c f i,1
+Fm-3 | c f h,1
+I4/mmm | a c e h,1
+Cmmm | a c i j p,1
+P-6m2 | a f j k,1
+P-6m2 | a f i,1
+P4_2/mmc | c e g i k n,1
+Pbam | a c d h,1
+I4/mcm | h,1
+P-6m2 | a d e g h i,1
+P4/mbm | e g j,1
+Pmmm | a b c f g s,1
+I-43m | c e,1
+Im-3 | c g,1
+P-62m | c d e f g i,1
+I-4m2 | a c,1
+Immm | a b d i j l,1
+R32 | d e f,1
+Fd-3m | e f,1
+P-62m | a b c f g,1
+Fm-3m | a b e f i,1
+P4_2/mmc | e i,1
+R-3m | a b c h i,1
+I4/mcm | k,1
+Pn-3m | b e f k,1
+Aem2 | a b c,1
+Cmmm | a c g i j p,1
+P-42_1m | c e,1
+R32 | a b d,1
+P4/nmm | a c i j,1
+P4/nbm | a b m,1
+C2/c | a b c f,1
+P6/mmm | c e,1
+P4_2/nmc | c d f g,1
+P-1 | a d h i,1
+P-1 | a b c d h i,1
+P4/m | a j k l,1
+I-42d | c e,1
+P6_222 | c d k,1
+P-4b2 | a b d i,1
+I222 | a c j k,1
+Immm | a i l,1
+Cmce | a d f,1
+P4_2nm | a c,1
+I-4 | a b c e f g,1
+I222 | a b k,1
+P4_2/mnm | a b c e f g i j k,1
+P6_322 | c f g,1
+P4_132 | a c d e,1
+Pccm | e g q r,1
+Fddd | a b f g h,1
+P2/c | a b c d e f g,1
+P4/mmm | a b,1
+Immm | a c g j,1
+Immm | a d h i l,1
+Pmmn | a b c e f g,1
+C2/m | a b f g h i j,1
+I4/m | e h i,1
+P6_3/mcm | a f g k,1
+P6_3/m | c f h i,1
+Fm-3m | c e f h,1
+Pmm2 | a b c d g,1
+F-43m | a b e f g h,1
+P-31c | b c i,1
+P4/mmm | a d h,1
+P-6 | a d f j k,1
+R-3m | h,1
+Pmma | a b e f,1
+I4/mmm | d e h,1
+Pnnm | a c g h,1
+Pmmn | c e g,1
+P6_3/mcm | b f g j,1
+P-43n | a c d e i,1
+I-4m2 | a e f g h i j,1
+Imma | h,1
+I4/mmm | a b d e g h i k m n,1
+P-43m | a d e i,1
+P-62m | e f g h i j k,1
+Im-3m | c d e k,1
+Pmmn | a b c d e f g,1
+Immm | a d h i j l o,1
+Fm-3 | a b c e h,1
+I4/mmm | a c d e g,1
+Imma | e f,1
+Pban | g i j m,1
+Pcca | c f,1
+P-42m | a e n,1
+Cmmm | a b e h,1
+P6/mmm | a d j,1
+F-43m | a b e g,1
+P4/mmm | a c f j,1
+C2/m | e h i,1
+I4/mmm | d e f h i j,1
+Ibam | a b f j,1
+P4/mbm | a b c g,1
+P-31m | e h i j k,1
+Cmme | a b g m,1
+P6_3cm | a c d,1
+Cmmm | a b d f,1
+Cmmm | a i j l n q,1
+P2_1/m | a d e,1
+P6_3/mmc | e f h,1
+Pm-3m | a b c g i j,1
+P4/mmm | a e r,1
+P6_3/mmc | c e f h k,1
+R-3c | e,1
+P-6m2 | a d f g h i,1
+Cmmm | a g h j k l m n p q r,1
+Cmmm | a c f i,1
+Pa-3 | a c d,1
+P4/mnc | a g h,1
+Pmmm | a b l,1
+P6_222 | c d i,1
+P4/mbm | a c e g,1
+P4/mmm | a c j k l o,1
+P4_2/nmc | g,1
+Fddd | c g h,1
+Cmmm | a c g,1
+P4/mbm | a b e f g h,1
+P4_2/nmc | a d f g h,1
+P-62m | f g i,1
+P2_12_12 | c,1
+P6_3/mmc | b c f i,1
+P4_2/mmc | j m,1
+P6_322 | a f h i,1
+Immm | a b f i j n,1
+P4/mbm | a d g h i j,1
+P-4m2 | a d e f g,1
+P4_2/mcm | a d i o,1
+I-42m | f g i,1
+P4_2/mmc | c j n,1
+Fmmm | a h,1
+Pmmm | a d,1
+P-62m | c e f g h i k,1
+P-43n | a c e,1
+Imm2 | a b d e,1
+P6/mmm | a h,1
+P6_3/mmc | a b f g k,1
+P4/mmm | a b f o,1
+I4/mmm | a b c h i k,1
+Cmm2 | a e,1
+P4_2/nmc | a c d,1
+C222 | a h j k l,1
+Cmmm | a h j,1
+P4_332 | a b d,1
+Fmm2 | b c d e,1
+P-6 | a c j k,1
+P4/mmm | a b c g i,1
+P4_2/nmc | c d f g h,1
+R-3m | a b g h,1
+R-3m | d e f h,1
+C2/m | a c d i,1
+P-6m2 | a e j k l,1
+I-42d | a c e,1
+I-4m2 | a e f i,1
+Fddd | a b h,1
+P2/c | a b c f g,1
+Cmmm | e g h i j p q,1
+C2/m | a b c d g h i j,1
+Pmm2 | a b c d g h i,1
+Immm | a f h i j l n o,1
+P622 | j l m n,1
+P4_2/m | e j k,1
+P4_2nm | a c d,1
+R-3c | a e f,1
+R-3c | a d e f,1
+Fm-3m | a c e h,1
+P-62m | a c f g j,1
+P4/mmm | a c f j k m o,1
+P6/mmm | a e,1
+R-3m | a c g h,1
+Cmme | a d g m,1
+P4_322 | a c d,1
+Ibam | c j,1
+Fmmm | a h i m,1
+P-6c2 | a e k,1
+Immm | e g i j l m n o,1
+I23 | a c d e f,1
+P-6 | g h i j k l,1
+P6mm | a c e,1
+Cmmm | a d e f i j l n p q,1
+I-4m2 | a b c d e f g h i,1
+P-6c2 | a e f g h l,1
+Pmmm | a b d e f n o q r s t u v,1
+P-4n2 | a b c d f g i,1
+P-4m2 | a b c d e g,1
+F-43m | a b c e,1
+P6_3/mcm | b g,1
+P4/nmm | c d f h i j k,1
+P312 | a c k l,1
+Fmm2 | a b c,1
+P4/mmm | a b d g h,1
+P6/mmm | a f g i o,1
+Ia-3d | d g,1
+P4/nmm | c d,1
+I4_1/amd | c d h,1
+P6/mmm | a d m,1
+Fd-3m | a b c e g,1
+Imma | a e f g h i j,1
+P4/mmm | a b e f g h,1
+P4/mmm | a b c f,1
+Cmme | a d f g m o,1
+P4/m | a b j,1
+I4/mmm | a b e h,1
+P-43m | c e g h,1
+P4_2/mnm | a b d f,1
+Pmma | e f j k l,1
+P4/mmm | a d e h,1
+P4/nmm | a b c i,1
+P-4 | a b g h,1
+I4/m | a d e h i,1
+P6_3 | b c,1
+Cccm | g h i j k l m,1
+P-6 | a b g h i j k l,1
+F4_132 | f g,1
+P-3m1 | a d i j,1
+P2/m | a d f h m n,1
+Ibam | a d j k,1
+I4/mmm | a b c d e m,1
+P-43m | c d e i,1
+P6_3/m | b e f g h i,1
+C2/c | c e,1
+P321 | d e,1
+I-43d | a c e,1
+Cmmm | a b f h i,1
+Pmm2 | a b c g h,1
+I4_1/acd | b d f,1
+C2/m | e g h i j,1
+Ibca | e f,1
+P2/m | a b g i j k l,1
+I-4m2 | a c e f,1
+Pm-3m | a b c d g i j,1
+Cmce | a d g,1
+Cmmm | a b f i j,1
+P6_422 | c j,1
+Pccn | c e,1
+Pccn | e,1
+C2/m | e f i j,1
+I4/m | a h i,1
+C2/m | a e i j,1
+Fd-3 | c d e f g,1
+I4/m | e f g h i,1
+Pcca | a c e f,1
+P6_3cm | a c,1
+P31c | c,1
+Ia-3 | b c d e,1
+P-6m2 | a e f,1
+P6_222 | c j,1
+C2/m | a c d f i j,1
+P-3 | d g,1
+P-1 | a c d i,1
+Fm-3m | a b c d e f,1
+I4/mcm | a b d l,1
+Pmna | a d g h i,1
+F-43m | a c d e f,1
+Pmmn | a e f g,1
+P4_2/ncm | c e i j,1
+I-42m | c e i j,1
+C2/m | a e f i j,1
+P-62m | c g,1
+Immm | a g h m,1
+I4_1/amd | f g h,1
+P4_2/mnm | f i j,1
+Cmmm | a d,1
+I4_1/acd | d f,1
+P4/mnc | a b d e h,1
+I4/mcm | b c h j l,1
+Pmmm | a h m o p q r s t u v,1
+C2/m | a c e i,1
+Cmcm | c e f g h,1
+C2/m | e f i,1
+P4_132 | a b d,1
+Pmma | e j,1
+P-62m | a d e f h i,1
+P-1 | a b c h i,1
+P4/nnc | a e k,1
+P4/mmm | a c d e,1
+P4/mmm | a d f k,1
+I-4m2 | a c e g i,1
+P-6m2 | a c i,1
+Cccm | a b e f,1
+Pmm2 | a b c d h,1
+P6_3/mmc | b c e f,1
+Imma | a c e h,1
+Immm | a d,1
+P-3 | c d g,1
+P-6c2 | a c k,1
+P6_3/mmc | b c k,1
+I4/mmm | e g,1
+Cmmm | a b f i q,1
+C2/m | a b h,1
+Immm | a d g,1
+I-4m2 | a d f,1
+Pm-3m | a c d f g h,1
+I4_1/acd | f,1
+P-6m2 | a b c d,1
+P4_2/ncm | a b c e i,1
+I-4m2 | a c i,1
+Cmcm | a b c d f,1
+Fm-3m | a b c e f h,1
+P4/mnc | a h,1
+I4/mcm | c e k,1
+C2/m | a e i,1
+P4/mmm | a c d,1
+Cmcm | a b c d f g,1
+Amm2 | a b c e,1
+Cmmm | a e,1
+P-31m | c e g k,1
+P4/mmm | a e g h i j r,1
+Pm-3n | a c k,1
+I4_1/acd | a e f g,1
+P4mm | a d e,1
+I4_1/amd | c e h,1
+P-31c | a b c f i,1
+Fm-3c | a b f i,1
+I4/mcm | b c f h l,1
+P-6 | a b e f h j k l,1
+C2/m | a d h i,1
+I422 | c d e k,1
+Cmmm | a b c i j p,1
+I4/mcm | a d g h k l m,1
+Cmmm | a d i j m o,1
+P-1 | a b d i,1
+Pm-3m | a c g i j,1
+I432 | h i,1
+I4/mmm | a d h n,1
+P-3 | a c d g,1
+P-1 | a c g h i,1
+P-1 | a e h i,1
+Fddd | g,1
+Pmmm | a c f r s t,1
+Amm2 | a c d e,1
+P4/mcc | a c n,1
+I4_1/amd | f g h i,1
+P-6m2 | a e j k,1
+P-1 | a b d e i,1
+P31m | a c,1
+Immm | g i l,1
+P4/mmm | a h,1
+Cmmm | a c d i j q,1
+P42_12 | c d e f g,1
+P-42_1m | a e f,1
+P2/m | a b c d e f g h m n o,1
+P4/mmm | a c d g,1
+Immm | a g h i j l,1
+Fmmm | h,1
+P4_32_12 | b,1
+P312 | a c g i l,1
+Pnc2 | a b c,1
+P4/mmm | a c g i,1
+I-4m2 | e f,1
+Fmmm | f g h i k m o,1
+Amm2 | a b c f,1
+P4/mmm | a b d e f j m o,1
+P6/mmm | a b c,1
+Cmmm | a c h i,1
+P-6m2 | a d g h i,1
+P-62m | a c e g h,1
+P4/mmm | g h,1
+Cmme | a d e g,1
+Imm2 | d,1
+P312 | a b l,1
+P-4n2 | f h i,1
+P-6m2 | a e g h i k,1
+I4/mcm | a b c h j k l,1
+I4_1/amd | h i,1
+P4/n | a g,1
+P-1 | a c g i,1
+P4/mmm | a b c e g l,1
+P-62c | a f g h i,1
+Pnma | a b c d,1
+I4/mcm | c d e h j k,1
+P-4n2 | a f h i,1
+I4/m | a d e g h i,1
+I4/mcm | a d f k l,1
+P-4n2 | a c e f h i,1
+P3_1 | a,1
+P4/mmm | a b c e,1
+R32 | a b c d,1
+P6/mmm | a b h i,1
+P-1 | a b d e f g i,1
+I4 | a c,1
+I4/mmm | c d e g,1
+Im-3m | a b c e,1
+P2_1/c | a b c d e,1
+Fd-3 | a d e f g,1
+P4_2/m | c j k,1
+C2/m | a c e f i j,1
+P4/mmm | a,1
+C222 | a c e h j k l,1
+I4_1cd | a b,1
+P6_3/mcm | a b d k,1
+Immm | a c j l,1
+P4_2/mnm | a b d f i j,1
+I2_13 | a,1
+P-6m2 | g h i,1
+Immm | a c i j n,1
+Aem2 | c,1
+I4/m | h i,1
+P4_2/mbc | b d h,1
+Cmmm | a b e h i j m o,1
+Cmmm | a g h j p,1
+I4/mmm | a b d e g m,1
+I4_1/amd | a f h i,1
+I-42m | c i j,1
+I4_1/acd | a d e g,1
+Immm | a c g i j l,1
+P-1 | a c f h i,1
+Immm | a b i,1
+P-31m | i j k l,1
+Im-3m | d e f,1
+Pa-3 | c,1
+P31m | b c d,1
+Ccc2 | c d,1
+Fddd | a c f h,1
+P4/mbm | a d h i j,1
+F-43c | a b c d e h,1
+I-43d | c d e,1
+Pm-3 | a b d f,1
+I-4m2 | a f,1
+P4_2 | c d,1
+Pmmm | q r,1
+I4_132 | b g h,1
+P-3c1 | d f g,1
+P4_2/mcm | a d o,1
+Fd-3m | a b e g,1
+Cmm2 | a b c e f,1
+P6_3/mmc | a c d e f k,1
+Fmmm | a n,1
+R-3m | a c f,1
+P-6 | a d e j k,1
+P4/mmm | a b f g h,1
+C2/m | a,1
+P2_1/m | a c e,1
+Immm | i l,1
+Cmce | c f,1
+Immm | a l,1
+Pm-3m | a e f g h,1
+Pm-3m | a d g m,1
+P4/mmm | a b c f k l n,1
+Fmmm | e f g i p,1
+P6_3/mmc | a c d f g,1
+I4/mmm | d e h i j,1
+P-1 | a b c d i,1
+Cmme | a b g,1
+P2/m | a c d g n,1
+Cmmm | a i l n,1
+P-6m2 | a c f j k,1
+Pmmm | a c e t,1
+Pmma | a c e f,1
+Pm-3m | a d,1
+I-4m2 | a d,1
+P2/m | a c d h m n,1
+P4_2/nmc | a b d f g,1
+Cmmm | a b j k l m,1
+P2/m | a g h i j k,1
+P4_2/mmc | o,1
+Fmmm | a i j m,1
+Immm | a b i l,1
+R-3m | c f,1
+P-31c | b c f i,1
+Cmmm | k n,1
+Imma | h i j,1
+Cmmm | a b e h i j p q,1
+Fddd | a d e,1
+P4/nbm | a c d g m,1
+Cmme | a g m o,1
+Cmce | a d e g,1
+P2/m | a m,1
+P-42_1m | c e f,1
+Cmmm | a b c f,1
+P6_3/mcm | b d g k,1
+P6_322 | b c f g,1
+Pm-3m | a c e f g i j,1
+Pmma | e f i,1
+P6_3/mcm | a c g i,1
+I4/mcm | c d h l m,1
+Cmmm | a g j m,1
+I-4m2 | a c f,1
+Pmma | a e i j,1
+Pm-3 | a c i j k,1
+Fddd | c h,1
+Cmmm | a c f i k l m n,1
+Amm2 | a b d e f,1
+C2/m | a c h i j,1
