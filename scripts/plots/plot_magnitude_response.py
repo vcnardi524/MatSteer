@@ -33,7 +33,7 @@ MAG = "analysis/v1_all/test/plots/density_injection_magnitude.csv"
 OUT = Path("analysis/v1_all/test/plots")
 
 
-def series_for(d, layer, min_points=4):
+def series_for(d, layer, min_points=4, sign="both"):
     """Every ladder on this layer, as (name, colour, marker, frame, label-fn).
 
     A ladder is a set of runs that hold one manifold knob fixed and vary the other:
@@ -45,6 +45,13 @@ def series_for(d, layer, min_points=4):
     """
     man = d[(d.layer == layer) & (d.method == "manifold")]
     lin = d[(d.layer == layer) & (d.method == "linear")]
+    # The DIRECTION the run was asked to move in: sign of the arc step for manifold,
+    # sign of alpha for linear. Injection magnitude is a norm and so always positive,
+    # which is why direction has to come from the knob rather than from the x axis.
+    if sign == "pos":
+        man, lin = man[man.target > 0], lin[lin.strength > 0]
+    elif sign == "neg":
+        man, lin = man[man.target < 0], lin[lin.strength < 0]
     out = []
 
     steps = sorted(v for v in man.strength.unique()
@@ -66,7 +73,7 @@ def series_for(d, layer, min_points=4):
     return [(n, c, m, f.sort_values("pct_of_h"), lab) for n, c, m, f, lab in out]
 
 
-def pareto(d, series, layer, path):
+def pareto(d, series, layer, path, sign="both"):
     """Effect against validity: the trade every method actually offers.
 
     Magnitude is the knob, but nobody wants magnitude -- they want effect without
@@ -75,13 +82,16 @@ def pareto(d, series, layer, path):
     sits above and to the right of it. Same split as the magnitude figure.
     """
     lin = [t for t in series if t[0].startswith("linear")]
-    cols = [("scale swept (arc step fixed)",
-             [t for t in series if t[0].startswith("scale")] + lin),
-            ("arc step swept (scale fixed)",
-             [t for t in series if t[0].startswith("arc")] + lin)]
+    cols = [(n, f + lin) for n, f in
+            (("scale swept (arc step fixed)",
+              [t for t in series if t[0].startswith("scale")]),
+             ("arc step swept (scale fixed)",
+              [t for t in series if t[0].startswith("arc")])) if f] or \
+           [("linear only", lin)]
 
-    fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
-    for ax, (title, members) in zip(axes, cols):
+    fig, axes = plt.subplots(1, len(cols), figsize=(8 * len(cols), 7),
+                             sharey=True, squeeze=False)
+    for ax, (title, members) in zip(axes[0], cols):
         for name, colour, marker, f, lab in members:
             g = f.sort_values("valid_pct")
             ax.plot(g.valid_pct * 100, g.cohens_d, "-", color=colour, lw=2,
@@ -102,12 +112,19 @@ def pareto(d, series, layer, path):
         ax.grid(alpha=0.25, lw=0.6)
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
-        ax.annotate("better \u2197", (0.97, 0.03), xycoords="axes fraction",
-                    ha="right", fontsize=10, color="#777", style="italic")
-    axes[0].set_ylabel("Cohen's $d$ vs the no-injection control")
-    fig.suptitle(f"Layer {layer}, no space group: effect against how much output survived\n"
-                 "up and to the RIGHT is better; a point is dominated if another sits "
-                 "above and to its right", fontsize=13)
+        arrow = "\u2198" if sign == "neg" else "\u2197"
+        ax.annotate(f"better {arrow}", (0.97, 0.03 if sign != "neg" else 0.93),
+                    xycoords="axes fraction", ha="right", fontsize=10,
+                    color="#777", style="italic")
+    axes[0][0].set_ylabel("Cohen's $d$ vs the no-injection control")
+    if sign == "neg":
+        sub = ("these runs were asked to LOWER the property, so a MORE NEGATIVE d is "
+               "better: down and to the RIGHT")
+    else:
+        sub = ("up and to the RIGHT is better; a point is dominated if another sits "
+               "above and to its right")
+    fig.suptitle(f"Layer {layer}, no space group: effect against how much output "
+                 f"survived\n{sub}", fontsize=13)
     fig.tight_layout()
     fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="white")
     print(f"Saved {path}")
@@ -117,12 +134,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mag", default=MAG)
     ap.add_argument("--layer", type=int, default=7)
+    ap.add_argument("--sign", choices=("both", "pos", "neg"), default="both",
+                    help="keep only runs asked to raise the property (pos), lower it "
+                         "(neg), or all of them")
     ap.add_argument("--min-points", type=int, default=4,
                     help="a ladder needs this many runs to be drawn as a series")
     args = ap.parse_args()
 
     d = pd.read_csv(args.mag)
-    series = series_for(d, args.layer, args.min_points)
+    series = series_for(d, args.layer, args.min_points, args.sign)
     if not series:
         raise SystemExit(f"no sweeps with more than one point at layer {args.layer}")
 
@@ -130,12 +150,16 @@ def main():
     # questions (does scale matter at a fixed arc step / does arc step matter at a fixed
     # scale) and the linear baseline is repeated in both so each is self-contained.
     lin = [t for t in series if t[0].startswith("linear")]
-    cols = [("scale swept (arc step fixed)",
-             [t for t in series if t[0].startswith("scale")] + lin),
-            ("arc step swept (scale fixed)",
-             [t for t in series if t[0].startswith("arc")] + lin)]
+    scale_fam = [t for t in series if t[0].startswith("scale")]
+    step_fam = [t for t in series if t[0].startswith("arc")]
+    cols = [(n, f + lin) for n, f in
+            (("scale swept (arc step fixed)", scale_fam),
+             ("arc step swept (scale fixed)", step_fam)) if f]
+    if not cols:                       # linear only
+        cols = [("linear only", lin)]
 
-    fig, axes = plt.subplots(2, 2, figsize=(16, 9), sharex=True, sharey="row")
+    fig, axes = plt.subplots(2, len(cols), figsize=(8 * len(cols), 9),
+                             sharex=True, sharey="row", squeeze=False)
     for col, (title, members) in enumerate(cols):
         ax_d, ax_v = axes[0][col], axes[1][col]
         for name, colour, marker, f, lab in members:
@@ -165,18 +189,22 @@ def main():
     axes[1][0].set_ylabel("valid output (%)")
 
     hnorm = d[d.layer == args.layer].h_norm.iloc[0]
-    fig.suptitle(f"Layer {args.layer}, no space group: manifold sweeps against the linear "
+    direction = {"pos": "asked to RAISE density", "neg": "asked to LOWER density",
+                 "both": "both directions"}[args.sign]
+    fig.suptitle(f"[{direction}]  "
+                 f"Layer {args.layer}, no space group: manifold sweeps against the linear "
                  f"baseline (repeated in both columns)\n"
                  f"x is the measured push, not each method's own knob, so the methods are "
                  f"comparable (median |$h$| = {hnorm:.1f}).  "
                  f"top row: effect.  bottom row: how much output survived",
                  fontsize=13)
     fig.tight_layout()
-    path = OUT / f"density_magnitude_response_layer{args.layer}.png"
+    tag = "" if args.sign == "both" else f"_{args.sign}"
+    path = OUT / f"density_magnitude_response_layer{args.layer}{tag}.png"
     fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="white")
     print(f"Saved {path}")
     pareto(d, series, args.layer,
-           OUT / f"density_pareto_layer{args.layer}.png")
+           OUT / f"density_pareto_layer{args.layer}{tag}.png", args.sign)
     for name, _, _, f, _ in series:
         print(f"\n{name}")
         print(f[["label", "pct_of_h", "cohens_d", "valid_pct"]].to_string(index=False))
