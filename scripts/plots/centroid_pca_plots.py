@@ -107,9 +107,10 @@ def main():
     labels[args.property] = pd.to_numeric(labels[args.property], errors="coerce")
     labels = labels.dropna(subset=[args.property])
     if args.partition != "all":
-        splits = load_split_index()
-        keep = set(filter_partition(splits, args.partition, verbose=False)["id"])
-        labels = labels[labels["id"].isin(keep)]
+        labels = filter_partition(labels, args.partition, verbose=False)
+        keep = None
+        if keep is not None:
+            labels = labels[labels["id"].isin(keep)]
     if args.min_value is not None:
         labels = labels[labels[args.property] >= args.min_value]
     if args.max_value is not None:

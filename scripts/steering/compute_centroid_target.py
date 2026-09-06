@@ -76,9 +76,10 @@ def main():
     labels = pd.read_parquet(args.labels, columns=["id", args.property])
     labels = labels.dropna(subset=[args.property])
     if args.partition != "all":
-        splits = load_split_index()
-        keep = set(filter_partition(splits, args.partition, verbose=False)["id"])
-        labels = labels[labels["id"].isin(keep)]
+        labels = filter_partition(labels, args.partition, verbose=False)
+        keep = None
+        if keep is not None:
+            labels = labels[labels["id"].isin(keep)]
     print(f"{len(labels):,} labelled structures in partition '{args.partition}'")
 
     if len(labels) < args.class_size:

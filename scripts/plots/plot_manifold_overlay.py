@@ -25,6 +25,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+# Default location for density at layer 7/14. Anything else -- a different property,
+# dataset or partition -- lives under its own analysis/<dataset>/<variant>/<partition>/
+# tree, so the output is written NEXT TO the centroid CSV it read rather than here.
 PLOTS = Path("analysis/v1_all/full/train/plots")
 TRIPLES = [(0, 1, 2), (3, 4, 5), (1, 2, 3), (2, 3, 4)]
 
@@ -36,14 +39,16 @@ def main():
     ap.add_argument("--property", default="density_atomic")
     ap.add_argument("--centroids", default=None)
     ap.add_argument("--manifold", default=None)
+    ap.add_argument("--suffix", default="",
+                    help="extra tag on the manifold filename, e.g. _max5")
     args = ap.parse_args()
 
     cen_path = Path(args.centroids or
                     PLOTS / f"centroid_pca_{args.property}_layer{args.layer}"
-                            f"_w{args.width:g}.csv")
+                            f"_w{args.width:g}{args.suffix}.csv")
     man_path = Path(args.manifold or
                     f"steering_vectors/manifolds/{args.property}_layer{args.layer}"
-                    f"_k64_w{args.width:g}_max40.parquet")
+                    f"_k64_w{args.width:g}{args.suffix or '_max40'}.parquet")
     c = pd.read_csv(cen_path).sort_values("bucket_lo").reset_index(drop=True)
     m = pd.read_parquet(man_path)
     curve = np.vstack(m["point"].to_numpy()).astype(float)
@@ -90,8 +95,8 @@ def main():
         f"{np.linalg.norm(curve[-1] - curve[0]):.1f} end to end",
         fontsize=12)
     fig.tight_layout()
-    out = PLOTS / (f"centroid_pca_{args.property}_layer{args.layer}"
-                   f"_w{args.width:g}_with_manifold.png")
+    # land beside the centroids that were plotted, whatever tree they came from
+    out = cen_path.with_name(cen_path.stem + "_with_manifold.png")
     fig.savefig(out, dpi=140, bbox_inches="tight", facecolor="white")
     print(f"\nmedian centroid-to-curve distance {np.median(dist):.3f}  "
           f"max {dist.max():.3f}")

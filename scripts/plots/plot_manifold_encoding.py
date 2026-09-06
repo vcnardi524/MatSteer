@@ -65,9 +65,7 @@ def main():
     # only the range the curve actually covers -- outside it encode can only clamp
     lab = lab[(lab[args.property] >= lo) & (lab[args.property] <= hi)]
     if args.partition != "all":
-        sp = load_split_index()
-        lab = lab[lab["id"].isin(set(filter_partition(sp, args.partition,
-                                                      verbose=False)["id"]))]
+        lab = filter_partition(lab, args.partition, verbose=False)
     rng = np.random.default_rng(0)
     if len(lab) > args.n:
         lab = lab.iloc[rng.choice(len(lab), args.n, replace=False)]

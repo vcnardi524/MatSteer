@@ -30,7 +30,8 @@ from sklearn.decomposition import IncrementalPCA
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
-from utils import filter_partition, embeddings_paths, load_split_index, add_partition_args
+from utils import (filter_partition, partition_id_sets, embeddings_paths,
+                   load_split_index, add_partition_args)
 
 METHOD_DIR = Path("steering_vectors") / "pca_centroid"
 
@@ -46,8 +47,14 @@ def embedding_files(layer: int, dataset: str, variant: str) -> list[Path]:
     return files
 
 
-def stream_batches(files: list[Path], keep_ids: set | None, batch_size: int):
-    """Yield (batch_size, 1024) float32 arrays of embeddings, filtered to keep_ids."""
+def stream_batches(files: list[Path], keep_ids: set | None, batch_size: int,
+                   drop_ids: set | None = None):
+    """Yield (batch_size, 1024) float32 arrays of embeddings.
+
+    keep_ids selects by membership (train/val/test); drop_ids excludes (not_heldout,
+    which keeps ids that are in NO split and so cannot be enumerated as a keep-set).
+    At most one is not None.
+    """
     buf, n_buf = [], 0
     for path in files:
         for rb in pq.ParquetFile(path).iter_batches(batch_size=batch_size,
@@ -55,6 +62,8 @@ def stream_batches(files: list[Path], keep_ids: set | None, batch_size: int):
             df = rb.to_pandas()
             if keep_ids is not None:
                 df = df[df["id"].isin(keep_ids)]
+            elif drop_ids is not None:
+                df = df[~df["id"].isin(drop_ids)]
             if df.empty:
                 continue
             buf.append(np.vstack(df["embedding"].to_numpy()).astype(np.float32))
@@ -78,12 +87,11 @@ def main():
     if args.batch_size <= args.k:
         raise SystemExit(f"--batch-size ({args.batch_size}) must exceed --k ({args.k})")
 
-    keep_ids = None
-    if args.partition != "all":
-        splits = load_split_index()
-        keep_ids = set(filter_partition(splits.rename(columns={"id": "id"}),
-                                        args.partition, verbose=False)["id"])
-        print(f"Partition '{args.partition}': {len(keep_ids):,} ids")
+    keep_ids, drop_ids = partition_id_sets(args.partition)
+    if keep_ids is not None:
+        print(f"Partition '{args.partition}': keeping {len(keep_ids):,} ids")
+    elif drop_ids is not None:
+        print(f"Partition '{args.partition}': dropping {len(drop_ids):,} val/test ids")
 
     files = embedding_files(args.layer, args.dataset, args.variant)
     print(f"Fitting IncrementalPCA(k={args.k}) over layer {args.layer} "
@@ -91,7 +99,8 @@ def main():
 
     pca = IncrementalPCA(n_components=args.k)
     n_seen = 0
-    for i, batch in enumerate(stream_batches(files, keep_ids, args.batch_size)):
+    for i, batch in enumerate(stream_batches(files, keep_ids, args.batch_size,
+                                             drop_ids=drop_ids)):
         if len(batch) < args.k:
             print(f"  skipping final batch of {len(batch)} rows (< k)")
             break

@@ -211,6 +211,28 @@ def load_split_index(path: str = SPLIT_INDEX_PATH) -> pd.DataFrame:
     return pd.read_parquet(path)
 
 
+def partition_id_sets(partition: str):
+    """(keep, drop) id sets for a partition. Exactly one is not None; "all" gives both None.
+
+    train/val/test are defined by MEMBERSHIP, so they yield a `keep` set. not_heldout is
+    defined by EXCLUSION -- everything that is not val or test -- and the ids it keeps
+    include structures absent from the split index entirely (the ~96k unpartitioned MP
+    CIFs). No keep-set can enumerate those, so it yields a `drop` set instead.
+
+    Use this wherever ids are filtered while STREAMING and there is no labels frame to
+    hand to filter_partition. Treating not_heldout as a keep-set silently collapses it to
+    train: that bug shipped in five scripts at once and cost 96k structures per run.
+    """
+    if partition not in PARTITIONS:
+        raise ValueError(f"partition must be one of {PARTITIONS}, got {partition!r}")
+    if partition == "all":
+        return None, None
+    sp = load_split_index()
+    if partition == "not_heldout":
+        return None, set(sp.query("split in ['val', 'test']")["id"])
+    return set(sp.query("split == @partition")["id"]), None
+
+
 def filter_partition(df: pd.DataFrame, partition: str, verbose: bool = True) -> pd.DataFrame:
     """Restrict a frame with an `id` column to one CrystaLLM split.
 
