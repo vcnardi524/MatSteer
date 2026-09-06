@@ -145,6 +145,19 @@ submodule, so `scripts/data/make_test_sample.py` reproduces it
 ids. Run it with `--verify` before trusting a comparison against older results; it refuses
 to overwrite a subset that differs from what it would draw.
 
+`metadata_mp.parquet` **mixes DFT thermo types**, and this silently corrupts any
+comparison. Most rows are GGA/GGA+U, but some are pure `r2SCAN`, whose energies sit on a
+different scale and whose `energy_above_hull` is measured against a different hull.
+`mp-2912291` (r2SCAN) has a *worse* formation energy than `mp-25977` (GGA_GGA+U) at the
+same composition yet a *smaller* stored `energy_above_hull` — impossible within one
+scheme. Comparing an r2SCAN row against a GGA/GGA+U hull produces a ~0.3 eV/atom
+discrepancy that is not an error. The file stores no `thermo_type` column, so fetch it
+live from MP when the scheme matters. `scripts/eval/validate_hull_predictor.py` does this.
+
+`formula_pretty` is **not a unique key** either: 46% of `metadata_mp` rows share a
+`(chemsys, formula_pretty)` with another material — 22 distinct materials are called
+`LiFe(PO3)4`, with formation energies spanning 0.3 eV/atom. Join on `material_id`.
+
 `utils.py:DEFAULT_LABEL_COLS` asks for `band_gap_ev`, which does not exist in
 `metadata.parquet` and is **silently dropped**. `load_labeled_embeddings` therefore
 never returns a gap — join it yourself.
