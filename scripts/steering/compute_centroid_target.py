@@ -28,7 +28,7 @@ import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
 # sys.path[0] is this script's own dir, so its neighbour imports directly.
 from compute_pca_basis import METHOD_DIR, embedding_files, stream_batches
-from utils import load_split_index, add_partition_args
+from utils import filter_partition, load_split_index, add_partition_args
 
 DEFAULT_LABELS = "density_atomic_v1.parquet"
 DEFAULT_PROPERTY = "density_atomic"
@@ -77,7 +77,7 @@ def main():
     labels = labels.dropna(subset=[args.property])
     if args.partition != "all":
         splits = load_split_index()
-        keep = set(splits.loc[splits["split"] == args.partition, "id"])
+        keep = set(filter_partition(splits, args.partition, verbose=False)["id"])
         labels = labels[labels["id"].isin(keep)]
     print(f"{len(labels):,} labelled structures in partition '{args.partition}'")
 

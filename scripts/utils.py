@@ -129,7 +129,7 @@ VARIANTS = ("full", "nosym")
 # 0.45% are in its test set -- results on "all" cannot distinguish learning from
 # memorization. There is deliberately no default: pick one explicitly.
 DATASETS = ("v1_all", "v1_mp")
-PARTITIONS = ("all", "train", "val", "test")
+PARTITIONS = ("all", "train", "val", "test", "not_heldout")
 SPLIT_INDEX_PATH = "splits_v1.parquet"
 ANALYSIS_ROOT = Path("analysis")
 
@@ -216,12 +216,30 @@ def filter_partition(df: pd.DataFrame, partition: str, verbose: bool = True) -> 
 
     partition="all" is a no-op. Ids missing from the split index are treated as
     "unknown" and dropped by train/val/test: the MP corpus carries ~96k CIFs that
-    dedup removed before the split was made, so they belong to no partition.
+    belong to no partition. (Measured 2026-09-05: 77.5% of those have a reduced
+    formula that appears somewhere in the corpus anyway, so they are mostly other
+    polymorphs of seen compositions rather than unseen chemistry.)
+
+    partition="not_heldout" keeps everything EXCEPT val and test -- train plus the
+    unpartitioned remainder. It exists for fitting on v1_mp, where restricting to
+    `train` throws away the ~96k unpartitioned structures for no benefit: none of them
+    are evaluated against, so excluding them only costs sample size. Use it for fitting
+    steering artifacts, never for scoring.
     """
     if partition not in PARTITIONS:
         raise ValueError(f"partition must be one of {PARTITIONS}, got {partition!r}")
     if partition == "all":
         return df
+    if partition == "not_heldout":
+        sp = load_split_index()
+        drop = set(sp.query("split in ['val', 'test']")["id"])
+        out = df[~df["id"].isin(drop)].reset_index(drop=True)
+        if verbose:
+            print(f"  partition=not_heldout: {len(out):,} of {len(df):,} rows kept "
+                  f"({len(df) - len(out):,} val/test dropped)")
+        if out.empty:
+            raise SystemExit("No rows left after filtering to partition='not_heldout'.")
+        return out
     keep = set(load_split_index().query("split == @partition")["id"])
     out = df[df["id"].isin(keep)].reset_index(drop=True)
     if verbose:

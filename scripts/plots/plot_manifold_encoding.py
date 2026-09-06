@@ -32,7 +32,7 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
 from manifold import Manifold, embedding_files
-from utils import analysis_dir, load_split_index, add_partition_args
+from utils import filter_partition, analysis_dir, load_split_index, add_partition_args
 
 
 def main():
@@ -66,7 +66,8 @@ def main():
     lab = lab[(lab[args.property] >= lo) & (lab[args.property] <= hi)]
     if args.partition != "all":
         sp = load_split_index()
-        lab = lab[lab["id"].isin(set(sp.loc[sp["split"] == args.partition, "id"]))]
+        lab = lab[lab["id"].isin(set(filter_partition(sp, args.partition,
+                                                      verbose=False)["id"]))]
     rng = np.random.default_rng(0)
     if len(lab) > args.n:
         lab = lab.iloc[rng.choice(len(lab), args.n, replace=False)]

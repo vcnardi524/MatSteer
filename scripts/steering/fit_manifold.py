@@ -33,7 +33,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
 from manifold import Manifold, bucket_centroids
-from utils import load_split_index, add_partition_args
+from utils import load_split_index, add_partition_args, filter_partition
 
 OUT_DIR = "steering_vectors/manifolds"
 
@@ -116,10 +116,7 @@ def main():
         labels = labels[labels[args.property] >= args.min_value]
     if args.max_value is not None:
         labels = labels[labels[args.property] <= args.max_value]
-    if args.partition != "all":
-        splits = load_split_index()
-        keep = set(splits.loc[splits["split"] == args.partition, "id"])
-        labels = labels[labels["id"].isin(keep)]
+    labels = filter_partition(labels, args.partition, verbose=False)
     print(f"{len(labels):,} labelled structures in partition '{args.partition}'")
 
     print(f"Streaming layer-{args.layer} embeddings, bucketing by {args.width:g} ...")

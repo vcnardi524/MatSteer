@@ -40,7 +40,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d projection)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import analysis_dir, load_split_index, add_partition_args
+from utils import filter_partition, analysis_dir, load_split_index, add_partition_args
 from manifold import bucket_centroids, embedding_files
 
 DEFAULT_LABELS = "density_atomic_v1.parquet"
@@ -108,7 +108,7 @@ def main():
     labels = labels.dropna(subset=[args.property])
     if args.partition != "all":
         splits = load_split_index()
-        keep = set(splits.loc[splits["split"] == args.partition, "id"])
+        keep = set(filter_partition(splits, args.partition, verbose=False)["id"])
         labels = labels[labels["id"].isin(keep)]
     if args.min_value is not None:
         labels = labels[labels[args.property] >= args.min_value]

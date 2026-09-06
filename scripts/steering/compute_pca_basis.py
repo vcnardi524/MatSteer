@@ -30,7 +30,7 @@ from sklearn.decomposition import IncrementalPCA
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
-from utils import embeddings_paths, load_split_index, add_partition_args
+from utils import filter_partition, embeddings_paths, load_split_index, add_partition_args
 
 METHOD_DIR = Path("steering_vectors") / "pca_centroid"
 
@@ -81,7 +81,8 @@ def main():
     keep_ids = None
     if args.partition != "all":
         splits = load_split_index()
-        keep_ids = set(splits.loc[splits["split"] == args.partition, "id"])
+        keep_ids = set(filter_partition(splits.rename(columns={"id": "id"}),
+                                        args.partition, verbose=False)["id"])
         print(f"Partition '{args.partition}': {len(keep_ids):,} ids")
 
     files = embedding_files(args.layer, args.dataset, args.variant)
