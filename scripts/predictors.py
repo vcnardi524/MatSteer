@@ -78,6 +78,25 @@ class HullLookup:
 
     One system is one API call, so diagrams are cached; a sweep over 1,000 prompts spans
     ~989 systems but hits far fewer distinct ones after dedup.
+
+    WHY thermo_types DEFAULTS TO GGA_GGA+U
+    MP serves several DFT schemes and they are NOT interchangeable: GGA/GGA+U, the mixed
+    GGA/GGA+U/R2SCAN, and pure r2SCAN each put energies on their own scale with their own
+    hull. Mixing them silently produces differences of ~0.3 eV/atom that look like model
+    error and are not.
+
+    The hull must match whatever produced the number being placed on it. The energies
+    come from MEGNet-Eform-MP-2018.6.1, trained on the 2018 MP release -- which predates
+    r2SCAN in MP entirely -- so it predicts GGA/GGA+U-style formation energies. A
+    GGA/GGA+U hull is therefore the consistent choice, not merely the simplest.
+
+    This deliberately does NOT apply MaterialsProjectDFTMixingScheme. That scheme exists
+    to combine GGA/GGA+U with r2SCAN, and its corrections are not guaranteed identical
+    for the same entry across different chemical systems. Adopting it would need a
+    formation-energy model trained on the same mixed scheme; MEGNet is not.
+
+    Pass thermo_types explicitly if the energy source ever changes -- and change it in
+    ONE place, since validation and coverage both read it off this instance.
     """
 
     def __init__(self, api_key: str = None, key_file: str = "api_keys.json",
