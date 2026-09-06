@@ -91,6 +91,17 @@ forward:
 - `steering_results/<property>/property_predictions/` — one file per source stem,
   accumulating `<base>_raw` (from the raw CIF) and `<base>` (from the relaxed one).
 
+**alpha=0 controls live in `steering_results/baseline/`, not under a property.** At
+alpha=0 the hook adds exactly zero, so the CIFs, their validity flags and their M3GNet
+relaxation are all property-independent — `steered_test_alpha0.0_layer14.parquet` was
+previously stored five times over, byte-identical. `generated_cifs`, `validation` and
+`relaxed` are shared there; `property_predictions` stays per-property, because the same
+structure has a different `density_atomic` and `band_gap`. `plot_steering_distribution_
+shift.py:resolve()` looks in the property tree first and falls back to `baseline/`, so a
+new property needs no control regenerated — only its own predictions. A baseline is keyed
+on the PROMPT SET (sg vs nosg, `--n-samples`), which the filename already carries; it is
+NOT keyed on layer, since no injection happens at any layer when alpha is zero.
+
 So novelty, relaxation, and prediction all read the flags file, join the CIF source on
 `(id, sample)`, and process `is_valid == True` rows only. A new stage should follow
 that shape rather than widening an existing file.
