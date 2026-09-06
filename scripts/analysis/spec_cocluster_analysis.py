@@ -73,13 +73,19 @@ def main():
     # Space group + occupied Wyckoff letters. A letter is only meaningful relative
     # to its space group ("c" is a different orbit in Pnma than in P6_3/mmc), so the
     # pair is the finer-grained structural label. NaN in either part -> NaN.
-    if "space_group_symbol" in df.columns and "wyckoff_letters" in df.columns:
-        both = df["space_group_symbol"].notna() & df["wyckoff_letters"].notna()
-        df["sg_wyckoff"] = np.where(
-            both, df["space_group_symbol"].astype(str) + " | " + df["wyckoff_letters"].astype(str), None
-        )
-        print(f"  sg_wyckoff: {int(both.sum()):,} populated, "
-              f"{int((~both).sum()):,} NaN, {df['sg_wyckoff'].nunique():,} distinct")
+    # sg_wyckoff keeps DISTINCT letters ("Pnma | c"); sg_sites keeps one token per
+    # occupied SET with its multiplicity ("Pnma | 4c 4c 4c 4c 4c"), which is ~2x the
+    # resolution. Both are reported because they are not comparable to each other: the
+    # finer label splits categories, so a cluster's dominant fraction is mechanically
+    # lower under sg_sites even when the clustering is identical.
+    for col, src in (("sg_wyckoff", "wyckoff_letters"), ("sg_sites", "wyckoff_sites")):
+        if "space_group_symbol" in df.columns and src in df.columns:
+            both = df["space_group_symbol"].notna() & df[src].notna()
+            df[col] = np.where(
+                both, df["space_group_symbol"].astype(str) + " | " + df[src].astype(str), None
+            )
+            print(f"  {col}: {int(both.sum()):,} populated, "
+                  f"{int((~both).sum()):,} NaN, {df[col].nunique():,} distinct")
 
     X = np.vstack(df["embedding"].values)
     n_samples, n_features = X.shape
@@ -157,10 +163,18 @@ def main():
     scaler = StandardScaler()
     X_std = scaler.fit_transform(X)
 
-    _cached = all(os.path.exists(os.path.join(OUTPUT_DIR, f)) for f in
-                  ["embeddings_sparse.npy", "singular_value_stats.csv", "pairwise_epsilons.csv"])
+    # Reusing these across runs is a real hazard: OUTPUT_DIR is keyed on
+    # (dataset, variant, partition, run_name, layer, n_clusters) but NOT on the label
+    # set or the code, so a rerun after changing anything else silently mixes old SVD
+    # output with new clusters. Off unless COCLUSTER_REUSE=1 is set deliberately.
+    _present = all(os.path.exists(os.path.join(OUTPUT_DIR, f)) for f in
+                   ["embeddings_sparse.npy", "singular_value_stats.csv", "pairwise_epsilons.csv"])
+    _cached = _present and os.environ.get("COCLUSTER_REUSE") == "1"
+    if _present and not _cached:
+        print("\nFound previous sparsification/SVD/epsilon outputs — RECOMPUTING them "
+              "(set COCLUSTER_REUSE=1 to reuse).")
     if _cached:
-        print("\nSkipping sparsification, SVD, and epsilons — cached outputs found.")
+        print("\nCOCLUSTER_REUSE=1: skipping sparsification, SVD, and epsilons.")
     if not _cached:
         print("\nSparsifying embeddings by cluster-assigned dimensions...")
 
@@ -258,7 +272,8 @@ def main():
 
     for label_col, label_name in [("point_group", "Point group"),
                                   ("space_group_symbol", "Space group"),
-                                  ("sg_wyckoff", "Space group + Wyckoff letters")]:
+                                  ("sg_wyckoff", "Space group + Wyckoff letters"),
+                                  ("sg_sites", "Space group + Wyckoff sites")]:
         if label_col not in df.columns:
             continue
         print(f"\n{'='*50}")

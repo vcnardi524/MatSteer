@@ -114,7 +114,8 @@ EMBEDDINGS_ROOT = Path("embeddings")
 DEFAULT_DATASET = "v1_all"   # combined NOMAD+OQMD+MP corpus (cifs_v1_prep / tokens_v1_all)
 DEFAULT_METADATA = "metadata.parquet"
 DEFAULT_LABEL_COLS = ("point_group", "space_group_symbol", "structural_type",
-                      "spin_polarized", "band_gap_ev", "wyckoff_letters")
+                      "spin_polarized", "band_gap_ev", "wyckoff_letters",
+                      "wyckoff_sites")
 
 # Which CIF text the embeddings were extracted from. The symmetry label is written
 # verbatim into every CIF (_symmetry_space_group_name_H-M and _symmetry_Int_Tables_number),

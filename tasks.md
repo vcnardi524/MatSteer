@@ -100,6 +100,55 @@ layers specialising for next-token prediction rather than holding property infor
 CSVs: `analysis/v1_all/full/val/property_probe_{density_atomic,dos_electronic_band_gap}.csv`
 and `analysis/v1_mp/full/val/property_probe_{efermi,energy_above_hull}.csv`.
 
+## The manifold effect is signed; linear's is not (2026-09-06)
+Both methods run in reverse at layer 7, nosg, against the same alpha=0 control. Asking
+for LOWER density instead of higher. 15 runs.
+
+    scale   d(delta=+2)   d(delta=-2)      sum
+      1        +0.047       +0.005       +0.053
+      3        +0.114       -0.177       -0.063
+      5        +0.159       -0.244       -0.085
+      7        +0.249       -0.188       +0.061
+      9        +0.254       -0.239       +0.015
+     10        +0.228       -0.417       -0.188
+
+    mean |d|:  up 0.173,  down 0.179     correlation of the two ladders +0.712
+
+**The manifold steers in the direction it is asked to.** d=-2 s9 gives -0.239 against
+d=+2 s9's +0.254 -- a near mirror -- and the downward ladder is monotone in scale with
+p_holm 1.3e-33 at s10. That rules out the reading that the manifold merely perturbs
+generation and the property drifts: a perturbation has no reason to reverse sign when the
+arc step reverses.
+
+**Linear does not.** Same test, and the negative direction produces almost nothing:
+
+    alpha     d(+a)     d(-a)
+        8    +0.076    +0.035
+       16    +0.104    -0.008
+       32    +0.158    -0.041
+       40    +0.181    +0.027
+       48    +0.184    +0.104
+
+    mean |d|:  up 0.141,  down 0.043
+
+Three of the five negative alphas have the WRONG sign, and the largest (a-48, +0.104)
+pushes density up while being asked to push it down. This is the compression story from
+2026-09-03 confirmed from a second direction: linear drags the distribution toward ~21
+rather than steering it, so reversing the vector does not reverse the outcome.
+
+**Validity is better going down.** The downward manifold ladder holds 86-96% across
+s=1..10 where the upward one falls to 77% by s10. Lowering density appears to be an
+easier ask of the model than raising it -- consistent with the control already
+undershooting dense structures (>28 bucket: control mean 33.73 vs ground truth 36.06).
+
+**KV cache control.** `d2 s9` regenerated with `--no-use-cache` into a separate results
+tree: 84.2% valid and median density 19.64, against the cached run's 83.2% and 19.56.
+Within sampling noise, so cached decoding is not distorting the steered generations.
+The docstring claim that the two paths are byte-identical still is not tested -- sampling
+makes that unmeasurable this way -- but the outcome distributions agree.
+
+Table now 288 rows.
+
 ## Linear compresses, the manifold shifts (2026-09-03)
 `scripts/analysis/stratified_effect.py`. The pooled Cohen's d asks whether the whole
 distribution moved. It cannot say whether a prompt whose true structure sits at 14
