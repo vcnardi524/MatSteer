@@ -116,7 +116,16 @@ def main():
     for c in pred_cols:
         if c not in pred.columns:
             pred[c] = None
-    pred = pred[["id", "sample"] + pred_cols].reset_index(drop=True)
+    # Keep columns this run does not own. pred_cols is only the CURRENT property's pair,
+    # so subsetting to it would delete every other property already computed for this
+    # stem -- which is how raw/relaxed accumulate safely but a second property would not.
+    # Preserving them lets one file hold several properties for the same structures,
+    # which is what the shared baseline/ tree needs.
+    other = [c for c in pred.columns if c not in ("id", "sample") and c not in pred_cols]
+    if other:
+        print(f"  preserving {len(other)} column(s) from other properties: "
+              f"{', '.join(other)}")
+    pred = pred[["id", "sample"] + pred_cols + other].reset_index(drop=True)
 
     pos = {k: i for i, k in enumerate(zip(pred["id"], pred["sample"]))}
     cif_map = dict(zip(zip(src["id"], src["sample"]), src[src_col]))
