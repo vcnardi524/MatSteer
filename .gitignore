@@ -43,3 +43,6 @@ __pycache__/
 *.swp
 *.swo
 *~
+
+# api keys
+api_keys.json
