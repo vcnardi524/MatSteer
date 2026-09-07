@@ -179,13 +179,17 @@ def write_results_table(df: pd.DataFrame, path) -> Path:
 # --- steering_results layout -------------------------------------------------------
 STEERING_ROOT = "steering_results"
 BASELINE_DIR = "baseline"
-# Subdirs whose content is property-INDEPENDENT, so one copy under baseline/ serves every
-# property. At alpha=0 the hook adds exactly zero: the CIFs, whether they parse, and their
-# M3GNet relaxation cannot depend on which property is being steered.
-# property_predictions is deliberately absent -- the same structure has a different
-# density_atomic and band_gap, and runs are DISCOVERED from that directory, so sharing it
-# lets two controls from different prompt sets collide on (family, strength).
-SHARED_SUBDIRS = ("generated_cifs", "validation", "relaxed")
+# Subdirs a control keeps under baseline/ rather than duplicating per property. At
+# alpha=0 the hook adds exactly zero, so the CIFs, whether they parse, and their M3GNet
+# relaxation are all property-independent -- one copy serves everything.
+#
+# property_predictions is included even though its VALUES are property-specific: a single
+# file accumulates density_atomic, band_gap, energy_above_hull... side by side, because
+# compute_predictions.py preserves columns it does not own. Sharing this directory once
+# caused two controls from different prompt sets to collide on (family, strength);
+# plot_steering_distribution_shift.pick_control now disambiguates by prompt-set overlap,
+# which is the real key, so the collision cannot recur.
+SHARED_SUBDIRS = ("generated_cifs", "validation", "relaxed", "property_predictions")
 
 
 def steering_path(results_dir: str, sub: str, stem: str) -> str:

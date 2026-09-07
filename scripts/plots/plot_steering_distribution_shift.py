@@ -79,7 +79,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-from utils import analysis_dir, postprocess, steering_path
+from utils import analysis_dir, postprocess, steering_path, BASELINE_DIR
 from pymatgen.core import Structure
 
 RANDOM_SEED = 42
@@ -221,22 +221,56 @@ def sweep_strength(stem: str, kind: str):
     return float(m.group(1)) if m else None
 
 
+_PROMPT_SET = {}
+
+
+def prompt_ids(path: str) -> frozenset:
+    """The set of prompt ids a run covers, cached. Reads one column."""
+    if path not in _PROMPT_SET:
+        _PROMPT_SET[path] = frozenset(pd.read_parquet(path, columns=["id"])["id"])
+    return _PROMPT_SET[path]
+
+
 def prediction_files(results_dir: str) -> list:
-    """Every predictions parquet for one property -- ITS OWN TREE ONLY.
+    """Predictions for one property, from its own tree AND the shared baseline tree.
 
-    Deliberately does not fall back to baseline/, unlike steering_path(). Runs are DISCOVERED
-    here and then keyed by (family, strength), which cannot tell two different controls
-    apart: steered_test_alpha0.0_layer7_nosg and steered_test_clean_alpha0.0_layer14_nosg
-    are both nosg with strength 0, but they are different PROMPT SETS (1,000 density
-    prompts vs 10,286 bandgap ones). Merging baseline predictions into this listing made
-    them collide, and density's nosg arms silently paired against the bandgap control.
-
-    Generation, validation and relaxation ARE shared, because steering_path() looks those up by
-    exact stem -- no discovery, no collision. Predictions stay per-property, which also
-    keeps each property's model version with its own numbers.
+    Controls live only in baseline/property_predictions so there is exactly one copy of
+    each. Keyed by stem; the property tree wins if a stem somehow appears in both.
     """
-    return sorted(glob.glob(
-        f"steering_results/{results_dir}/property_predictions/*.parquet"))
+    own = {_os.path.basename(f): f
+           for f in glob.glob(
+               f"steering_results/{results_dir}/property_predictions/*.parquet")}
+    for f in glob.glob(
+            f"steering_results/{BASELINE_DIR}/property_predictions/*.parquet"):
+        own.setdefault(_os.path.basename(f), f)
+    return sorted(own.values())
+
+
+def pick_control(candidates: list, arms: list, results_dir: str) -> str:
+    """Choose the control generated from the SAME prompt set as the arms.
+
+    (family, strength) is not enough to identify a control. baseline/ holds several --
+    steered_test_alpha0.0_layer0_nosg over 1,000 density prompts and
+    steered_test_clean_alpha0.0_layer14_nosg over 10,286 bandgap ones -- and both are
+    nosg with strength 0. Keying on that alone let the wrong one win on sort order, and
+    density's nosg arms silently paired against the bandgap control.
+
+    Prompt sets are the real key, so score each candidate by Jaccard overlap with the ids
+    the arms actually cover. An exact prompt set scores 1.0; a superset ten times larger
+    scores ~0.1, so the right control wins in both directions.
+    """
+    if len(candidates) <= 1 or not arms:
+        return candidates[0] if candidates else None
+    want = set()
+    for stem in arms:
+        want |= prompt_ids(steering_path(results_dir, "generated_cifs", stem))
+    best, best_j = None, -1.0
+    for stem in candidates:
+        have = prompt_ids(steering_path(results_dir, "generated_cifs", stem))
+        j = len(want & have) / max(len(want | have), 1)
+        if j > best_j:
+            best, best_j = stem, j
+    return best
 
 
 def discover_sweeps(results_dir: str, method: str) -> list:
@@ -279,7 +313,7 @@ def discover_runs(results_dir: str, family: str, method: str = "linear",
     one key and silently overwrite each other. Pass `target` to select one sweep; the
     alpha=0 control has no target and is always included, whatever layer it names.
     """
-    runs = {}
+    runs, controls = {}, []
     for f in prediction_files(results_dir):
         stem = _os.path.basename(f)
         if stem == "testset_baseline.parquet":
@@ -309,7 +343,13 @@ def discover_runs(results_dir: str, family: str, method: str = "linear",
         if not _os.path.exists(steering_path(results_dir, "validation", stem)):
             print(f"  ! {stem}: predictions but no validation -- skipped")
             continue
-        runs[strength] = stem
+        if is_control:
+            controls.append(stem)          # resolved below, once the arms are known
+        else:
+            runs[strength] = stem
+    chosen = pick_control(controls, list(runs.values()), results_dir)
+    if chosen is not None:
+        runs[0.0] = chosen
     return runs
 
 
@@ -327,7 +367,7 @@ def load_alpha(results_dir: str, stem: str, col: str, relaxed: bool,
     else:
         value_col = col if relaxed else f"{col}_raw"
         pred = pd.read_parquet(
-            f"steering_results/{results_dir}/property_predictions/{stem}")
+            steering_path(results_dir, "property_predictions", stem))
         if value_col not in pred.columns:
             raise SystemExit(f"{stem}: no column {value_col!r} (have {list(pred.columns)})")
     valid = pd.read_parquet(steering_path(results_dir, "validation", stem),

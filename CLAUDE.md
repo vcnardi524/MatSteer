@@ -91,14 +91,24 @@ forward:
 - `steering_results/<property>/property_predictions/` — one file per source stem,
   accumulating `<base>_raw` (from the raw CIF) and `<base>` (from the relaxed one).
 
-**alpha=0 controls live in `steering_results/baseline/`, not under a property.** At
+**alpha=0 controls live in `steering_results/baseline/` ONLY, never under a property.** At
 alpha=0 the hook adds exactly zero, so the CIFs, their validity flags and their M3GNet
 relaxation are all property-independent — `steered_test_alpha0.0_layer14.parquet` was
-previously stored five times over, byte-identical. `generated_cifs`, `validation` and
-`relaxed` are shared there; `property_predictions` stays per-property, because the same
-structure has a different `density_atomic` and `band_gap`. `plot_steering_distribution_
-shift.py:resolve()` looks in the property tree first and falls back to `baseline/`, so a
-new property needs no control regenerated — only its own predictions. A baseline is keyed
+previously stored five times over, byte-identical. All four subdirs are shared,
+including `property_predictions`: one control file accumulates `density_atomic`,
+`band_gap`, `energy_above_hull`… side by side, because `compute_predictions.py` preserves
+columns it does not own. `utils.py:steering_path()` looks in the property tree first and
+falls back to `baseline/`, so a new property needs nothing regenerated — point
+`--results-dir` at `steering_results/baseline` for every stage.
+
+A control is chosen by PROMPT SET, not by `(family, strength)`. Those two are not enough:
+`steered_test_alpha0.0_layer0_nosg` (1,000 density prompts) and
+`steered_test_clean_alpha0.0_layer14_nosg` (10,286 bandgap ones) are both nosg with
+strength 0, and keying on that alone let the wrong one win on sort order — density's nosg
+arms silently paired against the bandgap control.
+`plot_steering_distribution_shift.py:pick_control()` scores candidates by Jaccard overlap
+with the ids the arms actually cover, so an exact prompt set wins over a superset ten
+times larger. A baseline is keyed
 on the PROMPT SET (sg vs nosg, `--n-samples`), which the filename already carries; it is
 NOT keyed on layer, since no injection happens at any layer when alpha is zero.
 
