@@ -35,6 +35,25 @@ WHAT THE COLUMNS MEAN
   p_wilcoxon     signed-rank, distribution-free. Band gaps pile up at 0 and volumes are
                  log-normal-ish, so the t-test's normality assumption is shaky; if
                  Wilcoxon and the t-test disagree, trust Wilcoxon.
+
+WHY DENSITY IS SCORED ON log10 AND BAND GAP IS NOT
+Not for normality -- that is the weaker reason. d is mean(diff)/sd(diff), so the right
+scale is whichever makes the effect uniform ACROSS PROMPTS, because heterogeneity
+inflates sd(diff) without adding signal. Measured on d2_s7_layer7_nosg: prompts starting
+near 14 A^3/atom move +0.200 A^3/atom (+1.39%), prompts starting near 27 move +0.367
+(+1.21%). The absolute shift varies 1.84x with the starting value; the percentage is
+flat. The effect is multiplicative, so log is where it is homogeneous:
+
+    sd(raw diff) 1.2447 -> d +0.2191        sd(log diff) 0.0218 -> d +0.2487
+
+Across all 101 density arms log10 gives the larger |d| in 87, median gain +0.023, so
+scoring raw would systematically under-report the effect. The cost is that mean_diff is
+then a difference of logs, not A^3/atom -- stratified_effect.py reports median_diff_A3
+alongside for that reason. Wilcoxon is rank-based and identical either way, so the
+SIGNIFICANCE never depends on this choice, only the reported size.
+
+Band gap cannot use it: gaps pile up at exactly 0 and log10(0) is -inf. The guard at
+the top of analyse() demotes any log-scaled property to linear if it sees a value <= 0.
   p_welch        unpaired Welch, ignores the pairing (sanity check)
   p_levene       Brown-Forsythe: are the SPREADS different? A steering vector can widen
                  the distribution without moving its mean, and the t-test is blind to that.
