@@ -48,6 +48,19 @@ done
 [ $# -lt 1 ] && usage
 
 name="$1"; shift
+
+# --after is a run.sh flag, not a script flag. The loop above stops at the experiment
+# name, so `run.sh foo --after 123` used to pass `--after 123` straight through to
+# argparse -- which kills the job with "unrecognized arguments" only once it has waited
+# in the queue and started. Accept it on either side of the name.
+rest=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --after) after="$2"; shift 2 ;;
+        *)       rest+=("$1"); shift ;;
+    esac
+done
+set -- ${rest[@]+"${rest[@]}"}
 conf="$EXP_DIR/${name}.conf"
 if [ ! -f "$conf" ]; then
     echo "No experiment '$name'. Looked for $conf" >&2
