@@ -74,21 +74,18 @@ If a number appears in the paper, it came through here.
 | `scripts/eval/summarize_steering_results.py` | edited | 228 |
 | `scripts/eval/predict_bandgap_testset.py` | edited | 151 |
 
-**steering: what actually intervenes on the model** (5 files)
+**the manifold itself and embedding extraction** (3 files)
 
-
-**property prediction and scoring** (8 files)
+These were missing from an earlier draft of this list. `manifold.py` is the encode /
+step-along-arc / decode that every manifold steering run applies, and the embedding
+extractors produced every activation any probe or centroid was fitted on. Both belong
+with the Tier 1 statistics code, not below it.
 
 | file | | lines |
 |---|---|---|
-| `scripts/predictors.py` | new | 205 |
-| `scripts/eval/compute_predictions.py` | edited | 169 |
-| `scripts/eval/validate_hull_predictor.py` | new | 107 |
-| `scripts/eval/validate_steered_cifs.py` | edited | 171 |
-| `scripts/eval/novelty_steered_cifs.py` | edited | 280 |
-| `scripts/eval/relax_steered_cifs.py` | edited | 203 |
-| `scripts/eval/summarize_steering_results.py` | edited | 228 |
-| `scripts/eval/predict_bandgap_testset.py` | edited | 151 |
+| `scripts/manifold.py` | new | 178 |
+| `scripts/embeddings/extract_cif_embeddings.py` | edited | 284 |
+| `scripts/embeddings/consolidate_embeddings.py` | edited | 97 |
 
 **steering: what actually intervenes on the model** (5 files)
 
@@ -180,6 +177,21 @@ all 1,296 is not a sensible use of your time. The defensible policy:
 
 `experiments_configs/runs.tsv` is what ties an output back to the exact command and
 git SHA that produced it. That is the provenance chain to lean on.
+
+## Tier 5 — `ChemSteer/`, a separate earlier line of work
+
+Not part of the CrystaLLM pipeline above and not a source of any number in the current
+results. Review only if you intend to cite it.
+
+| file | | lines |
+|---|---|---|
+| `ChemSteer/analyze_subspace_clustering.py` | new | 830 |
+| `ChemSteer/analyze_subspace_coherence.py` | new | 91 |
+| `ChemSteer/calculate_thresholds.py` | new | 39 |
+| `ChemSteer/crossvalidation_unified.py` | new | 430 |
+| `ChemSteer/extract_gpt.py` | new | 339 |
+| `ChemSteer/extract_llama.py` | new | 310 |
+| `ChemSteer/generate_from_steer_new.py` | new | 431 |
 
 ---
 
