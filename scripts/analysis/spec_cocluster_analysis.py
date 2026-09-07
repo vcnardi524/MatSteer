@@ -66,9 +66,34 @@ def main():
     # -------------------------------
     # Load and intersect datasets
     # -------------------------------
-    df = load_labeled_embeddings(LAYER, dataset=DATASET, metadata_path=METADATA_PATH,
-                                 variant=VARIANT)
-    df = filter_partition(df, PARTITION)
+    # RELABEL MODE. The clustering is a deterministic function of (embeddings, K, seed)
+    # and never sees a label -- SpectralCoclustering.fit is given X only. So adding a
+    # label column cannot change which cluster anything lands in, and re-running the
+    # expensive half to compute new enrichment is pure waste: loading 1.6M embeddings,
+    # fitting the co-clustering, and the SVD together dominate the runtime and need 180G.
+    # clustered_embeddings.parquet already holds the assignment per id, so this reads it
+    # back, re-joins the labels from metadata, and goes straight to enrichment.
+    _clustered = os.path.join(OUTPUT_DIR, "clustered_embeddings.parquet")
+    RELABEL = os.environ.get("COCLUSTER_RELABEL") == "1"
+    if RELABEL and not os.path.exists(_clustered):
+        raise SystemExit(f"COCLUSTER_RELABEL=1 but no clustering to reuse at {_clustered}")
+
+    if RELABEL:
+        print(f"Relabel mode: reusing the clustering in {_clustered}")
+        df = pd.read_parquet(_clustered)
+        # the stored frame carries whatever labels existed when it was written, so pull
+        # the current label set fresh rather than trusting what is in the file
+        want = [c for c in ("point_group", "space_group_symbol", "wyckoff_letters",
+                            "wyckoff_sites") if c not in ("id", "cluster")]
+        meta = pd.read_parquet(METADATA_PATH, columns=["id"] + want)
+        df = df.drop(columns=[c for c in want if c in df.columns], errors="ignore")
+        df = df.merge(meta, on="id", how="left")
+        print(f"  {len(df):,} structures, {df['cluster'].nunique()} clusters, "
+              f"labels re-joined from {METADATA_PATH}")
+    else:
+        df = load_labeled_embeddings(LAYER, dataset=DATASET, metadata_path=METADATA_PATH,
+                                     variant=VARIANT)
+        df = filter_partition(df, PARTITION)
 
     # Space group + occupied Wyckoff letters. A letter is only meaningful relative
     # to its space group ("c" is a different orbit in Pnma than in P6_3/mmc), so the
@@ -87,183 +112,204 @@ def main():
             print(f"  {col}: {int(both.sum()):,} populated, "
                   f"{int((~both).sum()):,} NaN, {df[col].nunique():,} distinct")
 
-    X = np.vstack(df["embedding"].values)
-    n_samples, n_features = X.shape
-    print(f"Data shape: {X.shape}")
-
-    # -------------------------------
-    # Normalize (non-negative + L2)
-    # -------------------------------
-    X_pos = np.abs(X)
-    row_norms = np.linalg.norm(X_pos, axis=1, keepdims=True) + 1e-8
-    X_pos = X_pos / row_norms
-
-    # -------------------------------
-    # Spectral Co-Clustering
-    # -------------------------------
-    print("Running Spectral Co-Clustering...")
-    coclustering = SpectralCoclustering(n_clusters=N_CLUSTERS, random_state=RANDOM_SEED)
-    coclustering.fit(X_pos)
-
-    sample_labels = coclustering.row_labels_
-    feature_labels = coclustering.column_labels_
-    print("Co-clustering finished")
-
-    # -------------------------------
-    # Build feature sets
-    # -------------------------------
-    cluster_features = [[] for _ in range(N_CLUSTERS)]
-    for f, k in enumerate(feature_labels):
-        cluster_features[k].append(int(f))
-    cluster_features = [np.array(fset, dtype=int).tolist() for fset in cluster_features]
-
-    # Save clustered samples (drop raw embeddings — rejoin via id if needed later)
-    df["cluster"] = sample_labels
-    clustered_path = os.path.join(OUTPUT_DIR, "clustered_embeddings.parquet")
-    df.drop(columns=["embedding"]).to_parquet(clustered_path)
-    print(f"Saved clustered samples to {clustered_path}")
-
-    # Save cluster metadata
-    cluster_metadata = {
-        "n_clusters": int(N_CLUSTERS),
-        "n_samples": int(n_samples),
-        "n_features": int(n_features),
-        "cluster_features": cluster_features,
-    }
-    meta_path = os.path.join(OUTPUT_DIR, "cluster_metadata.json")
-    with open(meta_path, "w") as f:
-        json.dump(cluster_metadata, f, indent=2)
-    print(f"Saved cluster metadata to {meta_path}")
-
-    sample_counts = np.bincount(sample_labels, minlength=N_CLUSTERS)
-    feature_counts = np.array([len(fset) for fset in cluster_features])
-
-    print("\nClustering Summary:")
-    print(f"  Samples:              {n_samples:,}")
-    print(f"  Features (emb dim):   {n_features}")
-    print(f"  Clusters:             {N_CLUSTERS}")
-    print(f"  Avg samples/cluster:  {sample_counts.mean():.1f}")
-    print(f"  Avg features/cluster: {feature_counts.mean():.1f}")
-
-    # -------------------------------
-    # Cluster size histogram
-    # -------------------------------
-    nonzero_counts = sample_counts[sample_counts > 0]
-    plot_histogram(
-        nonzero_counts,
-        xlabel="Samples per cluster",
-        title=f"Cluster sizes ({name}, K={N_CLUSTERS})",
-        path=os.path.join(OUTPUT_DIR, "cluster_sizes_hist.png"),
-    )
-    print("Saved cluster sizes histogram")
-
-    # -------------------------------
-    # Sparsify by cluster-assigned dims
-    # -------------------------------
-    scaler = StandardScaler()
-    X_std = scaler.fit_transform(X)
-
-    # Reusing these across runs is a real hazard: OUTPUT_DIR is keyed on
-    # (dataset, variant, partition, run_name, layer, n_clusters) but NOT on the label
-    # set or the code, so a rerun after changing anything else silently mixes old SVD
-    # output with new clusters. Off unless COCLUSTER_REUSE=1 is set deliberately.
-    _present = all(os.path.exists(os.path.join(OUTPUT_DIR, f)) for f in
-                   ["embeddings_sparse.npy", "singular_value_stats.csv", "pairwise_epsilons.csv"])
-    _cached = _present and os.environ.get("COCLUSTER_REUSE") == "1"
-    if _present and not _cached:
-        print("\nFound previous sparsification/SVD/epsilon outputs — RECOMPUTING them "
-              "(set COCLUSTER_REUSE=1 to reuse).")
-    if _cached:
-        print("\nCOCLUSTER_REUSE=1: skipping sparsification, SVD, and epsilons.")
-    if not _cached:
-        print("\nSparsifying embeddings by cluster-assigned dimensions...")
-
-        X_sparse = np.zeros_like(X_std)
-        for k in range(N_CLUSTERS):
-            cluster_indices = np.where(sample_labels == k)[0]
-            if len(cluster_indices) == 0:
-                continue
-            assigned_dims = np.array(cluster_features[k], dtype=int)
-            if assigned_dims.size == 0:
-                continue
-            X_sparse[cluster_indices[:, None], assigned_dims] = X_std[cluster_indices[:, None], assigned_dims]
-            if (k + 1) % 10 == 0:
-                print(f"  Processed {k + 1}/{N_CLUSTERS} clusters")
-
-        np.save(os.path.join(OUTPUT_DIR, "embeddings_sparse.npy"), X_sparse)
-        print(f"Saved sparsified embeddings ({X_sparse.shape})")
+    if not RELABEL:
+        X = np.vstack(df["embedding"].values)
+        n_samples, n_features = X.shape
+        print(f"Data shape: {X.shape}")
 
         # -------------------------------
-        # Subspace bases via SVD
+        # Normalize (non-negative + L2)
         # -------------------------------
-        print("\nComputing subspace bases...")
-        unique_labels = np.unique(sample_labels)
-        mapping = {old: new for new, old in enumerate(unique_labels)}
-        remapped = np.array([mapping[l] for l in sample_labels])
+        X_pos = np.abs(X)
+        row_norms = np.linalg.norm(X_pos, axis=1, keepdims=True) + 1e-8
+        X_pos = X_pos / row_norms
 
-        bases = []
-        sv_stats = []
-        for cid in range(len(unique_labels)):
-            mask = remapped == cid
-            cluster_vecs = X_sparse[mask].T  # (D, n_k)
-            if cluster_vecs.shape[1] == 0:
-                bases.append(None)
-                continue
-            U, S, _ = np.linalg.svd(cluster_vecs, full_matrices=False)
-            r = np.sum(S > 1e-10)
-            bases.append(U[:, :r])
-            sv_ratio = S / (S.sum() + 1e-12)
-            sv_stats.append((cid, int(mask.sum()), float(S[0]), float(sv_ratio[0])))
+        # -------------------------------
+        # Spectral Co-Clustering
+        # -------------------------------
+        print("Running Spectral Co-Clustering...")
+        coclustering = SpectralCoclustering(n_clusters=N_CLUSTERS, random_state=RANDOM_SEED)
+        coclustering.fit(X_pos)
 
-        sv_df = pd.DataFrame(sv_stats, columns=["cluster_id", "n_samples", "largest_sv", "top_sv_fraction"])
-        sv_df.to_csv(os.path.join(OUTPUT_DIR, "singular_value_stats.csv"), index=False)
+        sample_labels = coclustering.row_labels_
+        feature_labels = coclustering.column_labels_
+        print("Co-clustering finished")
 
-        non_empty = sv_df[sv_df["n_samples"] > 0]
-        print(f"  Non-empty clusters:           {len(non_empty)}")
-        print(f"  Avg top singular fraction:    {non_empty['top_sv_fraction'].mean():.4f}")
-        print(f"  Median top singular fraction: {non_empty['top_sv_fraction'].median():.4f}")
+        # -------------------------------
+        # Build feature sets
+        # -------------------------------
+        cluster_features = [[] for _ in range(N_CLUSTERS)]
+        for f, k in enumerate(feature_labels):
+            cluster_features[k].append(int(f))
+        cluster_features = [np.array(fset, dtype=int).tolist() for fset in cluster_features]
 
+        # Save clustered samples (drop raw embeddings — rejoin via id if needed later)
+        df["cluster"] = sample_labels
+        clustered_path = os.path.join(OUTPUT_DIR, "clustered_embeddings.parquet")
+        df.drop(columns=["embedding"]).to_parquet(clustered_path)
+        print(f"Saved clustered samples to {clustered_path}")
+
+        # Save cluster metadata
+        cluster_metadata = {
+            "n_clusters": int(N_CLUSTERS),
+            "n_samples": int(n_samples),
+            "n_features": int(n_features),
+            "cluster_features": cluster_features,
+        }
+        meta_path = os.path.join(OUTPUT_DIR, "cluster_metadata.json")
+        with open(meta_path, "w") as f:
+            json.dump(cluster_metadata, f, indent=2)
+        print(f"Saved cluster metadata to {meta_path}")
+
+        sample_counts = np.bincount(sample_labels, minlength=N_CLUSTERS)
+        feature_counts = np.array([len(fset) for fset in cluster_features])
+
+        print("\nClustering Summary:")
+        print(f"  Samples:              {n_samples:,}")
+        print(f"  Features (emb dim):   {n_features}")
+        print(f"  Clusters:             {N_CLUSTERS}")
+        print(f"  Avg samples/cluster:  {sample_counts.mean():.1f}")
+        print(f"  Avg features/cluster: {feature_counts.mean():.1f}")
+
+        # -------------------------------
+        # Cluster size histogram
+        # -------------------------------
+        nonzero_counts = sample_counts[sample_counts > 0]
         plot_histogram(
-            non_empty["top_sv_fraction"],
-            xlabel="Top singular value fraction",
-            title=f"Dominant subspace direction strength ({name}, K={N_CLUSTERS})",
-            path=os.path.join(OUTPUT_DIR, "top_sv_fraction_hist.png"),
+            nonzero_counts,
+            xlabel="Samples per cluster",
+            title=f"Cluster sizes ({name}, K={N_CLUSTERS})",
+            path=os.path.join(OUTPUT_DIR, "cluster_sizes_hist.png"),
         )
+        print("Saved cluster sizes histogram")
 
         # -------------------------------
-        # Pairwise projector overlaps (epsilon)
+        # Sparsify by cluster-assigned dims
         # -------------------------------
-        print("\nComputing pairwise projector overlaps...")
-        projectors = [None if b is None else (b @ b.T) for b in bases]
+        scaler = StandardScaler()
+        X_std = scaler.fit_transform(X)
 
-        eps_records = []
-        eps_vals = []
-        for i in range(len(bases)):
-            for k in range(i + 1, len(bases)):
-                if projectors[i] is None or projectors[k] is None:
+        # Reusing these across runs is a real hazard: OUTPUT_DIR is keyed on
+        # (dataset, variant, partition, run_name, layer, n_clusters) but NOT on the label
+        # set or the code, so a rerun after changing anything else silently mixes old SVD
+        # output with new clusters. Off unless COCLUSTER_REUSE=1 is set deliberately.
+        class _SkipEpsilons(Exception):
+            """Control flow for the optional epsilon block -- not an error."""
+
+        _present = all(os.path.exists(os.path.join(OUTPUT_DIR, f)) for f in
+                       ["embeddings_sparse.npy", "singular_value_stats.csv", "pairwise_epsilons.csv"])
+        _cached = _present and os.environ.get("COCLUSTER_REUSE") == "1"
+        if _present and not _cached:
+            print("\nFound previous sparsification/SVD/epsilon outputs — RECOMPUTING them "
+                  "(set COCLUSTER_REUSE=1 to reuse).")
+        if _cached:
+            print("\nCOCLUSTER_REUSE=1: skipping sparsification, SVD, and epsilons.")
+        if not _cached:
+            print("\nSparsifying embeddings by cluster-assigned dimensions...")
+
+            X_sparse = np.zeros_like(X_std)
+            for k in range(N_CLUSTERS):
+                cluster_indices = np.where(sample_labels == k)[0]
+                if len(cluster_indices) == 0:
                     continue
-                val = float(np.linalg.norm(projectors[k] @ projectors[i], 2))
-                eps_records.append((i, k, val))
-                eps_vals.append(val)
+                assigned_dims = np.array(cluster_features[k], dtype=int)
+                if assigned_dims.size == 0:
+                    continue
+                X_sparse[cluster_indices[:, None], assigned_dims] = X_std[cluster_indices[:, None], assigned_dims]
+                if (k + 1) % 10 == 0:
+                    print(f"  Processed {k + 1}/{N_CLUSTERS} clusters")
 
-        eps_vals = np.array(eps_vals) if eps_vals else np.array([])
-        pd.DataFrame(eps_records, columns=["cluster_i", "cluster_k", "epsilon"]).to_csv(
-            os.path.join(OUTPUT_DIR, "pairwise_epsilons.csv"), index=False
-        )
-        print(f"Saved pairwise epsilons ({len(eps_records):,} pairs)")
+            np.save(os.path.join(OUTPUT_DIR, "embeddings_sparse.npy"), X_sparse)
+            print(f"Saved sparsified embeddings ({X_sparse.shape})")
 
-        if eps_vals.size > 0:
-            print("\nSubspace incoherence (epsilon = ||P_k P_i||_op):")
-            print(f"  Max:    {eps_vals.max():.6f}")
-            print(f"  Mean:   {eps_vals.mean():.6f}")
-            print(f"  Median: {np.median(eps_vals):.6f}")
-            print(f"  Std:    {eps_vals.std():.6f}")
-        plot_histogram(
-            eps_vals,
-            xlabel=r"$\|P_k P_i\|_{\mathrm{op}}$",
-            title=f"Subspace overlap epsilon ({name}, K={N_CLUSTERS})",
-            path=os.path.join(OUTPUT_DIR, "epsilons_hist.png"),
-        )
+            # -------------------------------
+            # Subspace bases via SVD
+            # -------------------------------
+            print("\nComputing subspace bases...")
+            unique_labels = np.unique(sample_labels)
+            mapping = {old: new for new, old in enumerate(unique_labels)}
+            remapped = np.array([mapping[l] for l in sample_labels])
+
+            bases = []
+            sv_stats = []
+            for cid in range(len(unique_labels)):
+                mask = remapped == cid
+                cluster_vecs = X_sparse[mask].T  # (D, n_k)
+                if cluster_vecs.shape[1] == 0:
+                    bases.append(None)
+                    continue
+                U, S, _ = np.linalg.svd(cluster_vecs, full_matrices=False)
+                r = np.sum(S > 1e-10)
+                bases.append(U[:, :r])
+                sv_ratio = S / (S.sum() + 1e-12)
+                sv_stats.append((cid, int(mask.sum()), float(S[0]), float(sv_ratio[0])))
+
+            sv_df = pd.DataFrame(sv_stats, columns=["cluster_id", "n_samples", "largest_sv", "top_sv_fraction"])
+            sv_df.to_csv(os.path.join(OUTPUT_DIR, "singular_value_stats.csv"), index=False)
+
+            non_empty = sv_df[sv_df["n_samples"] > 0]
+            print(f"  Non-empty clusters:           {len(non_empty)}")
+            print(f"  Avg top singular fraction:    {non_empty['top_sv_fraction'].mean():.4f}")
+            print(f"  Median top singular fraction: {non_empty['top_sv_fraction'].median():.4f}")
+
+            plot_histogram(
+                non_empty["top_sv_fraction"],
+                xlabel="Top singular value fraction",
+                title=f"Dominant subspace direction strength ({name}, K={N_CLUSTERS})",
+                path=os.path.join(OUTPUT_DIR, "top_sv_fraction_hist.png"),
+            )
+
+            # -------------------------------
+            # Pairwise projector overlaps (epsilon)
+            # -------------------------------
+            # OFF BY DEFAULT. Two reasons. It is the most expensive step by far -- it holds K
+            # projectors of 1024x1024 float64 at once (1.2 GB at K=150) and takes K(K-1)/2
+            # spectral norms, so going 50 -> 150 is a 9x jump to 11,175 of them; that is what
+            # silently killed 14 of 16 K=150 layers, leaving only the six files written before
+            # this block. And the result is a known construction artifact: the code zeroes
+            # every dimension a point is not assigned to, forcing disjoint coordinate supports,
+            # so epsilon is machine zero (1e-14 to 1e-17) by construction and measures nothing.
+            # See README, "Spectral co-clustering incoherence -- a construction artifact".
+            # Set COCLUSTER_EPSILONS=1 to compute it anyway.
+            if os.environ.get("COCLUSTER_EPSILONS") == "1":
+                print("\nComputing pairwise projector overlaps...")
+                projectors = [None if b is None else (b @ b.T) for b in bases]
+
+                eps_records = []
+                eps_vals = []
+                for i in range(len(bases)):
+                    for k in range(i + 1, len(bases)):
+                        if projectors[i] is None or projectors[k] is None:
+                            continue
+                        val = float(np.linalg.norm(projectors[k] @ projectors[i], 2))
+                        eps_records.append((i, k, val))
+                        eps_vals.append(val)
+
+                eps_vals = np.array(eps_vals) if eps_vals else np.array([])
+                pd.DataFrame(eps_records, columns=["cluster_i", "cluster_k", "epsilon"]).to_csv(
+                    os.path.join(OUTPUT_DIR, "pairwise_epsilons.csv"), index=False
+                )
+                print(f"Saved pairwise epsilons ({len(eps_records):,} pairs)")
+
+                if eps_vals.size > 0:
+                    print("\nSubspace incoherence (epsilon = ||P_k P_i||_op):")
+                    print(f"  Max:    {eps_vals.max():.6f}")
+                    print(f"  Mean:   {eps_vals.mean():.6f}")
+                    print(f"  Median: {np.median(eps_vals):.6f}")
+                    print(f"  Std:    {eps_vals.std():.6f}")
+                plot_histogram(
+                    eps_vals,
+                    xlabel=r"$\|P_k P_i\|_{\mathrm{op}}$",
+                    title=f"Subspace overlap epsilon ({name}, K={N_CLUSTERS})",
+                    path=os.path.join(OUTPUT_DIR, "epsilons_hist.png"),
+                )
+            else:
+                print("\nSkipping pairwise projector overlaps "
+                      "(construction artifact; set COCLUSTER_EPSILONS=1 to compute).")
+
+    else:
+        print("\nRelabel mode: skipping normalisation, co-clustering, sparsification,\n"
+              "  SVD and epsilons -- none of them depend on the labels.")
 
     # -------------------------------
     # Point group & space group enrichment
