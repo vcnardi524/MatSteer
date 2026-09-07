@@ -332,7 +332,7 @@ injection arrives, not that it directs anything.
   embeddings and reports subspace incoherence
   `epsilon = ||P_k P_i||_op` across layers 1–14 and K = 10/50/150/300.
 - All reported epsilons are 1e-14 to 1e-17 (machine zero):
-  `cocluster_results/v1/layer*/[K]_clusters/pairwise_epsilons.csv`.
+  `analysis/v1_all/full/all/cocluster_results/v1/layer*/[K]_clusters/pairwise_epsilons.csv`.
 - **This is trivial/circular, not a real property.** The code sparsifies `X` by
   zeroing every dimension a point isn't assigned to (`X_sparse`), forcing disjoint
   coordinate supports per cluster — so the subspaces are orthogonal *by construction*
