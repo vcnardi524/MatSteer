@@ -1,3 +1,251 @@
+# AI integrity review inventory
+
+Written 2026-09-06 for the ICLR LLM-usage statement, assuming **nothing has been
+reviewed yet**. Everything below was written or modified by Claude (Claude Code,
+Opus/Sonnet) and needs your sign-off before you can attest to it.
+
+Scope: **103 of the 120 commits** on this repo carry a `Co-Authored-By: Claude`
+trailer, spanning 2026-06-09 (`ba1cd1c`) to 2026-09-06 (`2a1a19a`). 126 source files
+and ~1,800 generated result files were touched. The narrative review of the
+2026-08-25 → 08-28 window is kept below as Part A / Part B; it is context, not a
+substitute for this inventory.
+
+What this list does *not* claim: that the code is wrong. It is the set of things
+you have not personally verified, which is what the statement is about.
+
+---
+
+## Tier 0 — prose. Read every line.
+
+These state claims in your voice. They carry the highest risk, because a wrong
+sentence here becomes a wrong sentence in the paper.
+
+| file | | lines | what it asserts |
+|---|---|---|---|
+| `README.md` | edited, 10 commits | 485 | the science, the directory conventions, and **the current results** |
+| `tasks.md` | edited, 24 commits | 934 | what was run, what was concluded, and why |
+| `CLAUDE.md` | new, 7 commits | 209 | the data gotchas — several are load-bearing factual claims (see below) |
+| `session_review.md` | new, 3 commits | 374 | this file, including the narrative below |
+| `ChemSteer/README.md` | new | 49 | |
+
+Specific factual claims in `CLAUDE.md` and `README.md` that a reviewer could check
+and that I asserted rather than you:
+
+- density is exactly parseable from the CIF (`R^2 = 1.000000` on 29,832 CIFs)
+- `metadata_mp.parquet` mixes GGA/GGA+U and r2SCAN rows, worth ~0.3 eV/atom
+- `formula_pretty` is not unique — 46% of rows share one
+- `cif_layer<N>` is the **output** of block N, not an input embedding
+- 89.6% of labelled structures sit in CrystaLLM's training split, 0.45% in test
+- the 1,000-prompt set fingerprint `cccf9b87455ac110`
+- probes must be scored on `by_formula`, where `lookup_acc` collapses to `majority_acc`
+
+## Tier 1 — code that produces reported numbers
+
+If a number appears in the paper, it came through here.
+
+**statistics and reported numbers** (13 files)
+
+| file | | lines |
+|---|---|---|
+| `scripts/analysis/steering_ttest.py` | new | 313 |
+| `scripts/analysis/stratified_effect.py` | new | 178 |
+| `scripts/analysis/injection_magnitude.py` | new | 208 |
+| `scripts/analysis/property_probe.py` | new | 242 |
+| `scripts/analysis/symmetry_probe.py` | new | 360 |
+| `scripts/analysis/layer_causal_probe.py` | new | 259 |
+| `scripts/analysis/layernorm_survival.py` | new | 191 |
+| `scripts/analysis/manifold_distance.py` | new | 149 |
+| `scripts/analysis/volume_steering_check.py` | new | 194 |
+| `scripts/analysis/spec_cocluster_analysis.py` | edited | 456 |
+| `scripts/analysis/symmetry_separability.py` | edited | 329 |
+| `scripts/analysis/bandgap_percentile_stats.py` | edited | 45 |
+| `scripts/analysis/wyckoff_sg_counts.py` | new | 93 |
+
+**property prediction and scoring** (8 files)
+
+| file | | lines |
+|---|---|---|
+| `scripts/predictors.py` | new | 205 |
+| `scripts/eval/compute_predictions.py` | edited | 169 |
+| `scripts/eval/validate_hull_predictor.py` | new | 107 |
+| `scripts/eval/validate_steered_cifs.py` | edited | 171 |
+| `scripts/eval/novelty_steered_cifs.py` | edited | 280 |
+| `scripts/eval/relax_steered_cifs.py` | edited | 203 |
+| `scripts/eval/summarize_steering_results.py` | edited | 228 |
+| `scripts/eval/predict_bandgap_testset.py` | edited | 151 |
+
+**steering: what actually intervenes on the model** (5 files)
+
+
+**property prediction and scoring** (8 files)
+
+| file | | lines |
+|---|---|---|
+| `scripts/predictors.py` | new | 205 |
+| `scripts/eval/compute_predictions.py` | edited | 169 |
+| `scripts/eval/validate_hull_predictor.py` | new | 107 |
+| `scripts/eval/validate_steered_cifs.py` | edited | 171 |
+| `scripts/eval/novelty_steered_cifs.py` | edited | 280 |
+| `scripts/eval/relax_steered_cifs.py` | edited | 203 |
+| `scripts/eval/summarize_steering_results.py` | edited | 228 |
+| `scripts/eval/predict_bandgap_testset.py` | edited | 151 |
+
+**steering: what actually intervenes on the model** (5 files)
+
+| file | | lines |
+|---|---|---|
+| `scripts/steering/compute_centroid_target.py` | new | 148 |
+| `scripts/steering/compute_pca_basis.py` | new | 138 |
+| `scripts/steering/compute_steering_vector.py` | edited | 158 |
+| `scripts/steering/fit_manifold.py` | new | 199 |
+| `scripts/steering/steer_generate_cif.py` | edited | 441 |
+
+**shared helpers** (1 files)
+
+| file | | lines |
+|---|---|---|
+| `scripts/utils.py` | new | 387 |
+
+Everything routes through `scripts/utils.py`: the partition splits, the directory
+conventions, `postprocess()`, and the baseline resolution. An error here is an error
+everywhere, so it is the single highest-leverage file in the repo.
+
+**data construction** (7 files)
+
+| file | | lines |
+|---|---|---|
+| `scripts/data/add_wyckoff_site_columns.py` | new | 170 |
+| `scripts/data/build_density_atomic_table.py` | new | 64 |
+| `scripts/data/build_split_index.py` | new | 48 |
+| `scripts/data/check_mp_hull_coverage.py` | new | 128 |
+| `scripts/data/consolidate_baselines.py` | new | 151 |
+| `scripts/data/make_test_sample.py` | new | 132 |
+| `scripts/data/property_coverage.py` | new | 106 |
+
+**plots** (17 files)
+
+| file | | lines |
+|---|---|---|
+| `scripts/plots/centroid_pca_plots.py` | new | 258 |
+| `scripts/plots/nomad_bandgap_histogram.py` | edited | 105 |
+| `scripts/plots/plot_clean_bandgap_histogram.py` | edited | 56 |
+| `scripts/plots/plot_magnitude_response.py` | new | 214 |
+| `scripts/plots/plot_manifold_curves.py` | new | 92 |
+| `scripts/plots/plot_manifold_encoding.py` | new | 153 |
+| `scripts/plots/plot_manifold_overlay.py` | new | 107 |
+| `scripts/plots/plot_probe_table.py` | new | 116 |
+| `scripts/plots/plot_property_histogram.py` | edited | 126 |
+| `scripts/plots/plot_property_probe_layers.py` | new | 113 |
+| `scripts/plots/plot_steering_distribution_shift.py` | new | 655 |
+| `scripts/plots/plot_steering_summary.py` | new | 162 |
+| `scripts/plots/plot_tsne_f43m_wyckoff.py` | edited | 149 |
+| `scripts/plots/plot_tsne_pca_bandgap.py` | edited | 227 |
+| `scripts/plots/plot_tsne_pca_categorical.py` | edited | 126 |
+| `scripts/plots/plot_tsne_pca_group_bandgap.py` | new | 250 |
+| `scripts/plots/plot_tsne_pca_mp_property.py` | new | 241 |
+
+## Tier 2 — infrastructure
+
+Does not compute results, but decides *what ran*. A wrong flag here means the
+recorded provenance is wrong.
+
+- `run.sh` — the submission wrapper; resolves configs, picks the venv, records provenance
+- `experiments_configs/*.conf` — 25 tracked configs, each naming a script, venv, resources and flags
+- `experiments_configs/runs.tsv` — the append-only record of every submission (timestamp, job id, git SHA, resolved command)
+- `slurms/*.slurm` — 21 tracked job files, mostly superseded by `run.sh` but still runnable
+- `.gitignore`, `.gitmodules`
+
+## Tier 3 — the CrystaLLM submodule
+
+**Easy to miss, and it changes the model.** The submodule is pinned to branch
+`kv-cache` at `a193702`, which is **one commit ahead of upstream** and is AI-authored:
+
+    a193702  Add KV-cached decoding (generate_cached) to GPT
+    diff vs upstream:  crystallm/_model.py   (one file)
+
+Every steered generation ran through this. It was verified byte-identical to the
+uncached path and separately checked for generation distortion (paired d = −0.027,
+p = 0.417, KV-cache off vs on), but you are attesting to a modification of a
+third-party model implementation, so read the diff.
+
+## Tier 4 — generated outputs, 376 CSVs and 920 PNGs
+
+Tracked under `analysis/`. These are machine output, not authored text, and reading
+all 1,296 is not a sensible use of your time. The defensible policy:
+
+1. For every number and figure **that appears in the paper**, regenerate it from the
+   committed code and confirm it matches the committed file.
+2. Confirm the script that wrote it is one you have reviewed in Tier 1.
+3. Leave the rest unreviewed and do not cite them.
+
+`experiments_configs/runs.tsv` is what ties an output back to the exact command and
+git SHA that produced it. That is the provenance chain to lean on.
+
+---
+
+## Errors that were found and corrected — check these first
+
+These are the places AI output was demonstrably wrong before being caught. They are
+the best use of limited review time, because they show the failure modes.
+
+**Affected reported numbers, now fixed:**
+
+- **Inference dropout.** CrystaLLM applied 10% SDPA dropout at generation time. Every
+  steered file generated before 2026-07-12 16:27 is contaminated — the alpha 11/25 runs
+  and all percentile runs. Fixed by zeroing dropout in `load_model`.
+- **The wrong control.** `property_predictions` is shared across properties, and the
+  density `nosg` arms were silently paired against the **band-gap** control. Fixed with
+  Jaccard prompt-set matching in `pick_control()`. Caught only because a row count went
+  288 → 286.
+- **Hull validation MAE 4.4e-3 → 3.7e-15.** Two causes: joining on `formula_pretty`
+  (not unique, 46%) and mixing r2SCAN with GGA/GGA+U rows.
+- **`filter_partition` handed the split index instead of the labels frame** — silently
+  returned train for `not_heldout`, dropping 96k structures.
+- **Band-gap steering vector at layer 4** carried legacy `bottom_max_ev = -30.25`, a
+  raw-Joules LUMO−HOMO subtraction. Rebuilt 2026-09-06. Layers 1–13 and 15 are still
+  corrupt; only 14 and the new 4 are clean. No published run used the bad ones.
+
+**Wrong claims I made and retracted (no data affected, but they were in prose):**
+
+- Claimed layer 0 was the token embedding. It is the **output of block 0**. A high
+  layer-0 probe score means "one block suffices", not "no computation needed".
+- Claimed `encode()` was broken from a median over `bank[:8000]` — an unshuffled slice
+  with a 76.5% failure rate against 10.1% overall.
+- Reported a 58.5° turning angle at layer 7 from a `--max-per-bucket 5000` config that
+  did not belong to that run. The real value is 34.7°.
+- `pct_usable` excluded zeros, which wrongly treated a 0 eV band gap as unusable.
+- Overstated what density's parseability implies — it removes the probe as evidence, it
+  does not show the model fails to represent density.
+
+**Infrastructure bugs, no effect on results:**
+
+- `run.sh` read `K`/`L`/`PARTITION` unguarded under `set -u`
+- `run.sh` did not consume `--after` when it followed the experiment name, passing it
+  through to argparse and killing 52 queued jobs
+- A vim swap file was committed in `13dee4b`
+- Coclustering at K=150 OOM-killed 14 of 16 layers
+
+---
+
+## Suggested order
+
+1. `scripts/utils.py` — everything depends on it
+2. `scripts/analysis/steering_ttest.py` — every reported effect size and p-value
+3. `scripts/predictors.py` + `scripts/eval/compute_predictions.py` — every property number
+4. `scripts/steering/steer_generate_cif.py` — the actual intervention
+5. `CrystaLLM/crystallm/_model.py` diff — the modified third-party model
+6. `README.md` and `CLAUDE.md` — the claims
+7. Spot-check the specific outputs you intend to cite
+
+---
+
+# Appendix — narrative review, 2026-08-25 → 08-28
+
+The original session review is kept below unchanged. It covers one four-day window in
+detail and does not cover the rest of the history above.
+
+---
+
 # Session review — `geometry_steering`, 2026-08-25 → 08-28
 
 Everything changed on this branch, for review. 20 commits, `fda9a16..HEAD`, all pushed.
