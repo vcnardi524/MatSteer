@@ -90,7 +90,7 @@ job_name="$name"
 # Configs that take their knobs from the environment (positional-arg scripts) would all
 # submit under the same name otherwise, which makes squeue useless.
 for v in K L PARTITION; do
-    [ -n "${!v}" ] && job_name="${job_name}-${v,,}${!v}"
+    [ -n "${!v:-}" ] && job_name="${job_name}-${v,,}${!v}"
 done
 if [ $# -gt 0 ]; then
     # A path override (--input steering_results/.../foo.parquet) would otherwise put the
