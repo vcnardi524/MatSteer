@@ -112,6 +112,13 @@ times larger. A baseline is keyed
 on the PROMPT SET (sg vs nosg, `--n-samples`), which the filename already carries; it is
 NOT keyed on layer, since no injection happens at any layer when alpha is zero.
 
+That last point is verified, not assumed. On 2026-09-07 alpha=0 was generated afresh at
+layer 0 and compared against the existing layer-1 controls: `steered_test_alpha0.0_layer0`
+and `steered_test_alpha0.0_layer0_nosg` are IDENTICAL to their layer1 counterparts, all
+3,000 rows and every column (`DataFrame.equals` true, same file size to the byte). So one
+alpha=0 run per prompt set genuinely serves every layer, and the layer number in a
+baseline filename is a historical label rather than a property of the run.
+
 So novelty, relaxation, and prediction all read the flags file, join the CIF source on
 `(id, sample)`, and process `is_valid == True` rows only. A new stage should follow
 that shape rather than widening an existing file.
