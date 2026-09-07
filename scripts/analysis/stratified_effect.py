@@ -41,7 +41,7 @@ _spec = _ilu.spec_from_file_location(
 _ds = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_ds)
 
 RESULTS_DIR = "density_atomic"
-CONTROL = "steered_test_alpha0.0_layer7_nosg"
+CONTROL = "steered_test_alpha0.0_layer0_nosg"
 OUT = Path("analysis/v1_all/test/plots")
 COLOR = ["#0072B2", "#D55E00", "#009E73", "#E69F00"]
 MARKER = ["s", "o", "^", "D"]
