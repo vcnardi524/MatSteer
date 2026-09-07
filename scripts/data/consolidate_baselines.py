@@ -40,14 +40,18 @@ import argparse
 import hashlib
 import re
 import shutil
+import sys
 from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path("steering_results")
-BASELINE = ROOT / "baseline"
-SHARED = ("generated_cifs", "validation", "relaxed")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils import STEERING_ROOT, BASELINE_DIR, SHARED_SUBDIRS   # noqa: E402
+
+ROOT = Path(STEERING_ROOT)
+BASELINE = ROOT / BASELINE_DIR
+SHARED = SHARED_SUBDIRS
 MERGED = ()   # see the docstring: property_predictions must NOT be shared
 CONTROL = re.compile(r"alpha-?0(\.0)?_")
 

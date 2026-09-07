@@ -3,6 +3,7 @@
 Kept import-light so any script can `from utils import ...` (scripts/ is on
 sys.path when a script is run as `python scripts/<name>.py`).
 """
+import os
 import re
 from pathlib import Path
 
@@ -173,6 +174,36 @@ def write_results_table(df: pd.DataFrame, path) -> Path:
     path = Path(path)
     df[RESULT_COLUMNS + extras].to_csv(path, index=False, float_format="%.6g")
     return path
+
+
+# --- steering_results layout -------------------------------------------------------
+STEERING_ROOT = "steering_results"
+BASELINE_DIR = "baseline"
+# Subdirs whose content is property-INDEPENDENT, so one copy under baseline/ serves every
+# property. At alpha=0 the hook adds exactly zero: the CIFs, whether they parse, and their
+# M3GNet relaxation cannot depend on which property is being steered.
+# property_predictions is deliberately absent -- the same structure has a different
+# density_atomic and band_gap, and runs are DISCOVERED from that directory, so sharing it
+# lets two controls from different prompt sets collide on (family, strength).
+SHARED_SUBDIRS = ("generated_cifs", "validation", "relaxed")
+
+
+def steering_path(results_dir: str, sub: str, stem: str) -> str:
+    """Path to one run's file, falling back to the shared baseline tree.
+
+    Looks in the property's own tree first, then baseline/ -- but only for subdirs that
+    are actually shared. Asking for property_predictions here raises rather than silently
+    resolving to a file that belongs to another property.
+    """
+    own = os.path.join(STEERING_ROOT, results_dir, sub, stem)
+    if os.path.exists(own) or sub not in SHARED_SUBDIRS:
+        if sub not in SHARED_SUBDIRS and not os.path.exists(own):
+            raise FileNotFoundError(
+                f"{own} not found, and {sub!r} is not shared so there is no baseline "
+                f"fallback (shared: {', '.join(SHARED_SUBDIRS)})")
+        return own
+    shared = os.path.join(STEERING_ROOT, BASELINE_DIR, sub, stem)
+    return shared if os.path.exists(shared) else own
 
 
 def analysis_dir(dataset: str = DEFAULT_DATASET, variant: str = DEFAULT_VARIANT,

@@ -79,7 +79,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-from utils import analysis_dir, postprocess
+from utils import analysis_dir, postprocess, steering_path
 from pymatgen.core import Structure
 
 RANDOM_SEED = 42
@@ -221,36 +221,17 @@ def sweep_strength(stem: str, kind: str):
     return float(m.group(1)) if m else None
 
 
-BASELINE_DIR = "baseline"
-
-
-def resolve(results_dir: str, sub: str, stem: str) -> str:
-    """Path to one run's file, falling back to the shared baseline tree.
-
-    alpha=0 controls live in steering_results/baseline/{generated_cifs,validation,relaxed}
-    because their content is property-independent -- the same CIFs were previously stored
-    five times over, once per property. Everything else lives under its own property.
-    property_predictions is deliberately NOT resolved here: the same structure has a
-    different density_atomic and band_gap, so those stay per-property.
-    """
-    own = f"steering_results/{results_dir}/{sub}/{stem}"
-    if _os.path.exists(own):
-        return own
-    shared = f"steering_results/{BASELINE_DIR}/{sub}/{stem}"
-    return shared if _os.path.exists(shared) else own
-
-
 def prediction_files(results_dir: str) -> list:
     """Every predictions parquet for one property -- ITS OWN TREE ONLY.
 
-    Deliberately does not fall back to baseline/, unlike resolve(). Runs are DISCOVERED
+    Deliberately does not fall back to baseline/, unlike steering_path(). Runs are DISCOVERED
     here and then keyed by (family, strength), which cannot tell two different controls
     apart: steered_test_alpha0.0_layer7_nosg and steered_test_clean_alpha0.0_layer14_nosg
     are both nosg with strength 0, but they are different PROMPT SETS (1,000 density
     prompts vs 10,286 bandgap ones). Merging baseline predictions into this listing made
     them collide, and density's nosg arms silently paired against the bandgap control.
 
-    Generation, validation and relaxation ARE shared, because resolve() looks those up by
+    Generation, validation and relaxation ARE shared, because steering_path() looks those up by
     exact stem -- no discovery, no collision. Predictions stay per-property, which also
     keeps each property's model version with its own numbers.
     """
@@ -325,7 +306,7 @@ def discover_runs(results_dir: str, family: str, method: str = "linear",
             continue
         if family == "sg" and is_nosg:
             continue
-        if not _os.path.exists(resolve(results_dir, "validation", stem)):
+        if not _os.path.exists(steering_path(results_dir, "validation", stem)):
             print(f"  ! {stem}: predictions but no validation -- skipped")
             continue
         runs[strength] = stem
@@ -336,10 +317,10 @@ def load_alpha(results_dir: str, stem: str, col: str, relaxed: bool,
                agg: str, measure: str) -> pd.DataFrame:
     """[id, value] for one run: valid samples only, one row per prompt if agg='mean'."""
     if measure == "text":
-        gen = pd.read_parquet(resolve(results_dir, "generated_cifs", stem))
+        gen = pd.read_parquet(steering_path(results_dir, "generated_cifs", stem))
         cif_col = "cif_relaxed" if relaxed else "cif_steered"
         if relaxed:
-            gen = pd.read_parquet(resolve(results_dir, "relaxed", stem))
+            gen = pd.read_parquet(steering_path(results_dir, "relaxed", stem))
         value_col = "value"
         pred = gen[["id", "sample"]].copy()
         pred[value_col] = gen[cif_col].map(text_volume_per_atom)
@@ -349,7 +330,7 @@ def load_alpha(results_dir: str, stem: str, col: str, relaxed: bool,
             f"steering_results/{results_dir}/property_predictions/{stem}")
         if value_col not in pred.columns:
             raise SystemExit(f"{stem}: no column {value_col!r} (have {list(pred.columns)})")
-    valid = pd.read_parquet(resolve(results_dir, "validation", stem),
+    valid = pd.read_parquet(steering_path(results_dir, "validation", stem),
                             columns=["id", "sample", "is_valid"])
 
     df = pred[["id", "sample", value_col]].merge(valid, on=["id", "sample"], how="left")
