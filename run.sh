@@ -87,6 +87,11 @@ cmd="$(echo "$cmd" | tr '\n' ' ' | tr -s ' ' | sed 's/ *$//')"
 # Job name: the config plus whatever was overridden, so eight concurrent runs are
 # telling apart in squeue. Overrides are flattened, e.g. --layer 9 --width 2 -> l9-w2.
 job_name="$name"
+# Configs that take their knobs from the environment (positional-arg scripts) would all
+# submit under the same name otherwise, which makes squeue useless.
+for v in K L PARTITION; do
+    [ -n "${!v}" ] && job_name="${job_name}-${v,,}${!v}"
+done
 if [ $# -gt 0 ]; then
     # A path override (--input steering_results/.../foo.parquet) would otherwise put the
     # whole path in the name and squeue would show 40 identical prefixes. Keep the stem.
