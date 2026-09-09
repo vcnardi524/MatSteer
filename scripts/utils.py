@@ -189,7 +189,8 @@ BASELINE_DIR = "baseline"
 # caused two controls from different prompt sets to collide on (family, strength);
 # plot_steering_distribution_shift.pick_control now disambiguates by prompt-set overlap,
 # which is the real key, so the collision cannot recur.
-SHARED_SUBDIRS = ("generated_cifs", "validation", "relaxed", "property_predictions")
+SHARED_SUBDIRS = ("generated_cifs", "validation", "relaxed", "property_predictions",
+                  "embeddings")
 
 
 def steering_path(results_dir: str, sub: str, stem: str) -> str:
