@@ -113,6 +113,17 @@ PROPS = {
         default_family=None,
         measure="predictor",
     ),
+    "energy_above_hull": dict(
+        results_dir="energy_above_hull",
+        col="energy_above_hull",
+        label="Energy above hull (eV/atom)",
+        # linear, and not by preference: 22% of MP rows sit at exactly 0 eV/atom
+        # (everything ON the hull is 0 by definition), so log10 is undefined for them.
+        # The guard in analyse() would demote a log setting to linear anyway.
+        scale="linear",
+        default_family="nosg",
+        measure="predictor",
+    ),
 }
 
 # Volume per atom read from the CIF text. Kept for the reference structures and as a

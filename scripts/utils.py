@@ -158,7 +158,8 @@ RESULT_COLUMNS = [
     "unit", "control_median", "median", "mean_diff", "frac_of_target_move",
     "cohens_d", "p_paired", "p_holm", "p_wilcoxon",
 ]
-RESULT_UNITS = {"band_gap": "eV", "density_atomic": "log10_A3_per_atom"}
+RESULT_UNITS = {"band_gap": "eV", "density_atomic": "log10_A3_per_atom",
+                "energy_above_hull": "eV_per_atom"}
 
 
 def write_results_table(df: pd.DataFrame, path) -> Path:
