@@ -130,7 +130,39 @@ def main():
                  fontsize=12)
     fig.tight_layout()
     fig.savefig(OUT / f"{args.out_stem}.png", dpi=150, bbox_inches="tight", facecolor="white")
-    print(f"\nSaved {OUT/args.out_stem}.csv and .png")
+
+    # Standalone single-panel version of the ratio: this is the headline number, and it
+    # reads better without the cosine panel competing for attention.
+    fig2, ax = plt.subplots(figsize=(8, 5.5))
+    for i, stem in enumerate(args.runs):
+        g = d[(d.run == stem) & (d.samples == "valid")].sort_values("layer")
+        if g.empty:
+            continue
+        lab = (stem.replace("steered_manifold_test_", "manifold ")
+                   .replace("steered_test_", "linear ")
+                   .replace("_k64_layer7_nosg", "").replace("_layer7_nosg", "")
+                   .replace("_residual", ""))
+        ax.plot(g.layer, g.d_rel, "-o", color=COLOR[i % len(COLOR)], lw=2.2, ms=6, label=lab)
+        ax.annotate(lab, (g.layer.iloc[-1], g.d_rel.iloc[-1]), xytext=(6, 0),
+                    textcoords="offset points", fontsize=8.5, va="center",
+                    color=COLOR[i % len(COLOR)])
+    inj = int(d.layer.min())
+    ax.axvline(inj, color="#999", lw=1, ls="--")
+    ax.annotate(f"injected at layer {inj}", (inj, ax.get_ylim()[1]), xytext=(4, -12),
+                textcoords="offset points", fontsize=8.5, color="#666")
+    ax.set_xlabel("layer")
+    ax.set_ylabel(r"$\|h_{\mathrm{steered}}-h_{\mathrm{control}}\|\ /\ \|h_{\mathrm{control}}\|$")
+    ax.set_xticks(sorted(d.layer.unique()))
+    ax.grid(alpha=0.25, lw=0.6)
+    for sp in ("top", "right"):
+        ax.spines[sp].set_visible(False)
+    ax.margins(x=0.12)
+    ax.set_title("A layer-7 injection neither grows nor decays through the layers above it\n"
+                 "valid samples only; paired on prompt", fontsize=11, loc="left")
+    fig2.tight_layout()
+    fig2.savefig(OUT / f"{args.out_stem}_ratio.png", dpi=150, bbox_inches="tight",
+                 facecolor="white")
+    print(f"\nSaved {OUT/args.out_stem}.csv, .png and _ratio.png")
     with pd.option_context("display.width", 200):
         print(d.round(4).to_string(index=False))
 
