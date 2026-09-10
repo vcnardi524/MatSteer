@@ -83,16 +83,29 @@ def main():
             print(f"  skip {out_col}: no {sub}/{stem}.parquet")
             continue
         df = pred[["id", "sample", e_col]].merge(cifs, on=["id", "sample"], how="left")
+        # Resume: keep whatever is already scored and only fill the gaps. Re-running is
+        # the normal way to recover from an MP outage, and refetching thousands of hulls
+        # that are already correct is how the rate limit gets hit in the first place.
+        have = (pred.set_index(["id", "sample"])[out_col]
+                if out_col in pred.columns else pd.Series(dtype=float))
+        vals = {k: v for k, v in have.dropna().items()} if len(have) else {}
         todo = df[df[e_col].notna() & df[cif_col].notna()]
+        todo = todo[~todo.set_index(["id", "sample"]).index.isin(vals)]
         if args.limit:
             todo = todo.head(args.limit)
-        print(f"  {out_col}: {len(todo):,} rows with both an E_form and a CIF")
+        print(f"  {out_col}: {len(vals):,} already scored, {len(todo):,} to do")
 
-        vals = {}
         for n, (_, r) in enumerate(tqdm(todo.iterrows(), total=len(todo)), 1):
             try:
                 s = Structure.from_str(postprocess(r[cif_col], "hull"), fmt="cif")
                 vals[(r["id"], r["sample"])] = hull.e_above_hull(s.composition, float(r[e_col]))
+            except RuntimeError:
+                # MP itself is failing (rate limit / outage). Stop rather than writing
+                # NaNs that are indistinguishable from "no hull exists"; rerun later and
+                # the resume above picks up where this left off.
+                print("\n  MP query failed repeatedly -- stopping so the gap stays "
+                      "visible. Rerun this job later to fill it.", flush=True)
+                break
             except Exception:
                 vals[(r["id"], r["sample"])] = float("nan")
         pred[out_col] = [vals.get((i, s)) for i, s in zip(pred["id"], pred["sample"])]

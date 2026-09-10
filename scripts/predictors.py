@@ -100,9 +100,12 @@ class HullLookup:
     """
 
     def __init__(self, api_key: str = None, key_file: str = "api_keys.json",
-                 thermo_types=("GGA_GGA+U",)):
+                 thermo_types=("GGA_GGA+U",), max_retries: int = 5,
+                 retry_wait: float = 5.0):
         self.api_key = api_key or __import__("json").load(open(key_file))["mp_api_key"]
         self.thermo_types = list(thermo_types)
+        self.max_retries = max_retries
+        self.retry_wait = retry_wait     # seconds; doubles each attempt
         self._cache = {}          # frozenset(elements) -> PhaseDiagram or None
         self._mpr = None
 
@@ -123,13 +126,28 @@ class HullLookup:
         key = frozenset(str(e) for e in elements)
         if key in self._cache:
             return self._cache[key]
-        try:
-            entries = self._mpr.get_entries_in_chemsys(
-                elements=sorted(key),
-                additional_criteria={"thermo_types": self.thermo_types})
-        except Exception:
-            entries = []
-        if not entries:
+        # A TRANSIENT API failure must NOT be cached as "MP has no hull for this system".
+        # It was: every exception collapsed to entries=[], which cached None, so one
+        # rate-limited call silently voided that whole chemical system for the rest of the
+        # job. Measured 2026-09-10 across 24 hull arms: 15 ids were missing everywhere
+        # (genuinely absent from MP) but 900 were missing in only some arms -- all of that
+        # was this bug. Retry with backoff, and re-raise so the caller sees a failure
+        # instead of a NaN that looks like real data.
+        import time
+        entries = None
+        for attempt in range(self.max_retries):
+            try:
+                entries = self._mpr.get_entries_in_chemsys(
+                    elements=sorted(key),
+                    additional_criteria={"thermo_types": self.thermo_types})
+                break
+            except Exception as e:
+                if attempt == self.max_retries - 1:
+                    raise RuntimeError(
+                        f"MP query failed for {sorted(key)} after {self.max_retries} "
+                        f"attempts: {type(e).__name__}: {e}") from e
+                time.sleep(self.retry_wait * (2 ** attempt))
+        if not entries:                      # a genuine empty result: cache it
             self._cache[key] = None
             return None
         try:
