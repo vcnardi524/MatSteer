@@ -36,6 +36,8 @@ SERIES = [
      "energy above hull",   "#009E73", "^"),
     ("dos_electronic.band_gap", "analysis/v1_all/full/val/property_probe_dos_electronic_band_gap.csv",
      "band gap",            "#E69F00", "D"),
+    ("formation_energy_per_atom", "analysis/v1_mp/full/val/property_probe_formation_energy_per_atom.csv",
+     "formation energy",    "#CC79A7", "v"),
 ]
 
 
@@ -45,10 +47,24 @@ def main():
     # top level of analysis/, not under a dataset tree: this figure combines
     # v1_all (density, band gap) with v1_mp (efermi, energy above hull)
     ap.add_argument("--out", default="analysis/property_probe_r2_by_layer.png")
+    ap.add_argument("--properties", nargs="+", default=None,
+                    help="Subset of SERIES names to plot, in any order. Default: all "
+                         "that have a CSV on disk. Colours are bound to the property, not "
+                         "to plot order, so a subset keeps the same colours as the full "
+                         "figure and the two can be read side by side.")
     args = ap.parse_args()
 
+    series = SERIES
+    if args.properties:
+        known = {n for n, *_ in SERIES}
+        unknown = [p for p in args.properties if p not in known]
+        if unknown:
+            raise SystemExit(f"unknown propert{'y' if len(unknown)==1 else 'ies'}: "
+                             f"{unknown}. Known: {sorted(known)}")
+        series = [t for t in SERIES if t[0] in set(args.properties)]
+
     loaded = []
-    for name, path, label, color, marker in SERIES:
+    for name, path, label, color, marker in series:
         if not Path(path).exists():
             print(f"  ! missing {path} -- skipped")
             continue
