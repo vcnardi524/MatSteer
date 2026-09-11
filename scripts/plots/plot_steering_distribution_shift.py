@@ -189,9 +189,15 @@ STRENGTH_RE = {"linear": re.compile(r"alpha(-?[\d.]+)"),
 
 # steered_manifold_<split>_d<delta>[_<variant>][_s<scale>]_k<k>_layer<N>.
 # project_nomu before project so the longer name wins.
+# The scale group must accept a leading minus. It did not, so a negative scale -- which
+# energy_above_hull uses throughout, since steering toward stability means stepping
+# backwards along the curve -- failed the whole match, and sweep_strength silently
+# returned its 1.0 default. All 20 hull manifold arms collapsed onto one strength and
+# deduplicated down to a single row. Negative DELTA already worked, which is why the
+# density d-2 sweep was unaffected and this went unnoticed.
 _MANIFOLD_RE = re.compile(
     r"^steered_manifold_[a-z]+_d(-?[\d.]+)"
-    r"(?:_(residual|project_nomu|project))?(?:_s([\d.]+))?_k\d+_layer(\d+)")
+    r"(?:_(residual|project_nomu|project))?(?:_s(-?[\d.]+))?_k\d+_layer(\d+)")
 
 
 def kind_of(stem: str) -> str:

@@ -262,7 +262,9 @@ def main():
                     help="Every property x method x source into one canonical table, "
                          "analysis/v1_all/test/steering_runs.csv, instead of a single "
                          "per-property file. Same statistics either way.")
-    ap.add_argument("--method", choices=["linear", "pca_centroid", "pca_local"],
+    # choices come from METHODS so the two cannot drift: the list here was stale and
+    # rejected --method manifold even though --all had been testing it all along.
+    ap.add_argument("--method", choices=list(METHODS),
                     default="linear",
                     help="Which steering family to test (default: linear)")
     ap.add_argument("--target", type=float, default=None,
