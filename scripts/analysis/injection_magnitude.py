@@ -222,7 +222,7 @@ def main():
     fig.tight_layout()
     fig.savefig(OUT / f"{stem}.png", dpi=150,
                 bbox_inches="tight", facecolor="white")
-    print(f"\nSaved {OUT / 'density_injection_magnitude.png'}")
+    print(f"\nSaved {OUT / (stem + '.png')}")
 
 
 if __name__ == "__main__":
