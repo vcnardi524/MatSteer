@@ -53,6 +53,20 @@ _sgc = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_sgc)
 
 CSV = "analysis/v1_all/test/steering_runs.csv"
 OUT = Path("analysis/v1_all/test/plots")
+
+# Where each property's steering artefacts live. hook_for used to hardcode the density
+# paths, so the script could only ever measure density runs.
+PROPERTY_PATHS = {
+    "density_atomic": dict(
+        vector="steering_vectors/density_atomic/layer{layer}.parquet",
+        manifold="steering_vectors/manifolds/density_atomic_layer{layer}_k64_w1_max40.parquet"),
+    "band_gap": dict(
+        vector="steering_vectors/bandgap/layer{layer}.parquet",
+        manifold="steering_vectors/manifolds/dos_electronic_band_gap_layer{layer}_k64_w0.05.parquet"),
+    "energy_above_hull": dict(
+        vector="steering_vectors/energy_above_hull/layer{layer}.parquet",
+        manifold="steering_vectors/manifolds/energy_above_hull_layer{layer}_k64_w0.1_max5.parquet"),
+}
 COLOR = {"linear": "#D55E00", "manifold": "#0072B2", "pca_centroid": "#009E73"}
 MARKER = {"linear": "o", "manifold": "s", "pca_centroid": "^"}
 
@@ -77,11 +91,12 @@ def capture(model, tokenizer, cifs, layers, device):
     return {l: torch.cat(v) for l, v in grabbed.items()}
 
 
-def hook_for(row, device):
+def hook_for(row, device, prop="density_atomic"):
     """The real hook for one table row, or None if this method is not measurable here."""
     m, layer = row.method, int(row.layer)
+    paths = PROPERTY_PATHS[prop]
     if m == "linear":
-        sv = Path(f"steering_vectors/density_atomic/layer{layer}.parquet")
+        sv = Path(paths["vector"].format(layer=layer))
         vec = np.asarray(pd.read_parquet(sv).iloc[0]["steering_vector"], np.float32)
         return _sgc.linear_hook(vec, float(row.strength), device)
     mean, comps = load_pca(layer, 64)
@@ -93,8 +108,7 @@ def hook_for(row, device):
         c = np.asarray(pd.read_parquet(cen).iloc[0]["centroid_pca"], np.float32)
         return _sgc.pca_centroid_hook(mean, comps, c, float(row.strength), device)
     if m == "manifold":
-        man = Path("steering_vectors/manifolds/"
-                   f"density_atomic_layer{layer}_k64_w1_max40.parquet")
+        man = Path(paths["manifold"].format(layer=layer))
         if not man.exists():
             return None
         return _sgc.manifold_hook(mean, comps, Manifold.load(str(man)),
@@ -117,10 +131,17 @@ def main():
     ap.add_argument("--pkl", default="CrystaLLM/cifs_v1_test_sample1000.pkl.gz")
     ap.add_argument("--n-cifs", type=int, default=25)
     ap.add_argument("--csv", default=CSV)
+    ap.add_argument("--property", default="density_atomic",
+                    choices=sorted(PROPERTY_PATHS),
+                    help="Which property's runs to measure. Each has its own steering "
+                         "vector and manifold, so the paths differ.")
+    ap.add_argument("--out-stem", default=None,
+                    help="Output stem (default: <property>_injection_magnitude)")
     args = ap.parse_args()
+    stem = args.out_stem or f"{args.property}_injection_magnitude"
 
     runs = pd.read_csv(args.csv)
-    runs = runs[(runs.property == "density_atomic") & (runs["agg"] == "mean")
+    runs = runs[(runs.property == args.property) & (runs["agg"] == "mean")
                 & (runs.source == "raw") & (runs.strength != 0)
                 & (runs.method != "pca_local")].drop_duplicates("run")
     layers = sorted(runs.layer.unique())
@@ -137,7 +158,7 @@ def main():
 
     rows = []
     for _, r in runs.iterrows():
-        hook = hook_for(r, device)
+        hook = hook_for(r, device, args.property)
         if hook is None:
             print(f"  ! {r.run}: no artifact, skipped")
             continue
@@ -158,7 +179,7 @@ def main():
                          pct_p75=float((inj / hn).quantile(0.75) * 100)))
     d = pd.DataFrame(rows).sort_values(["layer", "method", "injection"])
     OUT.mkdir(parents=True, exist_ok=True)
-    d.to_csv(OUT / "density_injection_magnitude.csv", index=False, float_format="%.6g")
+    d.to_csv(OUT / f"{stem}.csv", index=False, float_format="%.6g")
     print("\n" + d[["label", "layer", "injection", "pct_of_h", "valid_pct",
                     "cohens_d"]].to_string(index=False))
 
@@ -188,7 +209,7 @@ def main():
         ax.set_xlim(0, max(d.pct_p75) / 0.68)
         for sp in ("top", "right", "left"):
             ax.spines[sp].set_visible(False)
-    fig.suptitle("What each density intervention cost, and what it bought\n"
+    fig.suptitle(f"What each {args.property} intervention cost, and what it bought\n"
                  "bars ordered by effect size (largest at top); "
                  f"median |h_new - h| over {states[layers[0]].shape[0]:,} real per-token "
                  "states, as a share of the state's own norm; whiskers = "
@@ -199,7 +220,7 @@ def main():
                  "(linear: 96-98% of its vector), so the bars are comparable",
                  fontsize=12)
     fig.tight_layout()
-    fig.savefig(OUT / "density_injection_magnitude.png", dpi=150,
+    fig.savefig(OUT / f"{stem}.png", dpi=150,
                 bbox_inches="tight", facecolor="white")
     print(f"\nSaved {OUT / 'density_injection_magnitude.png'}")
 

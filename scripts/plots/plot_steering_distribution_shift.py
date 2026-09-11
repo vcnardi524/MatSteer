@@ -343,14 +343,22 @@ def discover_runs(results_dir: str, family: str, method: str = "linear",
         strength = sweep_strength(stem, kind)
         if strength is None:
             continue
+        # LAYER applies to every method. It used to sit inside the non-linear branch
+        # below, so a linear run was never filtered by layer: asking for band gap at
+        # layer 4 returned the layer-14 `test_clean` arms too, and where strengths
+        # collided (16, 40) the layer-14 run overwrote the layer-4 one and the whole
+        # table paired against the 10,286-prompt clean control instead of the 1,000-
+        # prompt one. Density never exposed it -- its layer-7 arms are nosg and its
+        # layer-14 arms are sg, so the family filter happened to separate them.
+        if layer is not None and not is_control:
+            lm = re.search(r"_layer(\d+)", stem)
+            if not lm or int(lm.group(1)) != layer:
+                continue
+        # TARGET is a pca/manifold concept only; a linear run has none.
         if kind != "linear" and not is_control:
             if target is not None:
                 tgt = sweep_target(stem, kind)
                 if tgt is None or tgt != target:
-                    continue
-            if layer is not None:
-                lm = re.search(r"_layer(\d+)", stem)
-                if not lm or int(lm.group(1)) != layer:
                     continue
         is_nosg = stem.endswith("_nosg.parquet")
         if family == "nosg" and not is_nosg:
