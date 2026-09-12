@@ -113,6 +113,15 @@ PROPS = {
         default_family=None,
         measure="predictor",
     ),
+    "formation_energy_per_atom": dict(
+        results_dir="formation_energy_per_atom",
+        col="formation_energy_per_atom",
+        label="Formation energy (eV/atom)",
+        # signed -- runs -5.15 to +8.99, median -1.55 -- so log10 is not available.
+        scale="linear",
+        default_family="nosg",
+        measure="predictor",
+    ),
     "energy_above_hull": dict(
         results_dir="energy_above_hull",
         col="energy_above_hull",

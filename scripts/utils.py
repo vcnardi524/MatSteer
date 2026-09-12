@@ -159,7 +159,8 @@ RESULT_COLUMNS = [
     "cohens_d", "p_paired", "p_holm", "p_wilcoxon",
 ]
 RESULT_UNITS = {"band_gap": "eV", "density_atomic": "log10_A3_per_atom",
-                "energy_above_hull": "eV_per_atom"}
+                "energy_above_hull": "eV_per_atom",
+                "formation_energy_per_atom": "eV_per_atom"}
 
 
 def write_results_table(df: pd.DataFrame, path) -> Path:
