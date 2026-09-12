@@ -133,6 +133,9 @@ def pareto(d, series, layer, path, sign="both"):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mag", default=MAG)
+    ap.add_argument("--property", default="density",
+                    help="Names the output files and the axis text. The runs themselves "
+                         "come from --mag, so point this at that property's CSV too.")
     ap.add_argument("--layer", type=int, default=7)
     ap.add_argument("--sign", choices=("both", "pos", "neg"), default="both",
                     help="keep only runs asked to raise the property (pos), lower it "
@@ -158,7 +161,7 @@ def main():
     if not cols:                       # linear only
         cols = [("linear only", lin)]
 
-    fig, axes = plt.subplots(2, len(cols), figsize=(8 * len(cols), 9),
+    fig, axes = plt.subplots(2, len(cols), figsize=(max(13, 8 * len(cols)), 9),
                              sharex=True, sharey="row", squeeze=False)
     for col, (title, members) in enumerate(cols):
         ax_d, ax_v = axes[0][col], axes[1][col]
@@ -179,7 +182,10 @@ def main():
         ax_d.axhline(0, color="#999", lw=1)
         ax_d.set_title(title, fontsize=12, loc="left")
         ax_d.legend(frameon=False, fontsize=9, loc="upper left")
-        ax_v.set_ylim(0, 100)
+        # 0-100 only when something actually collapses; otherwise all the
+        # variation is squashed into a band at the top and the panel reads empty.
+        vlo = min(f.valid_pct.min() for _, _, _, f, _ in members) * 100
+        ax_v.set_ylim(0 if vlo < 40 else max(0, vlo - 8), 100)
         ax_v.set_xlabel("injection magnitude  |$h_{new}-h$| as % of |$h$|")
         for ax in (ax_d, ax_v):
             ax.grid(alpha=0.25, lw=0.6)
@@ -189,22 +195,23 @@ def main():
     axes[1][0].set_ylabel("valid output (%)")
 
     hnorm = d[d.layer == args.layer].h_norm.iloc[0]
-    direction = {"pos": "asked to RAISE density", "neg": "asked to LOWER density",
+    direction = {"pos": f"asked to RAISE {args.property}",
+                 "neg": f"asked to LOWER {args.property}",
                  "both": "both directions"}[args.sign]
-    fig.suptitle(f"[{direction}]  "
-                 f"Layer {args.layer}, no space group: manifold sweeps against the linear "
-                 f"baseline (repeated in both columns)\n"
-                 f"x is the measured push, not each method's own knob, so the methods are "
-                 f"comparable (median |$h$| = {hnorm:.1f}).  "
-                 f"top row: effect.  bottom row: how much output survived",
-                 fontsize=13)
+    fig.suptitle(f"[{direction}]  Layer {args.layer}, no space group:\n"
+                 f"manifold sweeps against the linear baseline"
+                 f"{' (repeated in both columns)' if len(cols) > 1 else ''}\n"
+                 f"x is the measured push, not each method's own knob, so the methods\n"
+                 f"are comparable (median |$h$| = {hnorm:.1f}).   "
+                 f"top: effect.   bottom: output that survived",
+                 fontsize=12)
     fig.tight_layout()
     tag = "" if args.sign == "both" else f"_{args.sign}"
-    path = OUT / f"density_magnitude_response_layer{args.layer}{tag}.png"
+    path = OUT / f"{args.property}_magnitude_response_layer{args.layer}{tag}.png"
     fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="white")
     print(f"Saved {path}")
     pareto(d, series, args.layer,
-           OUT / f"density_pareto_layer{args.layer}{tag}.png", args.sign)
+           OUT / f"{args.property}_pareto_layer{args.layer}{tag}.png", args.sign)
     for name, _, _, f, _ in series:
         print(f"\n{name}")
         print(f[["label", "pct_of_h", "cohens_d", "valid_pct"]].to_string(index=False))
