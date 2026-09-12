@@ -24,6 +24,7 @@ Usage:
 import argparse
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
@@ -48,10 +49,15 @@ def series_for(d, layer, min_points=4, sign="both"):
     # The DIRECTION the run was asked to move in: sign of the arc step for manifold,
     # sign of alpha for linear. Injection magnitude is a norm and so always positive,
     # which is why direction has to come from the knob rather than from the x axis.
+    # The injection is scale * (dec(u+delta) - dec(u)), so the direction asked for is
+    # sign(delta * scale). Using sign(delta) alone was wrong for any sweep that encodes
+    # direction in the scale: energy_above_hull steers toward stability with a POSITIVE
+    # delta and a NEGATIVE scale, so man[target < 0] dropped all 20 of its arms.
+    man_dir = np.sign(man.target * man.strength) if len(man) else man.target
     if sign == "pos":
-        man, lin = man[man.target > 0], lin[lin.strength > 0]
+        man, lin = man[man_dir > 0], lin[lin.strength > 0]
     elif sign == "neg":
-        man, lin = man[man.target < 0], lin[lin.strength < 0]
+        man, lin = man[man_dir < 0], lin[lin.strength < 0]
     out = []
 
     steps = sorted(v for v in man.strength.unique()
@@ -138,16 +144,31 @@ def main():
                          "come from --mag, so point this at that property's CSV too.")
     ap.add_argument("--layer", type=int, default=7)
     ap.add_argument("--sign", choices=("both", "pos", "neg"), default="both",
-                    help="keep only runs asked to raise the property (pos), lower it "
-                         "(neg), or all of them")
+                    help="Direction to plot. 'both' writes TWO separate figures, one per "
+                         "direction -- it never draws them together. x is a magnitude, so "
+                         "+alpha and -alpha land on the same x and a combined line "
+                         "zigzags between opposite directions.")
     ap.add_argument("--min-points", type=int, default=4,
                     help="a ladder needs this many runs to be drawn as a series")
     args = ap.parse_args()
 
     d = pd.read_csv(args.mag)
-    series = series_for(d, args.layer, args.min_points, args.sign)
-    if not series:
+    signs = ["pos", "neg"] if args.sign == "both" else [args.sign]
+    drawn = 0
+    for sign in signs:
+        if render(d, args, sign):
+            drawn += 1
+    if not drawn:
         raise SystemExit(f"no sweeps with more than one point at layer {args.layer}")
+
+
+def render(d, args, sign):
+    """One figure for one direction. Returns False if that direction has no runs."""
+    series = series_for(d, args.layer, args.min_points, sign)
+    if not series:
+        print(f"  no runs asked to {'raise' if sign == 'pos' else 'lower'} "
+              f"{args.property} at layer {args.layer} -- skipped")
+        return False
 
     # Two columns rather than one crowded panel: the two families answer different
     # questions (does scale matter at a fixed arc step / does arc step matter at a fixed
@@ -196,8 +217,7 @@ def main():
 
     hnorm = d[d.layer == args.layer].h_norm.iloc[0]
     direction = {"pos": f"asked to RAISE {args.property}",
-                 "neg": f"asked to LOWER {args.property}",
-                 "both": "both directions"}[args.sign]
+                 "neg": f"asked to LOWER {args.property}"}[sign]
     fig.suptitle(f"[{direction}]  Layer {args.layer}, no space group:\n"
                  f"manifold sweeps against the linear baseline"
                  f"{' (repeated in both columns)' if len(cols) > 1 else ''}\n"
@@ -206,15 +226,16 @@ def main():
                  f"top: effect.   bottom: output that survived",
                  fontsize=12)
     fig.tight_layout()
-    tag = "" if args.sign == "both" else f"_{args.sign}"
+    tag = f"_{sign}"
     path = OUT / f"{args.property}_magnitude_response_layer{args.layer}{tag}.png"
     fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="white")
     print(f"Saved {path}")
     pareto(d, series, args.layer,
-           OUT / f"{args.property}_pareto_layer{args.layer}{tag}.png", args.sign)
+           OUT / f"{args.property}_pareto_layer{args.layer}{tag}.png", sign)
     for name, _, _, f, _ in series:
-        print(f"\n{name}")
+        print(f"\n[{sign}] {name}")
         print(f[["label", "pct_of_h", "cohens_d", "valid_pct"]].to_string(index=False))
+    return True
 
 
 if __name__ == "__main__":
