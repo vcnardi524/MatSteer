@@ -66,6 +66,9 @@ PROPERTY_PATHS = {
     "energy_above_hull": dict(
         vector="steering_vectors/energy_above_hull/layer{layer}.parquet",
         manifold="steering_vectors/manifolds/energy_above_hull_layer{layer}_k64_w0.1_max5.parquet"),
+    "formation_energy_per_atom": dict(
+        vector="steering_vectors/formation_energy_per_atom/layer{layer}.parquet",
+        manifold="steering_vectors/manifolds/formation_energy_per_atom_layer{layer}_k64_w0.25.parquet"),
 }
 COLOR = {"linear": "#D55E00", "manifold": "#0072B2", "pca_centroid": "#009E73"}
 MARKER = {"linear": "o", "manifold": "s", "pca_centroid": "^"}
