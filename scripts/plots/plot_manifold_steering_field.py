@@ -142,6 +142,15 @@ def main():
             if ri == 0:
                 ax.set_title(f"pc{a} / pc{b} / pc{e}", fontsize=10)
 
+    # A key for the colour, so the reader can tell which end of the curve is which
+    # property value rather than reading the ramp as decoration.
+    # Its own axis on the right -- ax=fig.axes drops it on top of the panels.
+    fig.subplots_adjust(right=0.91)
+    cax = fig.add_axes([0.925, 0.3, 0.011, 0.4])
+    cb = fig.colorbar(plt.cm.ScalarMappable(
+        cmap="viridis", norm=plt.Normalize(centres.min(), centres.max())), cax=cax)
+    cb.set_label(f"{prop_label}  (bucket centre)", fontsize=11)
+
     extra = (f"   arrows scaled per column for legibility (relative lengths WITHIN a "
              f"column are true)")
     fig.suptitle(
@@ -151,7 +160,7 @@ def main():
         f"grey = the fitted curve; points = bucket centroids coloured by {prop_label}, "
         f"sized by how many structures back them",
         fontsize=13)
-    fig.tight_layout(rect=[0.01, 0, 1, 0.97])
+
     out = Path(args.out or Path(args.centroids).with_name(
         Path(args.centroids).stem + f"_steering_field_s{args.scale:g}.png"))
     fig.savefig(out, dpi=140, bbox_inches="tight", facecolor="white")

@@ -82,6 +82,18 @@ def main():
         ax.set_title(f"pc{a} / pc{b} / pc{d3}", fontsize=11)
     axes[0][0].legend(loc="upper left", fontsize=9)
 
+    # A key for the colour. Without it the viridis ramp is decorative -- the reader
+    # cannot tell which end of the curve is which property value.
+    # Its own axis on the right. Passing ax=fig.axes with a 2x2 grid of 3-D axes puts
+    # the bar in the MIDDLE of the figure, on top of the panels.
+    fig.subplots_adjust(right=0.90)
+    cax = fig.add_axes([0.92, 0.25, 0.015, 0.5])
+    cb = fig.colorbar(plt.cm.ScalarMappable(
+        cmap="viridis",
+        norm=plt.Normalize(float(c.bucket_lo[inside].min()),
+                           float(c.bucket_lo[inside].max()))), cax=cax)
+    cb.set_label(f"{args.property}  (bucket lower edge, width {args.width:g})")
+
     # how far is each in-range centroid from the curve it was fitted to?
     dist = np.linalg.norm(P[inside][:, None, :len(pcs)] -
                           curve[None, :, :len(pcs)], axis=2).min(axis=1)
@@ -94,7 +106,6 @@ def main():
         f"max {dist.max():.3f}, over a curve spanning "
         f"{np.linalg.norm(curve[-1] - curve[0]):.1f} end to end",
         fontsize=12)
-    fig.tight_layout()
     # land beside the centroids that were plotted, whatever tree they came from
     out = cen_path.with_name(cen_path.stem + "_with_manifold.png")
     fig.savefig(out, dpi=140, bbox_inches="tight", facecolor="white")
