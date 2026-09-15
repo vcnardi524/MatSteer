@@ -156,7 +156,7 @@ def main():
                  fontsize=13, y=1.00)
     fig.tight_layout()
     out = analysis_dir(args.dataset, args.variant, args.partition, subdir="plots") / \
-        f"manifold_encoding_{args.property}_layer{args.layer}.png"
+        f"manifold_encoding_{args.property}_layer{args.layer}_k{args.k}.png"
     fig.savefig(out, dpi=130, bbox_inches="tight")
     pd.DataFrame({args.property: vals, "encoded_arc": u,
                   "encoded_property": got}).to_csv(
