@@ -45,6 +45,9 @@ def main():
     ap.add_argument("--k", type=int, default=64)
     ap.add_argument("--n", type=int, default=40000, help="structures to sample")
     add_partition_args(ap)                      # --dataset / --variant / --partition
+    ap.add_argument("--bands", nargs="+", default=None,
+                    help="Explicit true-property bands as lo:hi, e.g. -3:-2.5 0:0.5. "
+                         "Default: five windows at the 10/30/50/70/90th percentiles.")
     ap.add_argument("--batch-size", type=int, default=50_000)
     args = ap.parse_args()
 
@@ -111,7 +114,19 @@ def main():
     ax.legend(loc="upper left", fontsize=9, frameon=False)
 
     ax = axes[1]
-    bands = [(6, 9), (12, 14), (16, 18), (21, 23), (28, 31)]
+    # Bands were hardcoded as A^3/atom windows, so every one of them was empty for any
+    # property on a different scale and the panel came out blank. Derive them from the
+    # data instead: five narrow windows at the 10/30/50/70/90th percentiles of the true
+    # property, each half a decile wide. --bands still overrides for a specific set.
+    if args.bands:
+        bands = [tuple(float(x) for x in b.split(":")) for b in args.bands]
+    else:
+        q = np.percentile(vals, [10, 30, 50, 70, 90])
+        half = 0.25 * (np.percentile(vals, 60) - np.percentile(vals, 40)) or \
+               0.02 * (vals.max() - vals.min())
+        bands = [(c - half, c + half) for c in q]
+    print(f"  bands (true {args.property}): "
+          + ", ".join(f"{a:g}..{b:g}" for a, b in bands))
     cmap = plt.get_cmap("viridis")
     rows = []
     for i, (a, b) in enumerate(bands):
