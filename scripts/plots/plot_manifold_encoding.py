@@ -95,7 +95,24 @@ def main():
     got = np.interp(u, m.arc.numpy(), m.prop.numpy())
     err = got - vals
     rho = float(pd.Series(vals).corr(pd.Series(got), method="spearman"))
+
+    # TWO R-squareds, because they answer different questions and disagree sharply here.
+    #
+    #   r2_identity  1 - SS_res/SS_tot against the IDENTITY line, which is what a working
+    #                encode would produce. This is the one that matters: it asks whether
+    #                encode is a usable estimate of the property. It goes NEGATIVE when
+    #                encode does worse than just predicting the mean for everything.
+    #   r2_linear    squared Pearson correlation -- how much LINEAR association there is,
+    #                ignoring any offset or compression. It stays high even when encode
+    #                systematically squashes the range toward the middle, which it does.
+    ss_res = float(((got - vals) ** 2).sum())
+    ss_tot = float(((vals - vals.mean()) ** 2).sum())
+    r2_identity = 1.0 - ss_res / ss_tot if ss_tot else float("nan")
+    r2_linear = float(pd.Series(vals).corr(pd.Series(got))) ** 2
     print(f"  spearman(true, encoded) = {rho:+.4f}   (a working encode is ~+1.0)")
+    print(f"  R^2 vs the identity line = {r2_identity:+.4f}   "
+          f"(1.0 = perfect, 0 = no better than the mean, negative = worse)")
+    print(f"  r^2 (Pearson, linear association only) = {r2_linear:.4f}")
     print(f"  error (encoded - true):  median {np.median(err):+.2f}  "
           f"MAE {np.abs(err).mean():.2f}  within +-2: {(np.abs(err) <= 2).mean():.1%}")
 
@@ -109,7 +126,9 @@ def main():
     ax.set_ylabel(f"{args.property} encode() assigns it")
     ax.set_xlim(lo, hi); ax.set_ylim(lo, hi)
     ax.set_title(f"{len(vals):,} real embeddings\n"
-                 f"spearman {rho:+.3f}   MAE {np.abs(err).mean():.2f}   "
+                 f"$R^2$ vs identity {r2_identity:+.3f}   "
+                 f"$r^2$ linear {r2_linear:.3f}   spearman {rho:+.3f}\n"
+                 f"MAE {np.abs(err).mean():.2f}   "
                  f"within \u00b12: {(np.abs(err) <= 2).mean():.0%}")
     ax.legend(loc="upper left", fontsize=9, frameon=False)
 
