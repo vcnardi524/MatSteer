@@ -1,0 +1,5 @@
+layer,variant,distance,mean_cos
+7,raw,0,0.977392
+7,raw,1,0.970857
+7,centered,0,0.170272
+7,centered,1,-0.00707062
