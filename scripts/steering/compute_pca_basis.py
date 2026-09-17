@@ -30,21 +30,11 @@ from sklearn.decomposition import IncrementalPCA
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
-from utils import (filter_partition, partition_id_sets, embeddings_paths,
-                   load_split_index, add_partition_args)
+from utils import (filter_partition, partition_id_sets, embedding_files,
+                   embeddings_paths, load_split_index, add_partition_args)  # noqa: F401
 
 METHOD_DIR = Path("steering_vectors") / "pca_centroid"
 
-
-def embedding_files(layer: int, dataset: str, variant: str) -> list[Path]:
-    """The consolidated parquet if it exists, else the checkpoint shards."""
-    single, ckpt = embeddings_paths(layer, dataset, variant)
-    if single.exists():
-        return [single]
-    files = sorted(ckpt.glob("checkpoint_*.parquet")) + sorted(ckpt.glob("batch_*.parquet"))
-    if not files:
-        raise FileNotFoundError(f"No embeddings for layer {layer} at {single} or {ckpt}/")
-    return files
 
 
 def stream_batches(files: list[Path], keep_ids: set | None, batch_size: int,
@@ -93,7 +83,7 @@ def main():
     elif drop_ids is not None:
         print(f"Partition '{args.partition}': dropping {len(drop_ids):,} val/test ids")
 
-    files = embedding_files(args.layer, args.dataset, args.variant)
+    files = embedding_files(args.layer, args.dataset, args.variant, args.model)
     print(f"Fitting IncrementalPCA(k={args.k}) over layer {args.layer} "
           f"[{args.dataset}/{args.variant}/{args.partition}] from {len(files)} file(s) ...")
 

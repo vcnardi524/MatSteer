@@ -17,20 +17,36 @@ source /home/victor_nardi/.bashrc
 
 mkdir -p logs
 
-source CrystaLLM/crystallm_venv/bin/activate
+# MODEL picks both the weights loaded and the embeddings/<dataset>/<model>/ subdir.
+# llamat2 needs a venv with transformers -- crystallm_venv does not have it.
+#   sbatch --export=ALL,MODEL=llamat2,CKPT_DIR=<hf-dir> slurms/extract_cif_embeddings.slurm
+MODEL=${MODEL:-crystallm}
+CKPT_DIR=${CKPT_DIR:-CrystaLLM/crystallm_v1_large}
+
+# crystallm_venv has no transformers, so llamat2 needs its own venv. Override with
+# VENV=<path> if it lands somewhere else.
+if [ "$MODEL" = "crystallm" ]; then
+    VENV=${VENV:-CrystaLLM/crystallm_venv}
+else
+    VENV=${VENV:-llamat_venv}
+fi
+[ -d "$VENV" ] || { echo "venv $VENV not found"; exit 1; }
+source "$VENV/bin/activate"
+echo "venv: $VENV"
 
 pip install -q "numpy<2"
 
 # VARIANT=full  (default) embeds the CIFs as-is.
 # VARIANT=nosym drops the _symmetry_space_group_name_H-M / _symmetry_Int_Tables_number
 #   lines first, so the space group is not handed to the model verbatim. Output goes to
-#   embeddings/v1_all/$VARIANT/, so the two never overwrite each other.
+#   embeddings/v1_all/$MODEL/$VARIANT/, so the two never overwrite each other.
 #   Submit with: sbatch --export=ALL,VARIANT=nosym slurms/extract_cif_embeddings.slurm
 VARIANT=${VARIANT:-full}
-echo "Extracting variant: $VARIANT"
+echo "Extracting model=$MODEL variant=$VARIANT from $CKPT_DIR"
 
 python scripts/embeddings/extract_cif_embeddings.py \
-    --model CrystaLLM/crystallm_v1_large \
+    --model "$MODEL" \
+    --ckpt-dir "$CKPT_DIR" \
     --pkl CrystaLLM/cifs_v1_prep.pkl.gz \
     --variant "$VARIANT" \
     --batch-size 32 \

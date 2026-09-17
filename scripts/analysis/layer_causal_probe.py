@@ -93,7 +93,8 @@ def volume_digit_positions(tokens: list):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="CrystaLLM/crystallm_v1_large")
+    ap.add_argument("--ckpt-dir", default="CrystaLLM/crystallm_v1_large",
+                    help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
     ap.add_argument("--property", default="density_atomic",
                     help="steering_vectors/<property>/layer{N}.parquet must exist per layer")
     ap.add_argument("--method", choices=("linear", "pca_centroid"), default="linear",
@@ -110,7 +111,7 @@ def main():
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, config = load_model(args.model, device)
+    model, config = load_model(args.ckpt_dir, device)
     tokenizer = CIFTokenizer()
     digit_ids = torch.tensor([tokenizer.token_to_id[d] for d in DIGITS], device=device)
     # log10 of each digit, for the leading-digit term of the magnitude estimate;

@@ -25,7 +25,7 @@ from sklearn.preprocessing import StandardScaler
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_labeled_embeddings, filter_partition, analysis_dir
+from utils import DEFAULT_MODEL, load_labeled_embeddings, filter_partition, analysis_dir
 
 # -------------------------------
 # Configuration
@@ -40,6 +40,7 @@ RANDOM_SEED = 1
 # no default on purpose: 89.6% of the labelled structures are in the model's own training
 # set, so a silent default would quietly measure memorization.
 VARIANT = os.environ.get("VARIANT", "full")
+MODEL = os.environ.get("MODEL", DEFAULT_MODEL)   # see utils.MODELS
 PARTITION = os.environ.get("PARTITION")
 if PARTITION is None:
     raise SystemExit("Set PARTITION=all|train|val|test, e.g. "
@@ -91,7 +92,8 @@ def main():
         print(f"  {len(df):,} structures, {df['cluster'].nunique()} clusters, "
               f"labels re-joined from {METADATA_PATH}")
     else:
-        df = load_labeled_embeddings(LAYER, dataset=DATASET, metadata_path=METADATA_PATH,
+        df = load_labeled_embeddings(LAYER, dataset=DATASET, model=MODEL,
+                                     metadata_path=METADATA_PATH,
                                      variant=VARIANT)
         df = filter_partition(df, PARTITION)
 

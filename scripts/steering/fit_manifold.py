@@ -121,7 +121,8 @@ def main():
 
     print(f"Streaming layer-{args.layer} embeddings, bucketing by {args.width:g} ...")
     sums, counts, _, _ = bucket_centroids(labels, args.property, args.width, args.layer,
-                                          args.dataset, args.variant, args.batch_size)
+                                          args.dataset, args.variant, args.batch_size,
+                                          model=args.model)
     kept = sorted(b for b, n in counts.items() if n >= args.min_count)
     if len(kept) < 4:
         raise SystemExit(f"Only {len(kept)} buckets survived --min-count; need >= 4")

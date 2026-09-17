@@ -116,7 +116,8 @@ def pooled(buffer, layers):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--model", required=True)
+    p.add_argument("--ckpt-dir", required=True,
+                 help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
     p.add_argument("--pkl", required=True)
     p.add_argument("--method", choices=("linear", "manifold"), default="manifold")
     p.add_argument("--manifold", default=None)
@@ -148,7 +149,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    model, config = _sg.load_model(args.model, device)
+    model, config = _sg.load_model(args.ckpt_dir, device)
     tokenizer = _sg.CIFTokenizer()
     layers = [int(x) for x in args.capture_layers.split(",")]
     assert all(0 <= l < config.n_layer for l in layers), f"layers outside 0..{config.n_layer-1}"

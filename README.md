@@ -355,17 +355,22 @@ injection arrives, not that it directs anything.
 
 ### How `embeddings/` and `analysis/` are organised
 
-Both trees use the same first two levels, so an analysis directory names exactly which
-embeddings produced it. Built by `utils.py:analysis_dir()` / `embeddings_paths()`.
+Built by `utils.py:analysis_dir()` / `embeddings_paths()`.
 
 ```
-embeddings/<dataset>/<variant>/cif_layer{0..15}[.parquet]
+embeddings/<dataset>/<model>/<variant>/cif_layer{0..N}[.parquet]
 
 analysis/<dataset>/<variant>/<partition>/
 ├── <global outputs>            # span every layer: probe tables, separability CSVs
 └── plots/
-    └── layer{0..15}/           # one figure per layer
+    └── layer{0..N}/            # one figure per layer
 ```
+
+> **`analysis/` has no `<model>` level yet.** Everything under it was produced by
+> `crystallm`. Adding a second model's analysis outputs requires that level, or the
+> two will overwrite each other file for file — a `llamat2` probe table would land on
+> top of the `crystallm` one at the same path. Add it before running any analysis on
+> `llamat2`, not after.
 
 **1. dataset** — which corpus the CIFs came from.
 
@@ -378,7 +383,24 @@ They overlap by only 58,650 ids, and each is sampled independently, so **a t-SNE
 one is not comparable to a t-SNE from the other** — different point clouds give
 different shapes no matter what the colouring shows.
 
-**2. variant** — which CIF *text* the embeddings were extracted from.
+**2. model** — which model produced the hidden states. Registered in `utils.MODELS`.
+
+| | |
+|---|---|
+| `crystallm` | CrystaLLM v1 large: 16 blocks, 1024-dim, its own CIF tokenizer (≈one token per CIF field) |
+| `llamat2` | LLaMat-2 (`m3rg-iitd`): LLaMA-2 7B continued-pretrained on materials text — 32 blocks, 4096-dim, general BPE tokenizer |
+
+The same corpus read by two models gives two unrelated sets of vectors: same ids, same
+CIF text, different dimensionality, no shared basis. So **a layer index does not mean
+the same thing in each** — layer 7 is 7/16 of the way through `crystallm` and 7/32
+through `llamat2` — and a steering vector, PCA basis or manifold fitted on one cannot be
+applied to the other. Nothing in the repo mixes two models in one artifact; the path
+level is what keeps that true.
+
+`--model` names the model; `--ckpt-dir` is the filesystem path to its weights. The two
+were both called `--model` before a second model existed.
+
+**3. variant** — which CIF *text* the embeddings were extracted from.
 
 | | |
 |---|---|
@@ -395,7 +417,7 @@ Outputs that read metadata but never embeddings (the property histograms) pass
 `variant=None` and **drop this level entirely**: `analysis/v1_mp/all/`. They would be
 byte-identical under `full/` and `nosym/`.
 
-**3. partition** — which slice of CrystaLLM's own train/val/test split, one of
+**4. partition** — which slice of CrystaLLM's own train/val/test split, one of
 `all` / `train` / `val` / `test`. `analysis_dir` has no default and `add_partition_args`
 makes `--partition` required, on purpose: 89.6% of labelled structures are in the
 model's training set and only 0.45% in its test set, so a result on `all` cannot
@@ -480,6 +502,9 @@ analysis/v1_mp/all/metadata_mp_*.png        MP metadata histograms — no varian
   Never write one of these files by hand.
 
 ## Environments
-- `CrystaLLM/crystallm_venv` — generation (cu130; GPU generation only).
+- `CrystaLLM/crystallm_venv` — generation and `crystallm` embedding extraction (cu130; GPU generation only).
 - `relax_venv` — M3GNet-PES relaxation (cu121, V100-compatible).
 - `megnet_venv` — MEGNet band-gap prediction (CPU).
+- `llamat_venv` — **not created yet.** `llamat2` extraction needs `transformers`, which
+  none of the three above has. The extraction slurms pick this venv whenever
+  `MODEL != crystallm`; override with `VENV=<path>`.

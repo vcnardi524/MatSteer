@@ -2,25 +2,48 @@
 """
 extract_cif_embeddings.py
 
-Forward-pass each CIF through CrystaLLM once and save mean-pooled hidden states
-for all (or selected) transformer layers in parallel.
+Forward-pass each CIF through a model once and save mean-pooled hidden states for all
+(or selected) transformer layers in parallel.
+
+Two model families are supported, selected with --model:
+
+    crystallm  CrystaLLM v1 large. 16 blocks, 1024-dim, nanoGPT-style checkpoint
+               (ckpt.pt), and CrystaLLM's own CIF tokenizer -- roughly one token per
+               CIF field.
+    llamat2    LLaMat-2 (m3rg-iitd), LLaMA-2 7B continued-pretrained on materials
+               text. 32 blocks, 4096-dim, HuggingFace format, general BPE tokenizer.
+
+The CIF TEXT fed to both is identical -- the same preprocess_cif / strip_symmetry pass
+below -- so the comparison is between models rather than between inputs. Everything
+downstream of the forward pass (length-sorted batching, masked mean pooling, the
+checkpoint/resume scheme, the parquet schema) is shared.
+
+What is NOT comparable across the two: a layer index, and any artifact fitted on one.
+Layer 7 is 7/16 of the way through crystallm and 7/32 through llamat2, the hidden
+sizes differ, and there is no shared basis, so a steering vector, PCA basis or manifold
+belongs to exactly one model. See utils.MODELS.
 
 Setup:
-    cd CrystaLLM && python bin/download.py crystallm_v1_large.tar.gz
-    tar -xzf crystallm_v1_large.tar.gz
+    crystallm:  cd CrystaLLM && python bin/download.py crystallm_v1_large.tar.gz
+                tar -xzf crystallm_v1_large.tar.gz
+    llamat2:    huggingface-cli download m3rg-iitd/<checkpoint> --local-dir <dir>
+                Needs a venv with `transformers`; none of the three existing venvs
+                has it (crystallm_venv is nanoGPT-only, relax/megnet are for M3GNet
+                and MEGNet). See README.
 
 Usage:
     source CrystaLLM/crystallm_venv/bin/activate
-    python extract_cif_embeddings.py \
-        --model CrystaLLM/crystallm_v1_large \
+    python scripts/embeddings/extract_cif_embeddings.py \
+        --model crystallm \
+        --ckpt-dir CrystaLLM/crystallm_v1_large \
         --pkl CrystaLLM/cifs_v1_prep.pkl.gz \
         [--layers 0,7,14]   # comma-separated; omit for all layers \
-        [--batch-size 16] \
+        [--batch-size 32] \
         [--limit 1000]
 
-Outputs: embeddings/<dataset>/<variant>/cif_layer{N}/checkpoint_XXXXX.parquet for each
-layer N, where <dataset> is --dataset (inferred from the pkl stem if omitted:
-cifs_v1_mp_prep -> v1_mp, else v1_all) and <variant> is --variant:
+Outputs: embeddings/<dataset>/<model>/<variant>/cif_layer{N}/checkpoint_XXXXX.parquet
+for each layer N, where <dataset> is --dataset (inferred from the pkl stem if omitted:
+cifs_v1_mp_prep -> v1_mp, else v1_all), <model> is --model, and <variant> is --variant:
 
     full   CIFs exactly as stored (default)
     nosym  the two lines that state the symmetry outright are removed first:
@@ -40,35 +63,18 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 import torch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM"))
-from crystallm import CIFTokenizer, GPTConfig, GPT
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
+from utils import DEFAULT_MODEL, MODELS, embeddings_paths
 
 
-def load_model(model_dir: str, device: torch.device):
-    ckpt = torch.load(os.path.join(model_dir, "ckpt.pt"), map_location=device)
-    config = GPTConfig(**ckpt["model_args"])
-    # Disable dropout for inference. The checkpoint ships dropout=0.1, and the functional
-    # SDPA dropout_p (_model.py) is NOT gated by model.eval(), so leaving it on drops ~10%
-    # of attention weights on every forward -> nondeterministic generation. This loader is
-    # inference-only, so force dropout to 0 here (covers SDPA + all nn.Dropout modules).
-    config.dropout = 0.0
-    model = GPT(config)
-    state_dict = ckpt["model"]
-    # strip compile prefix if present
-    for k in list(state_dict.keys()):
-        if k.startswith("_orig_mod."):
-            state_dict[k[len("_orig_mod."):]] = state_dict.pop(k)
-    model.load_state_dict(state_dict)
-    model.to(device)
-    model.eval()
-    for p in model.parameters():
-        p.requires_grad = False
-    print(f"Loaded model: {config.n_layer} layers, {config.n_embd} dim, block_size {config.block_size}")
-    return model, config
-
+# ---------------------------------------------------------------------------------
+# CIF text preparation -- shared by every backend, so both models read the same bytes
+# ---------------------------------------------------------------------------------
 
 def load_cifs(pkl_path: str, limit: int = None):
     print(f"Loading {pkl_path} ...")
@@ -114,28 +120,15 @@ def strip_symmetry(cif: str) -> str:
                      if not l.strip().startswith(SYMMETRY_KEYS))
 
 
-def tokenize_batch(cif_strings, tokenizer: CIFTokenizer, block_size: int, device: torch.device):
-    """Tokenize a list of CIF strings, truncate, pad to batch max length."""
-    encoded = []
-    lengths = []
-    for cif in cif_strings:
-        tokens = tokenizer.tokenize_cif(cif)
-        ids = tokenizer.encode(tokens)[:block_size]
-        encoded.append(ids)
-        lengths.append(len(ids))
-
-    max_len = max(lengths)
-    # pad with 0 (will be masked out during pooling)
-    padded = torch.zeros(len(encoded), max_len, dtype=torch.long, device=device)
-    for i, ids in enumerate(encoded):
-        padded[i, :len(ids)] = torch.tensor(ids, dtype=torch.long)
-
-    return padded, torch.tensor(lengths, dtype=torch.long, device=device)
-
-
 def mean_pool(hidden: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
-    """Mean pool hidden states over true (non-padding) token positions."""
-    # hidden: (B, T, D), lengths: (B,)
+    """Mean pool hidden states over true (non-padding) token positions.
+
+    Upcast to float32 first: llamat2 runs in float16, and summing ~1500 half-precision
+    positions accumulates visible error (half has ~3 decimal digits, and the running
+    sum grows past where its steps stay exact). crystallm already computes in float32,
+    so this is a no-op there.
+    """
+    hidden = hidden.float()
     B, T, D = hidden.shape
     mask = torch.arange(T, device=hidden.device).unsqueeze(0) < lengths.unsqueeze(1)  # (B, T)
     mask_f = mask.unsqueeze(2).float()  # (B, T, 1)
@@ -143,9 +136,176 @@ def mean_pool(hidden: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
     return pooled
 
 
+# ---------------------------------------------------------------------------------
+# Backends -- the only architecture-specific code
+# ---------------------------------------------------------------------------------
+#
+# Each backend exposes exactly what the extraction loop needs:
+#
+#   n_layer, n_embd, block_size   ints
+#   blocks                        the per-layer nn.Modules to hook, in order
+#   encode(cif) -> list[int]      token ids for one CIF, already truncated
+#   forward(input_ids)            one no-grad forward; hooks do the capturing
+#
+# The heavy imports live INSIDE the loaders on purpose. crystallm pulls in omegaconf and
+# a pinned pymatgen; transformers pulls in its own stack; and the two will not be
+# installed in the same venv. A top-level import of either would make this file
+# unimportable for the other model -- and seven scripts import load_model from here.
+
+
+def load_model(model_dir: str, device: torch.device):
+    """Load CrystaLLM from a nanoGPT-style ckpt.pt. Returns (model, config).
+
+    Kept at this name and signature because steer_generate_cif.py, test_kv_cache.py,
+    layer_causal_probe.py, layernorm_survival.py, manifold_distance.py,
+    injection_magnitude.py and analyze_steering_norms.py all import it from here.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM"))
+    from crystallm import GPTConfig, GPT
+
+    ckpt = torch.load(os.path.join(model_dir, "ckpt.pt"), map_location=device)
+    config = GPTConfig(**ckpt["model_args"])
+    # Disable dropout for inference. The checkpoint ships dropout=0.1, and the functional
+    # SDPA dropout_p (_model.py) is NOT gated by model.eval(), so leaving it on drops ~10%
+    # of attention weights on every forward -> nondeterministic generation. This loader is
+    # inference-only, so force dropout to 0 here (covers SDPA + all nn.Dropout modules).
+    config.dropout = 0.0
+    model = GPT(config)
+    state_dict = ckpt["model"]
+    # strip compile prefix if present
+    for k in list(state_dict.keys()):
+        if k.startswith("_orig_mod."):
+            state_dict[k[len("_orig_mod."):]] = state_dict.pop(k)
+    model.load_state_dict(state_dict)
+    model.to(device)
+    model.eval()
+    for p in model.parameters():
+        p.requires_grad = False
+    print(f"Loaded model: {config.n_layer} layers, {config.n_embd} dim, block_size {config.block_size}")
+    return model, config
+
+
+class CrystaLLMBackend:
+    """CrystaLLM v1: nanoGPT blocks at model.transformer.h, CIFTokenizer."""
+
+    def __init__(self, ckpt_dir: str, device: torch.device, torch_dtype: str = None):
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM"))
+        from crystallm import CIFTokenizer
+
+        self.model, config = load_model(ckpt_dir, device)
+        self.tokenizer = CIFTokenizer()
+        self.device = device
+        self.n_layer = config.n_layer
+        self.n_embd = config.n_embd
+        self.block_size = config.block_size
+        self.blocks = self.model.transformer.h
+        self.pad_id = 0
+
+    def encode(self, cif: str) -> list:
+        return self.tokenizer.encode(self.tokenizer.tokenize_cif(cif))[:self.block_size]
+
+    def forward(self, input_ids):
+        self.model(input_ids)
+
+
+class LlamatBackend:
+    """LLaMat-2: HuggingFace LLaMA-2, blocks at model.model.layers, BPE tokenizer.
+
+    Loaded in half precision by default -- a 7B model is ~27 GB in float32 and ~13 GB in
+    float16, and only the latter leaves room for activations on a 32 GB card. bfloat16
+    needs sm_80 (Ampere); the V100s here are sm_70, so float16 is the default.
+    """
+
+    def __init__(self, ckpt_dir: str, device: torch.device, torch_dtype: str = "float16"):
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        self.tokenizer = AutoTokenizer.from_pretrained(ckpt_dir, use_fast=True)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            ckpt_dir, torch_dtype=getattr(torch, torch_dtype), low_cpu_mem_usage=True)
+        self.model.to(device)
+        self.model.eval()
+        for p in self.model.parameters():
+            p.requires_grad = False
+
+        config = self.model.config
+        self.device = device
+        self.n_layer = config.num_hidden_layers
+        self.n_embd = config.hidden_size
+        self.block_size = config.max_position_embeddings
+        self.blocks = self.model.model.layers
+        # Padding is masked out of the pooled mean and, because attention is causal and
+        # padding sits at the END of each row, no real token ever attends to it. So the
+        # pad id only has to be a valid index. Llama tokenizers often ship without a pad
+        # token, hence the fallback chain rather than tokenizer.pad_token_id alone.
+        pad = self.tokenizer.pad_token_id
+        if pad is None:
+            pad = self.tokenizer.eos_token_id
+        self.pad_id = 0 if pad is None else pad
+        print(f"Loaded model: {self.n_layer} layers, {self.n_embd} dim, "
+              f"block_size {self.block_size}, dtype {torch_dtype}")
+
+    def encode(self, cif: str) -> list:
+        # add_special_tokens keeps the BOS the model was trained with.
+        return self.tokenizer(cif, add_special_tokens=True,
+                              truncation=True, max_length=self.block_size)["input_ids"]
+
+    def forward(self, input_ids):
+        # No attention_mask: right-padding plus causal attention means real tokens never
+        # see the pads, and mean_pool drops them from the average.
+        self.model(input_ids)
+
+
+BACKENDS = {"crystallm": CrystaLLMBackend, "llamat2": LlamatBackend}
+assert set(BACKENDS) == set(MODELS), "every registered model needs a backend"
+
+
+def tokenize_batch(cif_strings, backend, device: torch.device):
+    """Tokenize a list of CIF strings, truncate, pad to batch max length."""
+    encoded = [backend.encode(cif) for cif in cif_strings]
+    lengths = [len(ids) for ids in encoded]
+
+    max_len = max(lengths)
+    padded = torch.full((len(encoded), max_len), backend.pad_id,
+                        dtype=torch.long, device=device)
+    for i, ids in enumerate(encoded):
+        padded[i, :len(ids)] = torch.tensor(ids, dtype=torch.long)
+
+    return padded, torch.tensor(lengths, dtype=torch.long, device=device)
+
+
+# ---------------------------------------------------------------------------------
+
+# float32 is what both models actually compute in, so storing float64 -- which is what
+# .tolist() produced, since Python floats are C doubles -- wrote four bytes of zeros per
+# dimension. float16 halves it again and is the practical choice for llamat2: 32 layers
+# of 4096 dims over 2.29M structures is ~19 GB per layer even at half precision.
+DTYPES = {"float16": np.float16, "float32": np.float32, "float64": np.float64}
+
+
+def existing_dtype(ckpt_dir: Path):
+    """The embedding dtype already used in a layer dir, or None if it is empty.
+
+    Resuming with a different dtype writes shards that cannot be concatenated into one
+    parquet, and consolidate_embeddings.py only discovers that at the end of a long job.
+    Adopting what is already there makes resume always consistent.
+    """
+    for f in sorted(ckpt_dir.glob("checkpoint_*.parquet")):
+        try:
+            t = pq.read_table(f, columns=["embedding"]).schema.field("embedding").type
+            return {"halffloat": "float16", "float": "float32", "double": "float64"} \
+                .get(str(t.value_type), None)
+        except Exception:
+            continue
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", required=True, help="Path to model dir containing ckpt.pt")
+    parser.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                        help="Which model to run, and the subdir it is stored under "
+                             "(see utils.MODELS). Distinct from --ckpt-dir.")
+    parser.add_argument("--ckpt-dir", required=True,
+                        help="Path to the checkpoint directory holding the weights.")
     parser.add_argument("--pkl", required=True, help="Path to cifs pkl.gz")
     parser.add_argument("--layers", default=None,
                         help="Comma-separated layer indices to extract (default: all layers)")
@@ -161,26 +321,49 @@ def main():
                         help="full: CIFs as-is. nosym: drop the _symmetry_space_group_name_H-M "
                              "and _symmetry_Int_Tables_number lines first, so the space group "
                              "is not handed to the model verbatim (default: full).")
+    parser.add_argument("--dtype", default="float32", choices=list(DTYPES),
+                        help="Stored precision of the embedding vectors. float32 is what "
+                             "the models compute in. Use float16 for llamat2, where a "
+                             "single layer is ~19 GB over the full corpus even so. "
+                             "Ignored if the layer dir already holds shards, whose dtype "
+                             "is adopted instead so a resume stays concatenable.")
+    parser.add_argument("--torch-dtype", default="float16",
+                        choices=["float16", "bfloat16", "float32"],
+                        help="Precision the model RUNS in (llamat2 only; crystallm "
+                             "ignores it). bfloat16 needs sm_80+, the V100s are sm_70.")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # which embeddings/<dataset>/ subdir to write to
+    # which embeddings/<dataset>/<model>/<variant>/ subdir to write to
     dataset = args.dataset or (
         "v1_mp" if "mp" in Path(args.pkl).stem.lower().split("_") else "v1_all")
-    print(f"Writing embeddings to embeddings/{dataset}/{args.variant}/")
+    print(f"Writing embeddings to embeddings/{dataset}/{args.model}/{args.variant}/")
 
-    model, config = load_model(args.model, device)
+    backend = BACKENDS[args.model](args.ckpt_dir, device, args.torch_dtype)
 
-    layers = list(range(config.n_layer)) if args.layers is None \
+    layers = list(range(backend.n_layer)) if args.layers is None \
              else [int(x) for x in args.layers.split(",")]
-    assert all(0 <= l < config.n_layer for l in layers), \
-        f"Some layers out of range (model has {config.n_layer} layers)"
+    assert all(0 <= l < backend.n_layer for l in layers), \
+        f"Some layers out of range (model has {backend.n_layer} layers)"
 
-    out_dirs = {l: Path(f"embeddings/{dataset}/{args.variant}/cif_layer{l}") for l in layers}
+    out_dirs = {l: embeddings_paths(l, dataset, args.variant, args.model)[1] for l in layers}
     for d in out_dirs.values():
         d.mkdir(parents=True, exist_ok=True)
+
+    # Adopt the dtype already on disk, if any, so a resumed run stays concatenable.
+    found = {existing_dtype(d) for d in out_dirs.values()} - {None}
+    if len(found) > 1:
+        raise SystemExit(f"Layer dirs already hold mixed embedding dtypes {sorted(found)} "
+                         f"-- consolidate or clear them before resuming.")
+    dtype_name = found.pop() if found else args.dtype
+    if dtype_name != args.dtype:
+        print(f"Existing shards are {dtype_name}; using that instead of --dtype {args.dtype}")
+    store_dtype = DTYPES[dtype_name]
+    bytes_per_vec = np.dtype(store_dtype).itemsize * backend.n_embd
+    print(f"Storing embeddings as {dtype_name} "
+          f"({bytes_per_vec:,} bytes/structure/layer, {len(layers)} layers)")
 
     done_ids_per_layer = {}
     for l, d in out_dirs.items():
@@ -194,7 +377,6 @@ def main():
         if done:
             print(f"Layer {l}: resuming — {len(done):,} entries already done")
 
-    tokenizer = CIFTokenizer()
     data = load_cifs(args.pkl, args.limit)
 
     # filter to entries not yet done (use layer 0 as reference)
@@ -221,9 +403,11 @@ def main():
     for l in layers:
         def make_hook(layer_idx):
             def hook_fn(module, inp, out):
-                captured[layer_idx] = out
+                # HF blocks return a tuple (hidden_states, ...); nanoGPT returns the
+                # tensor. Taking [0] of a tensor would silently keep one row.
+                captured[layer_idx] = out[0] if isinstance(out, tuple) else out
             return hook_fn
-        hooks.append(model.transformer.h[l].register_forward_hook(make_hook(l)))
+        hooks.append(backend.blocks[l].register_forward_hook(make_hook(l)))
 
     pending = {l: {"ids": [], "embeddings": []} for l in layers}
     checkpoint_num = {l: len(list(out_dirs[l].glob("checkpoint_*.parquet"))) for l in layers}
@@ -239,21 +423,22 @@ def main():
             cifs = [strip_symmetry(c) for c in cifs]
 
         try:
-            input_ids, lengths = tokenize_batch(cifs, tokenizer, config.block_size, device)
+            input_ids, lengths = tokenize_batch(cifs, backend, device)
             captured.clear()
             with torch.no_grad():
-                model(input_ids)
+                backend.forward(input_ids)
 
             for l in layers:
-                embeddings = mean_pool(captured[l], lengths).cpu().float()
+                embeddings = mean_pool(captured[l], lengths).cpu().numpy().astype(store_dtype)
                 pending[l]["ids"].extend(ids)
-                pending[l]["embeddings"].extend(embeddings.tolist())
+                pending[l]["embeddings"].extend(list(embeddings))
 
         except Exception as e:
             print(f"  WARNING: batch at {i} failed: {e}", flush=True)
             for l in layers:
                 pending[l]["ids"].extend(ids)
-                pending[l]["embeddings"].extend([[0.0] * config.n_embd] * len(ids))
+                pending[l]["embeddings"].extend(
+                    [np.zeros(backend.n_embd, dtype=store_dtype)] * len(ids))
 
         completed += len(batch)
         batch_num = i // args.batch_size + 1
@@ -277,7 +462,8 @@ def main():
 
     for h in hooks:
         h.remove()
-    print(f"\nDone. Outputs in embeddings/{dataset}/{args.variant}/cif_layer{{N}}/ for layers {layers}")
+    print(f"\nDone. Outputs in embeddings/{dataset}/{args.model}/{args.variant}/"
+          f"cif_layer{{N}}/ for layers {layers}")
 
 
 if __name__ == "__main__":

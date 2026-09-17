@@ -96,7 +96,8 @@ def main():
     ids = meta.loc[meta["space_group_symbol"] == args.sg, "id"]
     print(f"  {args.sg} materials: {len(ids):,}")
 
-    emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant)
+    emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant,
+                          model=args.model)
     emb = filter_partition(emb, args.partition)
     df = emb[emb["id"].isin(set(ids))].reset_index(drop=True)
     print(f"  with embeddings: {len(df):,}")

@@ -91,7 +91,7 @@ def main():
           f"range [{vals.min():.3f}, {vals.max():.3f}]  mean {vals.mean():.3f}")
 
     class_ids = set(cls["id"])
-    files = embedding_files(args.layer, args.dataset, args.variant)
+    files = embedding_files(args.layer, args.dataset, args.variant, args.model)
     print(f"Averaging layer-{args.layer} embeddings over the class ...")
     total, n = np.zeros(len(mean), dtype=np.float64), 0
     bank = [] if args.save_bank else None

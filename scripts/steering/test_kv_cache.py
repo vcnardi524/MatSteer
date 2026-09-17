@@ -44,7 +44,8 @@ def build_hook(vec):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="CrystaLLM/crystallm_v1_large")
+    ap.add_argument("--ckpt-dir", default="CrystaLLM/crystallm_v1_large",
+                    help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
     ap.add_argument("--pkl", default="CrystaLLM/cifs_v1_test.pkl.gz")
     ap.add_argument("--n-prompts", type=int, default=3)
     ap.add_argument("--max-new-tokens", type=int, default=200)
@@ -54,7 +55,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    model, _ = load_model(args.model, device)
+    model, _ = load_model(args.ckpt_dir, device)
     model.eval()
     tokenizer = CIFTokenizer()
 

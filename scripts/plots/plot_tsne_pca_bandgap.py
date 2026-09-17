@@ -64,7 +64,8 @@ def uniform_sample_by_value(values: np.ndarray, n: int, bins: int) -> np.ndarray
     return sel
 
 
-def load_joined(layer: int, dataset: str, variant: str, partition: str) -> pd.DataFrame:
+def load_joined(layer: int, dataset: str, model: str, variant: str,
+                partition: str) -> pd.DataFrame:
     """Load clean band gaps + embeddings and inner-join on id."""
     print("Loading metadata (clean band gap) ...")
     meta = pd.read_parquet("metadata.parquet", columns=["id", BG_COL])
@@ -72,7 +73,7 @@ def load_joined(layer: int, dataset: str, variant: str, partition: str) -> pd.Da
     meta["band_gap_ev"] = meta[BG_COL].astype(float)
     print(f"  {len(meta):,} entries with clean band gap")
 
-    emb = load_embeddings(layer, dataset=dataset, variant=variant)
+    emb = load_embeddings(layer, dataset=dataset, variant=variant, model=model)
     emb = filter_partition(emb, partition)
     print(f"  Embeddings: {len(emb):,}")
     df = emb.merge(meta[["id", "band_gap_ev"]], on="id", how="inner")
@@ -205,7 +206,7 @@ def main():
 
     np.random.seed(RANDOM_SEED)
 
-    df = load_joined(args.layer, args.dataset, args.variant, args.partition)
+    df = load_joined(args.layer, args.dataset, args.model, args.variant, args.partition)
     out_dir = analysis_dir(args.dataset, args.variant, args.partition,
                            subdir=f"plots/layer{args.layer}")
 

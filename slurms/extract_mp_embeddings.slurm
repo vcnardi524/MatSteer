@@ -14,22 +14,37 @@ source /home/victor_nardi/.bashrc
 
 mkdir -p logs
 
-source CrystaLLM/crystallm_venv/bin/activate
+# MODEL picks both the weights loaded and the embeddings/<dataset>/<model>/ subdir.
+# llamat2 needs a venv with transformers -- crystallm_venv does not have it.
+#   sbatch --export=ALL,MODEL=llamat2,CKPT_DIR=<hf-dir> slurms/extract_cif_embeddings.slurm
+MODEL=${MODEL:-crystallm}
+CKPT_DIR=${CKPT_DIR:-CrystaLLM/crystallm_v1_large}
+
+# crystallm_venv has no transformers, so llamat2 needs its own venv. Override with
+# VENV=<path> if it lands somewhere else.
+if [ "$MODEL" = "crystallm" ]; then
+    VENV=${VENV:-CrystaLLM/crystallm_venv}
+else
+    VENV=${VENV:-llamat_venv}
+fi
+[ -d "$VENV" ] || { echo "venv $VENV not found"; exit 1; }
+source "$VENV/bin/activate"
+echo "venv: $VENV"
 
 pip install -q "numpy<2"
 
 # Dataset (v1_mp) is inferred from the pkl stem, so embeddings land in
-# embeddings/v1_mp/$VARIANT/. See slurms/extract_cif_embeddings.slurm for what the
+# embeddings/v1_mp/$MODEL/$VARIANT/. See slurms/extract_cif_embeddings.slurm for what the
 # variants mean. Submit nosym with:
 #   sbatch --export=ALL,VARIANT=nosym slurms/extract_mp_embeddings.slurm
 # Resumable: re-running skips ids already checkpointed per layer.
 VARIANT=${VARIANT:-full}
-echo "Extracting variant: $VARIANT"
+echo "Extracting model=$MODEL variant=$VARIANT from $CKPT_DIR"
 
 python scripts/embeddings/extract_cif_embeddings.py \
-    --model CrystaLLM/crystallm_v1_large \
+    --model "$MODEL" \
+    --ckpt-dir "$CKPT_DIR" \
     --pkl CrystaLLM/cifs_v1_mp_prep.pkl.gz \
     --variant "$VARIANT" \
-    --layers 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 \
     --batch-size 32 \
     --checkpoint-every 200

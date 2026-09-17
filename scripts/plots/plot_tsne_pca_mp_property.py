@@ -79,7 +79,7 @@ UNITS = {
 }
 
 
-def load_joined(layer: int, column: str, invert: bool, dataset: str,
+def load_joined(layer: int, column: str, invert: bool, dataset: str, model: str,
                 variant: str, partition: str) -> pd.DataFrame:
     """v1_mp embeddings for one layer joined to an MP scalar column on material_id."""
     meta = pd.read_parquet(METADATA_PATH, columns=[JOIN_KEY, column]).dropna(subset=[column])
@@ -90,7 +90,7 @@ def load_joined(layer: int, column: str, invert: bool, dataset: str,
         meta["value"] = 1.0 / meta["value"]
     print(f"  metadata rows with {column}: {len(meta):,}")
 
-    emb = load_embeddings(layer, dataset=dataset, variant=variant)
+    emb = load_embeddings(layer, dataset=dataset, variant=variant, model=model)
     emb = filter_partition(emb, partition)
     df = emb.merge(meta[["id", "value"]], on="id", how="inner")
     print(f"  layer-{layer} embeddings: {len(emb):,}  ->  after join: {len(df):,}")
@@ -157,7 +157,7 @@ def main():
     results = {}
     for layer in args.layers:
         print(f"\n=== layer {layer} ===")
-        df = load_joined(layer, args.column, args.invert, args.dataset,
+        df = load_joined(layer, args.column, args.invert, args.dataset, args.model,
                          args.variant, args.partition)
 
         # Same sample across layers: the id sets are identical, and seeding per layer

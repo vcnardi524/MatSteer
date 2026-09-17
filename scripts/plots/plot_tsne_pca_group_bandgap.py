@@ -65,7 +65,7 @@ DEFAULT_BG_COL = "dos_electronic.band_gap"
 CMAP = "plasma"
 
 
-def load_group(group_col: str, group: str, layer: int, dataset: str,
+def load_group(group_col: str, group: str, layer: int, dataset: str, model: str,
                bg_col: str, variant: str, partition: str) -> pd.DataFrame:
     """Embeddings for one symmetry group, joined to the clean band gap (eV)."""
     print(f"Band-gap column: {bg_col}  (eV, clean -- not LUMO-HOMO)")
@@ -82,7 +82,7 @@ def load_group(group_col: str, group: str, layer: int, dataset: str,
     if meta.empty:
         raise SystemExit(f"Every {group} entry has a null {bg_col} -- nothing to plot.")
 
-    emb = load_embeddings(layer, dataset=dataset, variant=variant)
+    emb = load_embeddings(layer, dataset=dataset, variant=variant, model=model)
     emb = filter_partition(emb, partition)
     df = emb.merge(meta[["id", "band_gap_ev"]], on="id", how="inner")
     print(f"  with layer-{layer} embeddings: {len(df):,}")
@@ -174,8 +174,8 @@ def main():
     group_col, group = (("space_group_symbol", args.sg) if args.sg
                         else ("point_group", args.pg))
 
-    df = load_group(group_col, group, args.layer, args.dataset, args.bg_col,
-                    args.variant, args.partition)
+    df = load_group(group_col, group, args.layer, args.dataset, args.model,
+                    args.bg_col, args.variant, args.partition)
     df = sample(df, args.sample_mode, args.n_samples, args.metal_max)
 
     X = np.vstack(df["embedding"].values)

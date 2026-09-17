@@ -55,7 +55,8 @@ KNOWN_VALID = {0.0: 0.963, 0.25: 0.961, 0.5: 0.950, 0.75: 0.825, 1.0: 0.125, 2.0
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="CrystaLLM/crystallm_v1_large")
+    ap.add_argument("--ckpt-dir", default="CrystaLLM/crystallm_v1_large",
+                    help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
     ap.add_argument("--property", default="density_atomic")
     ap.add_argument("--target", type=float, default=30.0)
     ap.add_argument("--layer", type=int, default=14)
@@ -67,7 +68,7 @@ def main():
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, _ = load_model(args.model, device)
+    model, _ = load_model(args.ckpt_dir, device)
     tokenizer = CIFTokenizer()
 
     mean, comps = load_pca(args.layer, args.k)

@@ -54,7 +54,7 @@ import matplotlib.pyplot as plt
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_labeled_embeddings, filter_partition, analysis_dir
+from utils import DEFAULT_MODEL, load_labeled_embeddings, filter_partition, analysis_dir
 
 # -------------------------------
 # Configuration
@@ -70,6 +70,7 @@ LABEL_COL = os.environ.get("LABEL_COL", "space_group_symbol")
 # set, so a silent default would quietly measure memorization.
 DATASET = os.environ.get("DATASET", "v1_all")
 VARIANT = os.environ.get("VARIANT", "full")
+MODEL = os.environ.get("MODEL", DEFAULT_MODEL)   # see utils.MODELS
 PARTITION = os.environ.get("PARTITION")
 if PARTITION is None:
     raise SystemExit("Set PARTITION=all|train|val|test, e.g. "
@@ -186,7 +187,8 @@ def main():
         # -------------------------------
         # Load and intersect datasets
         # -------------------------------
-        df = load_labeled_embeddings(layer, dataset=DATASET, metadata_path=METADATA_PATH,
+        df = load_labeled_embeddings(layer, dataset=DATASET, model=MODEL,
+                                     metadata_path=METADATA_PATH,
                                      label_cols=(LABEL_COL,), variant=VARIANT)
         df = filter_partition(df, PARTITION)
         df = df.merge(formula_df, on="id", how="inner")

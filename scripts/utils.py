@@ -135,6 +135,25 @@ PARTITIONS = ("all", "train", "val", "test", "not_heldout")
 SPLIT_INDEX_PATH = "splits_v1.parquet"
 ANALYSIS_ROOT = Path("analysis")
 
+# Which model produced the hidden states. This sits between <dataset> and <variant> in
+# the embeddings tree, because the same corpus read by two models gives two unrelated
+# sets of vectors -- same ids, same CIF text, different dimensionality and no shared
+# basis. Without this level the second model would overwrite the first layer by layer.
+#
+# The models differ in more than weights, and the differences decide what is comparable:
+#
+#   crystallm  16 blocks, 1024-dim, its own CIF tokenizer (one token per CIF field).
+#   llamat2    LLaMA-2 7B continued-pretrained on materials text (m3rg-iitd), so 32
+#              blocks, 4096-dim, and a general BPE tokenizer that splits a number like
+#              4.2317 across several tokens.
+#
+# So a layer index means different things in each ("layer 7" is 7/16 of the way through
+# one and 7/32 of the other), and a steering vector, PCA basis or manifold fitted on one
+# cannot be applied to the other. Nothing in this repo mixes two models in one artifact;
+# the path keeps that honest. Add a new name here to register it.
+DEFAULT_MODEL = "crystallm"
+MODELS = ("crystallm", "llamat2")
+
 
 # One schema for every steering results table under analysis/<dataset>/<partition>/.
 # These files accumulated four different shapes -- `median` meant A^3/atom in one and
@@ -311,12 +330,20 @@ def filter_partition(df: pd.DataFrame, partition: str, verbose: bool = True) -> 
 
 
 def add_partition_args(parser):
-    """Attach the --dataset / --variant / --partition trio to an argparse parser.
+    """Attach the --dataset / --model / --variant / --partition set to an argparse parser.
 
     --partition is required on purpose so no analysis silently runs on the model's
     own training data.
+
+    --model defaults to crystallm, unlike --partition, because the default is right
+    rather than merely convenient: every run that predates the model level was
+    crystallm, so the old behaviour and the new default are the same thing. A wrong
+    --partition silently answers a different question; a wrong --model just fails to
+    find the files, and the path in the error names the model it looked under.
     """
     parser.add_argument("--dataset", default=DEFAULT_DATASET, choices=list(DATASETS))
+    parser.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                        help="which model's hidden states to read (see MODELS)")
     parser.add_argument("--variant", default=DEFAULT_VARIANT, choices=list(VARIANTS),
                         help="which CIF text the embeddings came from (see VARIANTS)")
     parser.add_argument("--partition", required=True, choices=list(PARTITIONS),
@@ -325,30 +352,59 @@ def add_partition_args(parser):
 
 
 def embeddings_paths(layer: int, dataset: str = DEFAULT_DATASET,
-                     variant: str = DEFAULT_VARIANT):
-    """Candidate (single_file, checkpoint_dir) for a dataset+variant+layer under embeddings/."""
-    base = EMBEDDINGS_ROOT / dataset / variant
+                     variant: str = DEFAULT_VARIANT, model: str = DEFAULT_MODEL):
+    """Candidate (single_file, checkpoint_dir) under embeddings/<dataset>/<model>/<variant>/.
+
+    `model` is validated against MODELS rather than passed through. An unregistered name
+    would otherwise create a sibling tree -- embeddings/v1_all/llamat-2/full/ next to
+    embeddings/v1_all/llamat2/full/ -- and the second run would report zero rows done and
+    quietly re-extract everything into the typo.
+    """
+    if model not in MODELS:
+        raise ValueError(f"model must be one of {MODELS}, got {model!r}")
+    base = EMBEDDINGS_ROOT / dataset / model / variant
     return base / f"cif_layer{layer}.parquet", base / f"cif_layer{layer}"
+
+
+def embedding_files(layer: int, dataset: str = DEFAULT_DATASET,
+                    variant: str = DEFAULT_VARIANT, model: str = DEFAULT_MODEL) -> list:
+    """The consolidated parquet for a layer if it exists, else the checkpoint shards.
+
+    For streaming readers, which want paths rather than one concatenated frame. This was
+    copied verbatim into manifold.py, compute_pca_basis.py and compute_steering_vector.py;
+    those now re-export this one so the model level only had to be added once.
+    """
+    single, ckpt = embeddings_paths(layer, dataset, variant, model)
+    if single.exists():
+        return [single]
+    files = sorted(ckpt.glob("checkpoint_*.parquet")) + sorted(ckpt.glob("batch_*.parquet"))
+    if not files:
+        raise FileNotFoundError(
+            f"No embeddings for layer {layer} (dataset={dataset}, model={model}, "
+            f"variant={variant}): looked for {single} and {ckpt}/checkpoint_*.parquet")
+    return files
 
 
 def load_embeddings(layer: int, dataset: str = DEFAULT_DATASET,
                     columns=("id", "embedding"),
-                    variant: str = DEFAULT_VARIANT) -> pd.DataFrame:
-    """Load mean-pooled embeddings for a layer from embeddings/<dataset>/<variant>/.
+                    variant: str = DEFAULT_VARIANT,
+                    model: str = DEFAULT_MODEL) -> pd.DataFrame:
+    """Mean-pooled embeddings for a layer from embeddings/<dataset>/<model>/<variant>/.
 
     Uses the single cif_layer{N}.parquet if present, else concatenates the
     checkpoint_*.parquet / batch_*.parquet shards in cif_layer{N}/. Pass
-    columns=None to read every column. See VARIANTS for what `variant` means.
+    columns=None to read every column. See VARIANTS for what `variant` means and
+    MODELS for what `model` means.
     """
     cols = list(columns) if columns is not None else None
-    single, ckpt = embeddings_paths(layer, dataset, variant)
+    single, ckpt = embeddings_paths(layer, dataset, variant, model)
     if single.exists():
         return pd.read_parquet(single, columns=cols)
     files = sorted(ckpt.glob("checkpoint_*.parquet")) + sorted(ckpt.glob("batch_*.parquet"))
     if not files:
         raise FileNotFoundError(
-            f"No embeddings for layer {layer} in dataset '{dataset}', variant '{variant}': "
-            f"looked for {single} and {ckpt}/checkpoint_*.parquet")
+            f"No embeddings for layer {layer} in dataset '{dataset}', model '{model}', "
+            f"variant '{variant}': looked for {single} and {ckpt}/checkpoint_*.parquet")
     return pd.concat([pd.read_parquet(f, columns=cols) for f in files], ignore_index=True)
 
 
@@ -356,7 +412,8 @@ def load_labeled_embeddings(layer: int, dataset: str = DEFAULT_DATASET,
                             metadata_path: str = DEFAULT_METADATA,
                             label_cols=DEFAULT_LABEL_COLS,
                             verbose: bool = True,
-                            variant: str = DEFAULT_VARIANT) -> pd.DataFrame:
+                            variant: str = DEFAULT_VARIANT,
+                            model: str = DEFAULT_MODEL) -> pd.DataFrame:
     """Embeddings for a layer, inner-joined with metadata labels on `id`.
 
     Returns a frame of [id, embedding, *label_cols] restricted to ids present in
@@ -367,7 +424,7 @@ def load_labeled_embeddings(layer: int, dataset: str = DEFAULT_DATASET,
     """
     if verbose:
         print("Loading embeddings...")
-    emb_df = load_embeddings(layer, dataset=dataset, variant=variant)
+    emb_df = load_embeddings(layer, dataset=dataset, variant=variant, model=model)
     if verbose:
         print(f"  Embeddings: {len(emb_df):,} entries")
         print("Loading metadata...")

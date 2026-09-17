@@ -24,7 +24,7 @@ J_TO_EV = 6.2415e18
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_embeddings
+from utils import DEFAULT_MODEL, MODELS, load_embeddings
 
 
 def main():
@@ -32,6 +32,8 @@ def main():
     parser.add_argument("--layer", type=int, default=14)
     parser.add_argument("--dataset", default="v1_all",
                         help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
+    parser.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                        help="which model's hidden states to read (see utils.MODELS)")
     args = parser.parse_args()
 
     percentiles = [5, 10, 15, 20, 25]
@@ -45,7 +47,7 @@ def main():
     meta["band_gap_ev"] = (meta["energy_lowest_unoccupied"] - meta["energy_highest_occupied"]) * J_TO_EV
     print(f"  Entries with band gap: {len(meta):,}")
 
-    emb = load_embeddings(args.layer, dataset=args.dataset)
+    emb = load_embeddings(args.layer, dataset=args.dataset, model=args.model)
     print(f"  Embeddings: {len(emb):,}")
 
     df = emb.merge(meta[["id", "band_gap_ev"]], on="id", how="inner")

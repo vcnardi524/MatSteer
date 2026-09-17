@@ -46,7 +46,8 @@ def main():
     meta = meta[meta[args.property].notna()].reset_index(drop=True)
     print(f"  Entries with {args.property}: {len(meta):,}")
 
-    emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant)
+    emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant,
+                          model=args.model)
     print(f"  Embeddings: {len(emb):,}")
     emb = filter_partition(emb, args.partition)
 

@@ -34,18 +34,9 @@ import pandas as pd
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
 import pyarrow.parquet as pq
-from utils import DEFAULT_VARIANT, embeddings_paths
+from utils import (DEFAULT_MODEL, DEFAULT_VARIANT, MODELS, embedding_files,
+                   embeddings_paths)  # noqa: F401  (embedding_files re-exported)
 
-
-def embedding_files(layer: int, dataset: str, variant: str) -> list:
-    """The consolidated parquet if it exists, else the checkpoint shards."""
-    single, ckpt = embeddings_paths(layer, dataset, variant)
-    if single.exists():
-        return [single]
-    files = sorted(ckpt.glob("checkpoint_*.parquet")) + sorted(ckpt.glob("batch_*.parquet"))
-    if not files:
-        raise FileNotFoundError(f"No embeddings for layer {layer} at {single} or {ckpt}/")
-    return files
 
 
 DEFAULT_PROPERTY = "dos_electronic.band_gap"  # clean band gap (eV); == electronic.band_gap
@@ -68,6 +59,8 @@ def main():
                     help="Metadata parquet holding --property")
     ap.add_argument("--dataset", default="v1_all",
                     help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="which model's hidden states to read (see utils.MODELS)")
     ap.add_argument("--id-col", default="id",
                     help="Metadata join key against the embedding id (e.g. material_id for MP)")
     ap.add_argument("--layer", type=int, default=14)
@@ -110,7 +103,7 @@ def main():
     high_ids = set(join.loc[join["val"] >= high_thresh, "id"])
 
     print(f"Streaming layer-{args.layer} embeddings (dataset={args.dataset}) ...")
-    files = embedding_files(args.layer, args.dataset, DEFAULT_VARIANT)
+    files = embedding_files(args.layer, args.dataset, DEFAULT_VARIANT, args.model)
     sums = {"low": np.zeros(1024), "high": np.zeros(1024)}
     counts = {"low": 0, "high": 0}
     for path in files:

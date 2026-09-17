@@ -3,8 +3,8 @@
 Consolidate the per-layer checkpoint parquets written by extract_cif_embeddings.py
 into a single parquet per layer. Skips layers that already have a consolidated file.
 
-Reads  embeddings/<dataset>/<variant>/cif_layer{N}/checkpoint_*.parquet
-Writes embeddings/<dataset>/<variant>/cif_layer{N}.parquet
+Reads  embeddings/<dataset>/<model>/<variant>/cif_layer{N}/checkpoint_*.parquet
+Writes embeddings/<dataset>/<model>/<variant>/cif_layer{N}.parquet
 
 load_embeddings() prefers the single file when it exists, so consolidating changes
 nothing for callers -- it just replaces ~358 opens per layer with one.
@@ -13,6 +13,7 @@ Usage:
     python consolidate_embeddings.py                          # v1_all/full, all layers
     python consolidate_embeddings.py --variant nosym
     python consolidate_embeddings.py --dataset v1_mp --layers 0,5,14
+    python consolidate_embeddings.py --model llamat2 --layers 0,8,16,24,31
 """
 import argparse
 import os
@@ -23,12 +24,15 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/ -> utils.py
-from utils import DEFAULT_DATASET, DEFAULT_VARIANT, embeddings_paths
+from utils import (DEFAULT_DATASET, DEFAULT_MODEL, DEFAULT_VARIANT, MODELS,
+                   embeddings_paths)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=DEFAULT_DATASET)
+    parser.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                        help="which model wrote the shards (see utils.MODELS)")
     parser.add_argument("--variant", default=DEFAULT_VARIANT,
                         help="full or nosym (see utils.VARIANTS)")
     parser.add_argument("--layers", default=None,
@@ -37,7 +41,7 @@ def main():
                         help="Overwrite existing consolidated files")
     args = parser.parse_args()
 
-    base = Path("embeddings") / args.dataset / args.variant
+    base = Path("embeddings") / args.dataset / args.model / args.variant
     if args.layers:
         layers = [int(x) for x in args.layers.split(",")]
     else:
@@ -47,7 +51,8 @@ def main():
     print(f"Consolidating {base}/ layers: {layers}")
 
     for layer in layers:
-        out_path, ckpt_dir = embeddings_paths(layer, args.dataset, args.variant)
+        out_path, ckpt_dir = embeddings_paths(layer, args.dataset, args.variant,
+                                             args.model)
 
         if out_path.exists() and not args.force:
             print(f"Layer {layer}: already consolidated ({out_path}), skipping")

@@ -179,7 +179,8 @@ def main():
     results, curves = [], {}
     for layer in args.layers:
         print(f"\n{'='*60}\nLayer {layer}\n{'='*60}")
-        emb = load_embeddings(layer, dataset=args.dataset, variant=args.variant)
+        emb = load_embeddings(layer, dataset=args.dataset, variant=args.variant,
+                              model=args.model)
         df = emb.merge(lab, on="id", how="inner")
         df = filter_partition(df, args.partition)
         df = df.merge(formula_df, on="id", how="inner").reset_index(drop=True)

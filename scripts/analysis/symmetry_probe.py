@@ -79,7 +79,7 @@ from sklearn.preprocessing import StandardScaler
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_labeled_embeddings, load_split_index, analysis_dir
+from utils import DEFAULT_MODEL, load_labeled_embeddings, load_split_index, analysis_dir
 
 # -------------------------------
 # Configuration
@@ -89,6 +89,7 @@ METADATA_PATH = "./metadata.parquet"
 PKL_PATH = "./CrystaLLM/cifs_v1_prep.pkl.gz"
 DATASET = os.environ.get("DATASET", "v1_all")
 VARIANT = os.environ.get("VARIANT", "full")
+MODEL = os.environ.get("MODEL", DEFAULT_MODEL)   # see utils.MODELS
 # Fixed by design, not exposed as knobs: fit on train, score on val. Anything else
 # risks scoring the probe on rows it was fit on, or on rows the language model itself
 # was trained on (89.6% of the labelled structures are in the model's train split).
@@ -246,7 +247,8 @@ def main():
         # -------------------------------
         # Load and intersect datasets
         # -------------------------------
-        df = load_labeled_embeddings(layer, dataset=DATASET, metadata_path=METADATA_PATH,
+        df = load_labeled_embeddings(layer, dataset=DATASET, model=MODEL,
+                                     metadata_path=METADATA_PATH,
                                      label_cols=tuple(LABEL_COLS), variant=VARIANT)
         df = assign_pools(df)
         df = df.merge(formula_df, on="id", how="inner")

@@ -130,7 +130,8 @@ def label(r):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="CrystaLLM/crystallm_v1_large")
+    ap.add_argument("--ckpt-dir", default="CrystaLLM/crystallm_v1_large",
+                    help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
     ap.add_argument("--pkl", default="CrystaLLM/cifs_v1_test_sample1000.pkl.gz")
     ap.add_argument("--n-cifs", type=int, default=25)
     ap.add_argument("--csv", default=CSV)
@@ -151,7 +152,7 @@ def main():
     print(f"{len(runs)} runs across layers {layers}")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model, _ = load_model(args.model, device)
+    model, _ = load_model(args.ckpt_dir, device)
     tokenizer = CIFTokenizer()
     cifs = load_cifs(args.pkl)[:args.n_cifs]
     states = capture(model, tokenizer, cifs, layers, device)

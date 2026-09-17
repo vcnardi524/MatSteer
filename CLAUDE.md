@@ -137,9 +137,27 @@ then drives the shared load/validate/checkpoint loop with no further changes.
 
 ### `utils.py` owns the directory conventions
 
-`analysis_dir()` and `embeddings_paths()` build the `<dataset>/<variant>/<partition>`
-paths described in the README. Use them rather than composing paths by hand, so the
-two trees stay aligned.
+`analysis_dir()` and `embeddings_paths()` build the paths described in the README. Use
+them rather than composing paths by hand.
+
+The embeddings tree carries a **model** level — `embeddings/<dataset>/<model>/<variant>/`
+— because the same corpus read by two models gives two unrelated sets of vectors and the
+second would otherwise overwrite the first layer by layer. `analysis/` does **not** carry
+that level yet; everything under it came from `crystallm`. Add it before running any
+analysis on a second model.
+
+Two flags that were both `--model` before a second model existed, now split:
+`--model` is the registered NAME (`utils.MODELS`: crystallm, llamat2) and decides the
+path; `--ckpt-dir` is the filesystem path to the weights. `embeddings_paths()` validates
+the name, so a typo raises instead of silently creating a sibling tree that reports zero
+rows done and re-extracts everything into it.
+
+A layer index is NOT comparable across models — crystallm has 16 blocks at 1024 dim,
+llamat2 has 32 at 4096 — and no steering vector, PCA basis or manifold transfers between
+them. `extract_cif_embeddings.py` holds the only architecture-specific code, in two
+backends; both are fed identical CIF text so the comparison is between models rather
+than between inputs. Its heavy imports are deliberately inside the loaders, since
+crystallm (omegaconf, pinned pymatgen) and llamat2 (transformers) will not share a venv.
 
 `add_partition_args()` makes `--partition` required with no default, deliberately:
 89.6% of labelled structures are in CrystaLLM's own training set and only 0.45% in its

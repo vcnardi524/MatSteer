@@ -25,22 +25,13 @@ import pandas as pd
 import pyarrow.parquet as pq
 import torch
 
-from utils import embeddings_paths
+from utils import (DEFAULT_MODEL, embedding_files,
+                   embeddings_paths)  # noqa: F401  (embedding_files re-exported)
 
-
-def embedding_files(layer: int, dataset: str, variant: str) -> list:
-    """The consolidated parquet for a layer if it exists, else the checkpoint shards."""
-    single, ckpt = embeddings_paths(layer, dataset, variant)
-    if single.exists():
-        return [single]
-    files = sorted(ckpt.glob("checkpoint_*.parquet")) + sorted(ckpt.glob("batch_*.parquet"))
-    if not files:
-        raise FileNotFoundError(f"No embeddings for layer {layer} at {single} or {ckpt}/")
-    return files
 
 
 def bucket_centroids(labels, prop, width, layer, dataset, variant, batch_size,
-                     sample_ids=None):
+                     sample_ids=None, model=DEFAULT_MODEL):
     """Per-bucket (sum, count) by streaming the layer, plus the raw rows for sample_ids.
 
     Buckets are [x, x+width). The sample is drawn as ids up front rather than
@@ -52,7 +43,7 @@ def bucket_centroids(labels, prop, width, layer, dataset, variant, batch_size,
     want = set() if sample_ids is None else set(sample_ids)
 
     sums, counts, s_vec, s_id = {}, {}, [], []
-    for path in embedding_files(layer, dataset, variant):
+    for path in embedding_files(layer, dataset, variant, model):
         for rb in pq.ParquetFile(path).iter_batches(batch_size=batch_size,
                                                     columns=["id", "embedding"]):
             df = rb.to_pandas()

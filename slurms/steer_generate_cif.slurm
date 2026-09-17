@@ -43,7 +43,7 @@ case "$METHOD" in
 esac
 
 python scripts/steering/steer_generate_cif.py \
-    --model CrystaLLM/crystallm_v1_large \
+    --ckpt-dir CrystaLLM/crystallm_v1_large \
     --pkl ${PKL:-CrystaLLM/cifs_v1_test.pkl.gz} \
     --temperature ${TEMPERATURE:-1.0} \
     --method ${METHOD} \

@@ -54,7 +54,8 @@ from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import analysis_dir, load_split_index, DATASETS, VARIANTS
+from utils import (analysis_dir, load_split_index, DATASETS, VARIANTS,
+                   DEFAULT_MODEL, MODELS)
 from manifold import embedding_files
 
 import pyarrow.parquet as pq
@@ -103,10 +104,11 @@ def score(y_true, pred):
             float(np.sqrt(((y_true - pred) ** 2).mean())))
 
 
-def stream_layer(layer, dataset, variant, keep_ids, batch_size=50_000):
+def stream_layer(layer, dataset, variant, keep_ids, batch_size=50_000,
+                 model=DEFAULT_MODEL):
     """[id, embedding] for the ids we need, streamed -- a layer does not fit in memory."""
     ids, vecs = [], []
-    for path in embedding_files(layer, dataset, variant):
+    for path in embedding_files(layer, dataset, variant, model):
         for rb in pq.ParquetFile(path).iter_batches(batch_size=batch_size,
                                                     columns=["id", "embedding"]):
             d = rb.to_pandas()
@@ -127,6 +129,8 @@ def main():
                     default=list(range(16)))
     ap.add_argument("--dataset", default="v1_all", choices=list(DATASETS))
     ap.add_argument("--variant", default="full", choices=list(VARIANTS))
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="which model's hidden states to read (see utils.MODELS)")
     ap.add_argument("--train-sample", type=int, default=200_000)
     ap.add_argument("--eval-sample", type=int, default=50_000)
     ap.add_argument("--alpha", type=float, default=1.0, help="Ridge regularisation")
@@ -194,7 +198,8 @@ def main():
     rows = []
     for layer in args.layers:
         print(f"\n{'='*70}\nLayer {layer}\n{'='*70}")
-        got, E = stream_layer(layer, args.dataset, args.variant, keep)
+        got, E = stream_layer(layer, args.dataset, args.variant, keep,
+                              model=args.model)
         order = pd.Series(np.arange(len(got)), index=got["id"]).reindex(lab["id"])
         if order.isna().any():
             print(f"  ! {int(order.isna().sum()):,} rows have no embedding -- skipped layer")

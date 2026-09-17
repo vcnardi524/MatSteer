@@ -37,7 +37,7 @@ ZERO_EPS = [0.001, 0.01, 0.1, 0.5]  # eV windows around 0 to call "metal"
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_embeddings
+from utils import DEFAULT_MODEL, MODELS, load_embeddings
 
 
 def measure_residual_norm(model_dir: str, pkl: str, layer: int, n_cifs: int) -> float:
@@ -77,11 +77,14 @@ def main():
     ap.add_argument("--layer", type=int, default=14)
     ap.add_argument("--dataset", default="v1_all",
                     help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="which model's hidden states to read (see utils.MODELS)")
     ap.add_argument("--residual-norm", type=float, default=None,
                     help="Per-token residual norm (skip --with-model and supply directly)")
     ap.add_argument("--with-model", action="store_true",
                     help="Re-measure per-token residual norm (needs crystallm_venv + model)")
-    ap.add_argument("--model", default="CrystaLLM/crystallm_v1_large")
+    ap.add_argument("--ckpt-dir", default="CrystaLLM/crystallm_v1_large",
+                    help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
     ap.add_argument("--pkl", default="CrystaLLM/cifs_v1_test.pkl.gz")
     ap.add_argument("--n-cifs", type=int, default=5)
     ap.add_argument("--out", default=None)
@@ -95,12 +98,12 @@ def main():
     residual_norm = args.residual_norm
     if args.with_model:
         print("Measuring per-token residual norm via model forward ...")
-        residual_norm = measure_residual_norm(args.model, args.pkl, args.layer, args.n_cifs)
+        residual_norm = measure_residual_norm(args.ckpt_dir, args.pkl, args.layer, args.n_cifs)
         print(f"  residual per-token norm = {residual_norm:.2f}")
 
     # 2. pooled embedding norms
     print(f"Loading layer-{args.layer} embeddings ...")
-    emb = load_embeddings(args.layer, dataset=args.dataset)
+    emb = load_embeddings(args.layer, dataset=args.dataset, model=args.model)
     X = np.vstack(emb["embedding"].values).astype(np.float32)
     pooled = np.linalg.norm(X, axis=1)
     print(f"  {len(emb):,} embeddings, dim={X.shape[1]}, "

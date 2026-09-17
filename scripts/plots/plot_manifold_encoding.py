@@ -76,7 +76,7 @@ def main():
     print(f"  {len(want):,} structures sampled from partition '{args.partition}'")
 
     vals, Z = [], []
-    for path in embedding_files(args.layer, args.dataset, args.variant):
+    for path in embedding_files(args.layer, args.dataset, args.variant, args.model):
         for rb in pq.ParquetFile(path).iter_batches(batch_size=args.batch_size,
                                                     columns=["id", "embedding"]):
             d = rb.to_pandas()

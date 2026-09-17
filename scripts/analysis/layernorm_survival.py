@@ -91,7 +91,8 @@ def rel_delta(a, b):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="CrystaLLM/crystallm_v1_large")
+    ap.add_argument("--ckpt-dir", default="CrystaLLM/crystallm_v1_large",
+                    help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
     ap.add_argument("--method", choices=("linear", "pca_centroid"), default="linear")
     ap.add_argument("--layer", type=int, default=14)
     ap.add_argument("--alpha", type=float, default=40.0, help="[linear]")
@@ -103,7 +104,7 @@ def main():
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, _ = load_model(args.model, device)
+    model, _ = load_model(args.ckpt_dir, device)
     tokenizer = CIFTokenizer()
 
     # Build the same injection the generator would apply. For pca_centroid the vector

@@ -271,7 +271,8 @@ def build_manifold(args, device):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", required=True)
+    parser.add_argument("--ckpt-dir", required=True,
+                 help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
     parser.add_argument("--pkl", required=True)
     parser.add_argument("--method",
                         choices=("linear", "pca_centroid", "pca_local", "manifold"),
@@ -340,7 +341,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    model, config = load_model(args.model, device)
+    model, config = load_model(args.ckpt_dir, device)
     tokenizer = CIFTokenizer()
 
     local = None

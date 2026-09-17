@@ -146,7 +146,7 @@ def main():
           f"by {args.width:g} ...")
     sums, counts, S, s_ids = bucket_centroids(labels, args.property, args.width, args.layer,
                                               args.dataset, args.variant, args.batch_size,
-                                              sample_ids)
+                                              sample_ids, model=args.model)
     kept = sorted(b for b, n in counts.items() if n >= args.min_count)
     dropped = len(counts) - len(kept)
     if not kept:
