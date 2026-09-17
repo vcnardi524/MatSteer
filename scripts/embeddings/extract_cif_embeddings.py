@@ -59,8 +59,10 @@ import argparse
 import gzip
 import os
 import pickle
+import re
 import sys
 import time
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -69,7 +71,8 @@ import pyarrow.parquet as pq
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import DEFAULT_MODEL, MODELS, embeddings_paths
+import llamat_prompts
+from utils import DEFAULT_MODEL, MODELS, VARIANTS, embeddings_paths
 
 
 # ---------------------------------------------------------------------------------
@@ -120,8 +123,18 @@ def strip_symmetry(cif: str) -> str:
                      if not l.strip().startswith(SYMMETRY_KEYS))
 
 
-def mean_pool(hidden: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
-    """Mean pool hidden states over true (non-padding) token positions.
+def mean_pool(hidden: torch.Tensor, starts: torch.Tensor,
+              ends: torch.Tensor) -> torch.Tensor:
+    """Mean pool hidden states over positions [start, end) of each row.
+
+    WHY A SPAN AND NOT JUST A LENGTH. For crystallm the whole sequence is the structure,
+    so start is 0 and this is the old whole-sequence mean. For llamat2_cif the sequence
+    is a constant ~200-token prompt followed by the structure's crystal string, and
+    attention is causal -- so every prompt position holds the IDENTICAL hidden state for
+    all 154,871 structures. Pooling those in would make roughly half of every embedding
+    one shared constant vector. start therefore skips the prompt.
+
+    Padding sits beyond `end` and is excluded by the same mask.
 
     Upcast to float32 first: llamat2 runs in float16, and summing ~1500 half-precision
     positions accumulates visible error (half has ~3 decimal digits, and the running
@@ -130,9 +143,12 @@ def mean_pool(hidden: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
     """
     hidden = hidden.float()
     B, T, D = hidden.shape
-    mask = torch.arange(T, device=hidden.device).unsqueeze(0) < lengths.unsqueeze(1)  # (B, T)
-    mask_f = mask.unsqueeze(2).float()  # (B, T, 1)
-    pooled = (hidden * mask_f).sum(dim=1) / lengths.unsqueeze(1).float()  # (B, D)
+    pos = torch.arange(T, device=hidden.device).unsqueeze(0)             # (1, T)
+    mask = (pos >= starts.unsqueeze(1)) & (pos < ends.unsqueeze(1))      # (B, T)
+    n = mask.sum(1)
+    if (n == 0).any():
+        raise ValueError("a row has an empty pooling span -- nothing to average")
+    pooled = (hidden * mask.unsqueeze(2).float()).sum(dim=1) / n.unsqueeze(1).float()
     return pooled
 
 
@@ -201,8 +217,10 @@ class CrystaLLMBackend:
         self.blocks = self.model.transformer.h
         self.pad_id = 0
 
-    def encode(self, cif: str) -> list:
-        return self.tokenizer.encode(self.tokenizer.tokenize_cif(cif))[:self.block_size]
+    def encode_pair(self, prompt: str, answer: str):
+        """(ids, answer_start). CrystaLLM has no prompt form, so prompt must be empty."""
+        assert prompt == "", "the CrystaLLM tokenizer has no prompt/answer split"
+        return self.tokenizer.encode(self.tokenizer.tokenize_cif(answer))[:self.block_size], 0
 
     def forward(self, input_ids):
         self.model(input_ids)
@@ -235,19 +253,48 @@ class LlamatBackend:
         self.blocks = self.model.model.layers
         # Padding is masked out of the pooled mean and, because attention is causal and
         # padding sits at the END of each row, no real token ever attends to it. So the
-        # pad id only has to be a valid index. Llama tokenizers often ship without a pad
-        # token, hence the fallback chain rather than tokenizer.pad_token_id alone.
+        # pad id only has to be a VALID INDEX -- its value is never read.
+        #
+        # It must therefore be < the model's vocab_size, which is not the same as the
+        # tokenizer's. llamat-2-cif ships tokenizer vocab 32005 against config
+        # vocab_size 32000: its five added tokens (<CLS> <SEP> <EOD> <MASK> <PAD>) sit
+        # PAST the end of the embedding matrix, so padding with tokenizer.pad_token_id
+        # (32004) would index out of bounds and crash the forward pass.
         pad = self.tokenizer.pad_token_id
         if pad is None:
             pad = self.tokenizer.eos_token_id
-        self.pad_id = 0 if pad is None else pad
+        if pad is None or pad >= config.vocab_size:
+            print(f"  pad_token_id {pad} is outside the model vocab ({config.vocab_size}); "
+                  f"padding with 0 instead (masked out either way)")
+            pad = 0
+        self.pad_id = pad
+        self._prompt_text, self._prompt_ids = None, None   # constant prompt, tokenised once
         print(f"Loaded model: {self.n_layer} layers, {self.n_embd} dim, "
               f"block_size {self.block_size}, dtype {torch_dtype}")
 
-    def encode(self, cif: str) -> list:
-        # add_special_tokens keeps the BOS the model was trained with.
-        return self.tokenizer(cif, add_special_tokens=True,
-                              truncation=True, max_length=self.block_size)["input_ids"]
+    def encode_pair(self, prompt: str, answer: str):
+        """(ids, answer_start) for prompt+answer, tokenised as ONE string.
+
+        The model must see the joined text, not two pieces glued together, so the whole
+        thing is tokenised at once and the boundary is then located by checking that the
+        result still starts with the prompt's own tokens. BPE can merge across a
+        boundary ("output-" then "4"), which would shift the split by a token and
+        silently pool one prompt position; the caller asserts the prefix matches.
+
+        The prompt is constant across the corpus, so its ids are cached on first use.
+        """
+        if self._prompt_ids is None or prompt != self._prompt_text:
+            self._prompt_text = prompt
+            self._prompt_ids = self.tokenizer(
+                prompt, add_special_tokens=True)["input_ids"] if prompt else \
+                self.tokenizer("", add_special_tokens=True)["input_ids"]
+        ids = self.tokenizer(prompt + answer, add_special_tokens=True,
+                             truncation=True, max_length=self.block_size)["input_ids"]
+        start = len(self._prompt_ids)
+        if ids[:start] != self._prompt_ids:
+            # BPE merged across the boundary -- find the real split by re-encoding.
+            start = _boundary(ids, self._prompt_ids)
+        return ids, start
 
     def forward(self, input_ids):
         # No attention_mask: right-padding plus causal attention means real tokens never
@@ -255,22 +302,146 @@ class LlamatBackend:
         self.model(input_ids)
 
 
-BACKENDS = {"crystallm": CrystaLLMBackend, "llamat2": LlamatBackend}
+def _boundary(ids, prompt_ids) -> int:
+    """Longest prefix of `ids` that still agrees with `prompt_ids`, minus any merged token.
+
+    Only reached when BPE merges the last prompt token with the first answer token. Back
+    off to the last position where the two agree; that token then counts as prompt, which
+    errs toward excluding a position rather than including a constant one.
+    """
+    n = 0
+    while n < len(prompt_ids) and n < len(ids) and ids[n] == prompt_ids[n]:
+        n += 1
+    return n
+
+
+BACKENDS = {"crystallm": CrystaLLMBackend,
+            "llamat2": LlamatBackend, "llamat2_cif": LlamatBackend}
 assert set(BACKENDS) == set(MODELS), "every registered model needs a backend"
 
 
-def tokenize_batch(cif_strings, backend, device: torch.device):
-    """Tokenize a list of CIF strings, truncate, pad to batch max length."""
-    encoded = [backend.encode(cif) for cif in cif_strings]
-    lengths = [len(ids) for ids in encoded]
+# ---------------------------------------------------------------------------------
+# Text builders -- what text a structure becomes, and which part of it gets pooled
+# ---------------------------------------------------------------------------------
+#
+# A builder returns (prompt, answer). The embedding is pooled over the ANSWER only;
+# the prompt is context the model reads first. Returning None skips the structure.
+#
+# This is a separate axis from the backend: the same LLaMA weights could be fed a raw
+# CIF or a crystal string, and it is the TEXT that decides what a pooled vector means.
 
-    max_len = max(lengths)
+
+class RawCifBuilder:
+    """The CIF itself, no prompt. What crystallm has always been given.
+
+    prompt is "" so the pooled span is the whole sequence -- byte-for-byte the old
+    behaviour, which is the regression test.
+    """
+
+    def __init__(self, variant: str):
+        self.variant = variant
+
+    def build(self, cif: str, cid: str):
+        text = preprocess_cif(cif)
+        if self.variant == "nosym":
+            text = strip_symmetry(text)
+        return "", text
+
+
+class CrystalStringBuilder:
+    """The crystal string, in the answer slot of the unconditional generation prompt.
+
+    This is what LLaMat-2-CIF was tuned to WRITE. See scripts/llamat_prompts.py for why
+    a CIF would be the wrong text to embed for steering work.
+
+    Every structure is checked against its own `_chemical_formula_sum` before encoding.
+    Symmetry expansion can emit more sites than the formula states -- measured at 1.73%
+    on the prep pickle and 0.07% on the originals -- and since the crystal string lists
+    one line per site, a mismatch is a structurally wrong input, not a cosmetic one.
+    Those are skipped and logged rather than embedded.
+    """
+
+    def __init__(self, system_index: int = 0, wrapper: str = "notebook",
+                 on_overflow: str = "skip"):
+        from pymatgen.core.structure import Structure
+        self._Structure = Structure
+        self.prompt = llamat_prompts.unconditional_prompt(system_index, wrapper)
+        self.on_overflow = on_overflow
+        self.max_sites = None          # set once the backend's block_size is known
+
+    def build(self, cif: str, cid: str):
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")      # pymatgen is loud about occupancies
+                s = self._Structure.from_str(cif, fmt="cif")
+        except Exception as e:
+            raise SkipStructure(f"parse failed: {type(e).__name__}") from e
+        stated = stated_composition(cif)
+        got = {str(el): int(n) for el, n in s.composition.get_el_amt_dict().items()}
+        if stated is not None and got != stated:
+            raise SkipStructure(f"composition {got} != stated {stated}")
+        if self.on_overflow == "skip" and self.max_sites and len(s) > self.max_sites:
+            raise SkipStructure(f"{len(s)} sites exceeds the context budget "
+                                f"({self.max_sites})")
+        return self.prompt, llamat_prompts.crystal_string(s)
+
+    def set_budget(self, block_size: int, n_prompt_tokens: int,
+                   tokens_per_site: float = 18.0):
+        """Largest site count that fits, from the measured 18.0 tokens/site on v1_mp.
+
+        A cheap pre-filter so an oversized structure is rejected before it is tokenised
+        and before it inflates a batch's padding. The exact check still happens at
+        tokenisation; this only avoids the obvious cases.
+        """
+        self.max_sites = int((block_size - n_prompt_tokens - 1) / tokens_per_site)
+
+
+class SkipStructure(Exception):
+    """Raised by a builder for a structure that must not be embedded."""
+
+
+_FORMULA_SUM = re.compile(r"_chemical_formula_sum\s+(?:'([^']+)'|(\S+))")
+_ELEMENT = re.compile(r"([A-Z][a-z]?)(\d*)")
+
+
+def stated_composition(cif: str):
+    """{element: count} from the CIF's own _chemical_formula_sum, or None if absent."""
+    m = _FORMULA_SUM.search(cif)
+    if not m:
+        return None
+    out = {}
+    for el, cnt in _ELEMENT.findall(m.group(1) or m.group(2)):
+        if el:
+            out[el] = out.get(el, 0) + int(cnt or 1)
+    return out
+
+
+def build_text_builder(args):
+    if args.variant == "crystal_uncond":
+        return CrystalStringBuilder(args.system_index, args.wrapper, args.on_overflow)
+    return RawCifBuilder(args.variant)
+
+
+def tokenize_batch(pairs, backend, device: torch.device):
+    """Tokenize (prompt, answer) pairs; pad to batch max. Returns ids, starts, ends.
+
+    starts/ends bound the ANSWER span of each row, which is what mean_pool averages.
+    """
+    encoded = [backend.encode_pair(prompt, answer) for prompt, answer in pairs]
+    ends = [len(ids) for ids, _ in encoded]
+    starts = [start for _, start in encoded]
+    if any(s >= e for s, e in zip(starts, ends)):
+        raise ValueError("a row has no answer tokens left after truncation")
+
+    max_len = max(ends)
     padded = torch.full((len(encoded), max_len), backend.pad_id,
                         dtype=torch.long, device=device)
-    for i, ids in enumerate(encoded):
+    for i, (ids, _) in enumerate(encoded):
         padded[i, :len(ids)] = torch.tensor(ids, dtype=torch.long)
 
-    return padded, torch.tensor(lengths, dtype=torch.long, device=device)
+    return (padded,
+            torch.tensor(starts, dtype=torch.long, device=device),
+            torch.tensor(ends, dtype=torch.long, device=device))
 
 
 # ---------------------------------------------------------------------------------
@@ -317,10 +488,33 @@ def main():
                         help="Embeddings subdir under embeddings/ to write to. "
                              "Default: inferred from the pkl stem "
                              "(cifs_v1_mp_prep -> v1_mp, else v1_all).")
-    parser.add_argument("--variant", default="full", choices=["full", "nosym"],
-                        help="full: CIFs as-is. nosym: drop the _symmetry_space_group_name_H-M "
-                             "and _symmetry_Int_Tables_number lines first, so the space group "
-                             "is not handed to the model verbatim (default: full).")
+    parser.add_argument("--variant", default="full", choices=list(VARIANTS),
+                        help="What text a structure becomes. full: the CIF as-is. nosym: "
+                             "the same with _symmetry_space_group_name_H-M and "
+                             "_symmetry_Int_Tables_number dropped, so the space group is "
+                             "not handed to the model verbatim. crystal_uncond: the "
+                             "compact crystal string in the answer slot of LLaMat's "
+                             "unconditional generation prompt -- only the answer tokens "
+                             "are pooled (default: full).")
+    parser.add_argument("--system-index", type=int, default=0,
+                        help="Which of the 10 GENERATION_SYSTEMS messages to use for "
+                             "crystal_uncond. Training picked one at random per example; "
+                             "extraction fixes one so only the structure varies.")
+    parser.add_argument("--on-overflow", default="skip", choices=("skip", "truncate"),
+                        help="What to do when prompt+crystal string exceeds the model "
+                             "context (2048 for llamat-2-cif). skip: drop the structure "
+                             "and log it -- a truncated crystal string describes a cell "
+                             "with FEWER ATOMS, so its embedding is not that structure's. "
+                             "truncate: keep it, flagged by n_answer_tokens. Measured on "
+                             "v1_mp: 8.1% overflow, and they are the large cells "
+                             "(median 142 sites vs 26 kept), so this choice biases the "
+                             "corpus either way -- report which was used.")
+    parser.add_argument("--wrapper", default="notebook",
+                        choices=list(llamat_prompts.WRAPPERS),
+                        help="Prompt wrapper for crystal_uncond. Unresolved which the "
+                             "released checkpoint was trained with: the committed "
+                             "pipeline uses chatml, every inference script the authors "
+                             "wrote uses notebook (default: notebook).")
     parser.add_argument("--dtype", default="float32", choices=list(DTYPES),
                         help="Stored precision of the embedding vectors. float32 is what "
                              "the models compute in. Use float16 for llamat2, where a "
@@ -341,7 +535,17 @@ def main():
         "v1_mp" if "mp" in Path(args.pkl).stem.lower().split("_") else "v1_all")
     print(f"Writing embeddings to embeddings/{dataset}/{args.model}/{args.variant}/")
 
+    builder = build_text_builder(args)
+    if isinstance(builder, CrystalStringBuilder):
+        print(f"Prompt ({args.wrapper} wrapper, system {args.system_index}, "
+              f"{len(builder.prompt)} chars) is constant; pooling the answer span only.")
+
     backend = BACKENDS[args.model](args.ckpt_dir, device, args.torch_dtype)
+    if isinstance(builder, CrystalStringBuilder):
+        n_prompt = len(backend.encode_pair(builder.prompt, "")[0])
+        builder.set_budget(backend.block_size, n_prompt)
+        print(f"  prompt is {n_prompt} tokens of the {backend.block_size} context; "
+              f"--on-overflow={args.on_overflow} above ~{builder.max_sites} sites")
 
     layers = list(range(backend.n_layer)) if args.layers is None \
              else [int(x) for x in args.layers.split(",")]
@@ -409,51 +613,67 @@ def main():
             return hook_fn
         hooks.append(backend.blocks[l].register_forward_hook(make_hook(l)))
 
-    pending = {l: {"ids": [], "embeddings": []} for l in layers}
+    # keys are the parquet column names: the dict is written straight to DataFrame
+    pending = {l: {"id": [], "embedding": [], "n_answer_tokens": []} for l in layers}
+    skip_path = out_dirs[layers[0]].parent / "skipped.csv"
+    skipped = []
     checkpoint_num = {l: len(list(out_dirs[l].glob("checkpoint_*.parquet"))) for l in layers}
     completed = 0
     start_time = time.time()
 
     for i in range(0, total, args.batch_size):
         batch = data[i: i + args.batch_size]
-        ids = [entry[0] for entry in batch]
-        # preprocess_cif first so strip_symmetry sees stripped/normalized lines.
-        cifs = [preprocess_cif(entry[1]) for entry in batch]
-        if args.variant == "nosym":
-            cifs = [strip_symmetry(c) for c in cifs]
+
+        # Build text per structure. A builder may reject one (unparseable, or a
+        # composition that disagrees with the CIF's own formula), and a rejected
+        # structure is dropped from the batch rather than embedded -- a missing row
+        # falls out of every downstream join, a wrong one does not.
+        ids, pairs = [], []
+        for cid, cif in batch:
+            try:
+                built = builder.build(cif, cid)
+            except SkipStructure as e:
+                skipped.append({"id": cid, "reason": str(e)})
+                continue
+            ids.append(cid)
+            pairs.append(built)
+        if not pairs:
+            completed += len(batch)
+            continue
 
         try:
-            input_ids, lengths = tokenize_batch(cifs, backend, device)
+            input_ids, starts, ends = tokenize_batch(pairs, backend, device)
             captured.clear()
             with torch.no_grad():
                 backend.forward(input_ids)
 
+            n_answer = (ends - starts).cpu().numpy()
             for l in layers:
-                embeddings = mean_pool(captured[l], lengths).cpu().numpy().astype(store_dtype)
-                pending[l]["ids"].extend(ids)
-                pending[l]["embeddings"].extend(list(embeddings))
+                embeddings = mean_pool(captured[l], starts, ends).cpu().numpy().astype(store_dtype)
+                pending[l]["id"].extend(ids)
+                pending[l]["embedding"].extend(list(embeddings))
+                pending[l]["n_answer_tokens"].extend(n_answer.tolist())
 
         except Exception as e:
-            print(f"  WARNING: batch at {i} failed: {e}", flush=True)
-            for l in layers:
-                pending[l]["ids"].extend(ids)
-                pending[l]["embeddings"].extend(
-                    [np.zeros(backend.n_embd, dtype=store_dtype)] * len(ids))
+            # A failed batch is recorded as skipped, NOT written as zero vectors: a zero
+            # row looks like a real embedding to every downstream consumer.
+            print(f"  WARNING: batch at {i} failed, skipping {len(ids)}: {e}", flush=True)
+            skipped.extend({"id": cid, "reason": f"forward failed: {type(e).__name__}"}
+                           for cid in ids)
 
         completed += len(batch)
         batch_num = i // args.batch_size + 1
 
         if batch_num % args.checkpoint_every == 0 or completed == total:
             for l in layers:
-                if not pending[l]["ids"]:
+                if not pending[l]["id"]:
                     continue
                 ckpt_file = out_dirs[l] / f"checkpoint_{checkpoint_num[l]:05d}.parquet"
-                pd.DataFrame({
-                    "id": pending[l]["ids"],
-                    "embedding": pending[l]["embeddings"],
-                }).to_parquet(ckpt_file, index=False)
+                pd.DataFrame(pending[l]).to_parquet(ckpt_file, index=False)
                 checkpoint_num[l] += 1
-                pending[l] = {"ids": [], "embeddings": []}
+                pending[l] = {"id": [], "embedding": [], "n_answer_tokens": []}
+            if skipped:
+                pd.DataFrame(skipped).to_csv(skip_path, index=False)
 
         elapsed = time.time() - start_time
         rate = completed / elapsed * 3600

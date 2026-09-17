@@ -501,10 +501,135 @@ analysis/v1_mp/all/metadata_mp_*.png        MP metadata histograms — no varian
   alpha for the linear method and `t` for the pca ones, so one column orders every sweep.
   Never write one of these files by hand.
 
+### LLaMat-2 was trained on a different CIF layout than the one we feed it
+
+Established 2026-09-17 by reading the LLaMat repo (`llamat/`, an untracked clone of
+M3RG-IITD/llamat) and comparing it against our own corpus files. This affects `llamat2`
+embeddings only; nothing about `crystallm` changes.
+
+**What LLaMat-2 saw.** Its CIF instruction tuning
+(`llamat/src/cifs/notebooks/cif_tasks.ipynb`) poses seven question tasks whose input is
+a whole CIF file, unedited, as `Below is a CIF file.\n{cif}\n{question}`. 14,046 such
+records survive in that repo's saved notebook outputs, and all 14,023 space-group lines
+among them read `'P 1'` — no exceptions. They are **pymatgen-written P1 files**: quoted
+`'P 1'`, `_symmetry_Int_Tables_number 1`, the identity operator alone, 8-decimal
+numbers, **one line per atom in the cell** with multiplicity 1 and unique site labels
+(`Te0, Te1, …`). Matching that, the authors' evaluation scores the space-group question
+at 99.1%, i.e. the answer was almost always the constant `P1`. The model therefore has
+no training that teaches it to expand symmetry operators.
+
+**What we feed it.** `extract_cif_embeddings.py` deliberately gives both models
+identical text: CrystaLLM-corpus CIFs through `preprocess_cif`. That text differs from
+LLaMat-2's training layout in four ways:
+
+| | CrystaLLM corpus (what we feed) | LLaMat-2 training |
+|---|---|---|
+| space group | real symbol, unquoted (`Pmmm`) | always quoted `'P 1'` |
+| atom lines | symmetry-unique only; `Fe1  2  …` means two Fe | every atom listed, multiplicity 1 |
+| decimals | 4 (`bin/preprocess.py`, `round_numbers`) | 8 |
+| extra block | `_atom_type_electronegativity` loop | absent |
+
+The second row changes meaning, not just surface form: the model reads one `Fe` line and
+has no reason to infer two atoms.
+
+**Which of those come from CrystaLLM's preprocessing.** Checked by pulling
+`NOMAD_GjZzUnOlEIJpuQwmit4GsRKZjrAr` out of both `cifs_v1_orig.pkl.gz` (3,551,492
+entries, unfiltered) and the prep pickle. Only the rounding, the atom-property block,
+the `data_` rename and the operator collapse are added by `bin/preprocess.py`. **The
+symmetry-unique atom layout and the real space group are already in the originals**, so
+converting is needed either way. One consequence for parsing: the original lists all 8
+operators for `Pmmm` and pymatgen reads it correctly on its own (4 sites, BaFe₂P), while
+only the preprocessed file needs `utils.py:postprocess()` first.
+
+**Conversion.** Convert from `cifs_v1_orig.pkl.gz`, not the prep pickles: it keeps 8
+decimals and full operators, and has no atom-property block to strip.
+
+```python
+s = Structure.from_str(orig_cif, fmt="cif")          # prep pickles: postprocess() first
+s = Structure(s.lattice, s.species, s.frac_coords)   # fresh labels: Ba0, Fe1, Fe2, P3
+llamat_cif = s.to(fmt="cif")
+```
+
+Verified on that structure with pymatgen 2024.11.13 (`crystallm_venv`): the result
+matches the training layout line for line. Skipping the second line leaves duplicate
+`Fe1` labels. `cifs_v1_orig` is larger than the 2.29M v1 corpus because it is not
+deduplicated — filter it by the ids in the split pickles to keep the same structures.
+
+**Token budget.** Measured on 1,000 CIFs from the LLaMat repo's own test set with
+LLaMat-2's tokenizer (`llamat/src/tokenizer_l2.model`): a raw CIF is **332 tokens plus
+~44 per site** (median 767, max 1,244 at ≤20 sites); the compact "crystal string" the
+model generates is median 193. At the 4,096 context this truncates at roughly **85
+atoms**, and conversion to P1 pushes structures over that sooner than their CrystaLLM
+files suggest. Numbers tokenize digit by digit, so most tokens in a CIF are coordinate
+digits and a mean pool is dominated by them.
+
+**Two consequences for variants and probes.**
+- After conversion the H-M line is always `'P 1'` and every multiplicity is 1, so
+  `--variant nosym` removes almost nothing and the Wyckoff leak noted in
+  `strip_symmetry` disappears. A `nosym` llamat2 run is not the same experiment as a
+  `nosym` crystallm run.
+- `_cell_volume` and `_chemical_formula_sum` survive conversion, so the density parse
+  ceiling documented above still applies. The space group does not survive, so a
+  space-group probe on converted text has no parse shortcut.
+
+**Reading vs writing.** LLaMat-2 reads CIFs but never writes them: its generation tasks
+emit a compact crystal string (lengths / angles / element and fractional-coordinate
+lines), which is turned into a CIF in Python afterwards. A direction fitted on
+CIF-reading activations may not transfer to generation. For steering work, embed crystal
+strings placed where the model's answer goes. Every generation prompt, the
+crystal-string encoder and a parser are in **`llamat/cif_prompts/`** (`README.md`,
+`cif_prompts.py`, `examples.txt`), verified against the authors' own saved records.
+
+**The released checkpoint, inspected 2026-09-17.** `m3rg-iitd/llamat-2-cif` is public
+and ungated; the weights are in `models/llamat2_cif` (gitignored, 27 GB of safetensors —
+the repo also ships identical `.bin` copies and a separate `adapter_ckpt/` LoRA for the
+Gruver conditional-generation route, neither of which we use). Four facts from its
+`config.json` and tokenizer that the code has to respect:
+
+| | |
+|---|---|
+| context | **2048**, not 4096 — `max_position_embeddings` |
+| tokenizer vs model vocab | tokenizer has 32,005 entries, `vocab_size` is 32,000 |
+| weights | fp32 on disk (26.95 GB); load as fp16 for the V100 |
+| `architectures` | absent from config.json, but `model_type: llama`, so AutoModel resolves |
+
+The vocab gap is a crash, not a curiosity: the five added tokens (`<CLS> <SEP> <EOD>
+<MASK> <PAD>`) are ids 32,000–32,004, i.e. **past the end of the embedding matrix**, so
+padding a batch with `tokenizer.pad_token_id` indexes out of bounds. `LlamatBackend`
+falls back to 0, which is safe because padding is masked out of the pool and, being at
+the end of a causally-attended row, is never read.
+
+**The wrapper question is now settled, near enough.** It was open because the committed
+training pipeline builds ChatML (`<|im_start|>system …`) while every inference script the
+authors wrote uses `{system} input-{input}output-`. The released tokenizer contains
+**no `<|im_start|>` or `<|im_end|>`** and ships no `chat_template`, although
+`src/ft_pipeline.sh` passes `--vocab_extra_ids_list "<|im_start|>,<|im_end|>"` when it
+converts a ChatML-trained model. So this checkpoint was not ChatML-trained, and
+`--wrapper notebook` is the default. That is strong evidence, not proof; `--wrapper
+chatml` remains available.
+
+**Token budget against the real tokenizer** (measured on 3,000 v1_mp and 2,000 v1_all
+structures, replacing the earlier CIF-based estimate). The unconditional prompt is
+exactly **203 tokens**, and a crystal string costs **18.0 tokens per site**, so about
+102 sites fit:
+
+| corpus | median sites | median tokens | over 2048 | kept-corpus cost |
+|---|---|---|---|---|
+| `v1_mp` | 28 | 714 | **8.13%** (~12,600) | 0.11 B tokens, ~11 GPU-h |
+| `v1_all` | 9 | 383 | **0.40%** (~9,100) | 1.03 B tokens, ~100 GPU-h |
+
+MP structures are three times larger than the v1_all median, so the smaller corpus is
+the one that loses more to the context limit — and what it loses is systematic: the
+dropped cells have a median of 142 sites against 26 for those kept. `--on-overflow skip`
+therefore biases toward small structures and the skip count belongs in any result. It is
+still the right default, because a truncated crystal string describes a cell with fewer
+atoms, so its embedding is not that structure's.
+
 ## Environments
 - `CrystaLLM/crystallm_venv` — generation and `crystallm` embedding extraction (cu130; GPU generation only).
 - `relax_venv` — M3GNet-PES relaxation (cu121, V100-compatible).
 - `megnet_venv` — MEGNet band-gap prediction (CPU).
-- `llamat_venv` — **not created yet.** `llamat2` extraction needs `transformers`, which
-  none of the three above has. The extraction slurms pick this venv whenever
-  `MODEL != crystallm`; override with `VENV=<path>`.
+- `llamat_venv` — `llamat2_cif` extraction (torch 2.4.1+cu121 + transformers). Built
+  on the same torch as `relax_venv` because that is the build known to run on these
+  V100s. `run.sh` selects it with `VENV="llamat"`; the older extraction slurms pick it
+  whenever `MODEL != crystallm`, overridable with `VENV=<path>`.

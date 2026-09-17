@@ -26,9 +26,10 @@ importing one script from another needs `importlib.util.spec_from_file_location`
 
 | venv | Used for | Why separate |
 |---|---|---|
-| `CrystaLLM/crystallm_venv` | generation, embeddings, sklearn analysis | torch cu130 — **GPU generation only** |
+| `CrystaLLM/crystallm_venv` | crystallm generation, embeddings, sklearn analysis | torch 2.0.1+cu118 |
 | `relax_venv` | M3GNet-PES relaxation | torch 2.4.1+cu121, the only one that runs on the V100 (sm_70) |
 | `megnet_venv` | MEGNet band-gap prediction | CPU |
+| `llamat_venv` | llamat2_cif embedding extraction | torch 2.4.1+cu121 + transformers |
 
 `crystallm_venv`'s cu130 build **cannot run on the V100**. Anything touching M3GNet
 must use `relax_venv`.

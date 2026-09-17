@@ -46,3 +46,10 @@ __pycache__/
 
 # api keys
 api_keys.json
+
+# ---- model weights ----
+# llamat-2-cif is ~27 GB of safetensors. Downloaded with
+#   hf download m3rg-iitd/llamat-2-cif --local-dir models/llamat2_cif
+models/
+*.safetensors
+*.pt

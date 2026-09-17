@@ -123,8 +123,15 @@ DEFAULT_LABEL_COLS = ("point_group", "space_group_symbol", "structural_type",
 # so "full" embeddings cannot be used to ask whether the model *represents* symmetry --
 # a probe just reads the copied token back. "nosym" strips those lines before the forward
 # pass, so symmetry has to be inferred from the cell and coordinates.
+#
+# Variants are MODEL-SPECIFIC in meaning. full/nosym describe CIF text and belong to
+# crystallm; crystal_uncond belongs to llamat2_cif and is not a CIF at all -- it is the
+# compact crystal string the model generates, placed in the answer slot of the
+# unconditional generation prompt (see scripts/llamat_prompts.py for why). The tuple is
+# flat because <model> already separates the trees, so an unused pairing is just an
+# empty directory rather than a collision.
 DEFAULT_VARIANT = "full"
-VARIANTS = ("full", "nosym")
+VARIANTS = ("full", "nosym", "crystal_uncond")
 
 # Which slice of CrystaLLM's own train/val/test split an analysis runs on. This matters
 # because 89.6% of the structures with metadata are in the model's training set and only
@@ -146,13 +153,16 @@ ANALYSIS_ROOT = Path("analysis")
 #   llamat2    LLaMA-2 7B continued-pretrained on materials text (m3rg-iitd), so 32
 #              blocks, 4096-dim, and a general BPE tokenizer that splits a number like
 #              4.2317 across several tokens.
+#   llamat2_cif  llamat2 further instruction-tuned on CIF tasks. Same architecture,
+#              DIFFERENT WEIGHTS, so it gets its own name -- sharing llamat2's would
+#              silently mix two models' vectors in one directory.
 #
 # So a layer index means different things in each ("layer 7" is 7/16 of the way through
 # one and 7/32 of the other), and a steering vector, PCA basis or manifold fitted on one
 # cannot be applied to the other. Nothing in this repo mixes two models in one artifact;
 # the path keeps that honest. Add a new name here to register it.
 DEFAULT_MODEL = "crystallm"
-MODELS = ("crystallm", "llamat2")
+MODELS = ("crystallm", "llamat2", "llamat2_cif")
 
 
 # One schema for every steering results table under analysis/<dataset>/<partition>/.

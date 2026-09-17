@@ -76,7 +76,7 @@ QUEUE="batch"; TIME="4:00:00"; MEM="32G"; CPUS="4"; GPUS="0"; EXCLUDE=""
 source "$conf"
 
 [ -n "$SCRIPT" ] || { echo "$conf: SCRIPT is required" >&2; exit 1; }
-[ -n "$VENV" ]   || { echo "$conf: VENV is required (crystallm|relax|megnet)" >&2; exit 1; }
+[ -n "$VENV" ]   || { echo "$conf: VENV is required (crystallm|relax|megnet|llamat)" >&2; exit 1; }
 
 # The venv choice is a real footgun, so it is decided in exactly one place.
 # crystallm_venv is a cu130 build and CANNOT run on the V100 (sm_70); anything touching
@@ -85,7 +85,8 @@ case "$VENV" in
     crystallm) venv_path="CrystaLLM/crystallm_venv" ;;
     relax)     venv_path="relax_venv" ;;
     megnet)    venv_path="megnet_venv" ;;
-    *) echo "$conf: VENV must be crystallm|relax|megnet, got '$VENV'" >&2; exit 1 ;;
+    llamat)    venv_path="llamat_venv" ;;
+    *) echo "$conf: VENV must be crystallm|relax|megnet|llamat, got '$VENV'" >&2; exit 1 ;;
 esac
 [ -d "$venv_path" ] || { echo "venv not found: $venv_path" >&2; exit 1; }
 
