@@ -288,8 +288,11 @@ class LlamatBackend:
             self._prompt_ids = self.tokenizer(
                 prompt, add_special_tokens=True)["input_ids"] if prompt else \
                 self.tokenizer("", add_special_tokens=True)["input_ids"]
-        ids = self.tokenizer(prompt + answer, add_special_tokens=True,
-                             truncation=True, max_length=self.block_size)["input_ids"]
+        # Deliberately NOT truncated here. Truncating inside the tokenizer would silently
+        # drop atoms off the end of a crystal string and hand back an embedding of a
+        # smaller cell; the caller checks the length against block_size and applies
+        # --on-overflow instead.
+        ids = self.tokenizer(prompt + answer, add_special_tokens=True)["input_ids"]
         start = len(self._prompt_ids)
         if ids[:start] != self._prompt_ids:
             # BPE merged across the boundary -- find the real split by re-encoding.
@@ -422,20 +425,18 @@ def build_text_builder(args):
     return RawCifBuilder(args.variant)
 
 
-def tokenize_batch(pairs, backend, device: torch.device):
-    """Tokenize (prompt, answer) pairs; pad to batch max. Returns ids, starts, ends.
+def pad_batch(encoded, pad_id: int, device: torch.device):
+    """Pad a list of (ids, answer_start) to the batch max. Returns ids, starts, ends.
 
     starts/ends bound the ANSWER span of each row, which is what mean_pool averages.
     """
-    encoded = [backend.encode_pair(prompt, answer) for prompt, answer in pairs]
     ends = [len(ids) for ids, _ in encoded]
     starts = [start for _, start in encoded]
     if any(s >= e for s, e in zip(starts, ends)):
-        raise ValueError("a row has no answer tokens left after truncation")
+        raise ValueError("a row has no answer tokens -- the span is empty")
 
     max_len = max(ends)
-    padded = torch.full((len(encoded), max_len), backend.pad_id,
-                        dtype=torch.long, device=device)
+    padded = torch.full((len(encoded), max_len), pad_id, dtype=torch.long, device=device)
     for i, (ids, _) in enumerate(encoded):
         padded[i, :len(ids)] = torch.tensor(ids, dtype=torch.long)
 
@@ -616,7 +617,8 @@ def main():
     # keys are the parquet column names: the dict is written straight to DataFrame
     pending = {l: {"id": [], "embedding": [], "n_answer_tokens": []} for l in layers}
     skip_path = out_dirs[layers[0]].parent / "skipped.csv"
-    skipped = []
+    trunc_path = out_dirs[layers[0]].parent / "truncated.csv"
+    skipped, truncated = [], []
     checkpoint_num = {l: len(list(out_dirs[l].glob("checkpoint_*.parquet"))) for l in layers}
     completed = 0
     start_time = time.time()
@@ -628,21 +630,33 @@ def main():
         # composition that disagrees with the CIF's own formula), and a rejected
         # structure is dropped from the batch rather than embedded -- a missing row
         # falls out of every downstream join, a wrong one does not.
-        ids, pairs = [], []
+        ids, encoded = [], []
         for cid, cif in batch:
             try:
-                built = builder.build(cif, cid)
+                prompt, answer = builder.build(cif, cid)
+                seq, start = backend.encode_pair(prompt, answer)
+                # EXACT length check. The builder's site-count filter is an estimate
+                # (18.0 tokens/site); this is the real number, so nothing is truncated
+                # without a decision being recorded.
+                if len(seq) > backend.block_size:
+                    if args.on_overflow == "skip":
+                        raise SkipStructure(
+                            f"{len(seq)} tokens exceeds context {backend.block_size}")
+                    seq, n_over = seq[:backend.block_size], len(seq) - backend.block_size
+                    truncated.append({"id": cid, "dropped_tokens": n_over})
+                    if start >= len(seq):
+                        raise SkipStructure("truncation left no answer tokens")
             except SkipStructure as e:
                 skipped.append({"id": cid, "reason": str(e)})
                 continue
             ids.append(cid)
-            pairs.append(built)
-        if not pairs:
+            encoded.append((seq, start))
+        if not encoded:
             completed += len(batch)
             continue
 
         try:
-            input_ids, starts, ends = tokenize_batch(pairs, backend, device)
+            input_ids, starts, ends = pad_batch(encoded, backend.pad_id, device)
             captured.clear()
             with torch.no_grad():
                 backend.forward(input_ids)
@@ -674,6 +688,8 @@ def main():
                 pending[l] = {"id": [], "embedding": [], "n_answer_tokens": []}
             if skipped:
                 pd.DataFrame(skipped).to_csv(skip_path, index=False)
+            if truncated:
+                pd.DataFrame(truncated).to_csv(trunc_path, index=False)
 
         elapsed = time.time() - start_time
         rate = completed / elapsed * 3600
