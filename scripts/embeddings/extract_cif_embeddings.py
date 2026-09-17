@@ -507,7 +507,7 @@ def main():
                              "and log it -- a truncated crystal string describes a cell "
                              "with FEWER ATOMS, so its embedding is not that structure's. "
                              "truncate: keep it, flagged by n_answer_tokens. Measured on "
-                             "v1_mp: 8.1% overflow, and they are the large cells "
+                             "v1_mp: 8.1%% overflow, and they are the large cells "
                              "(median 142 sites vs 26 kept), so this choice biases the "
                              "corpus either way -- report which was used.")
     parser.add_argument("--wrapper", default="notebook",
