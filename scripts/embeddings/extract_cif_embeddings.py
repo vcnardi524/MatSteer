@@ -251,23 +251,20 @@ class LlamatBackend:
         self.n_embd = config.hidden_size
         self.block_size = config.max_position_embeddings
         self.blocks = self.model.model.layers
-        # Padding is masked out of the pooled mean and, because attention is causal and
-        # padding sits at the END of each row, no real token ever attends to it. So the
-        # pad id only has to be a VALID INDEX -- its value is never read.
+        # Padding is pure bookkeeping: it is excluded from the pooled mean, and with right
+        # padding and causal attention no real token ever attends to it. The filler only
+        # has to be a valid embedding row, so 0 -- the same value the CrystaLLM backend
+        # uses -- is fine.
         #
-        # It must therefore be < the model's vocab_size, which is not the same as the
-        # tokenizer's. llamat-2-cif ships tokenizer vocab 32005 against config
-        # vocab_size 32000: its five added tokens (<CLS> <SEP> <EOD> <MASK> <PAD>) sit
-        # PAST the end of the embedding matrix, so padding with tokenizer.pad_token_id
-        # (32004) would index out of bounds and crash the forward pass.
-        pad = self.tokenizer.pad_token_id
-        if pad is None:
-            pad = self.tokenizer.eos_token_id
-        if pad is None or pad >= config.vocab_size:
-            print(f"  pad_token_id {pad} is outside the model vocab ({config.vocab_size}); "
-                  f"padding with 0 instead (masked out either way)")
-            pad = 0
-        self.pad_id = pad
+        # Deliberately NOT tokenizer.pad_token_id. That is <PAD> = 32004, one of five
+        # tokens (<CLS> <SEP> <EOD> <MASK> <PAD>) that Megatron-LM's tokenizer adds by
+        # default (llamat/Megatron-LLM/megatron/tokenizer/tokenizer.py:362) and the
+        # Megatron -> HF conversion carried across. The embedding matrix was never
+        # resized to match: it has 32,000 rows against the tokenizer's 32,005, so none of
+        # those five can be embedded at all. They never appear in our text -- checked over
+        # 3,000 real prompt+crystal-string sequences, the highest id produced is 29,999 --
+        # so nothing here needs to defend against them; we simply do not use one.
+        self.pad_id = 0
         self._prompt_text, self._prompt_ids = None, None   # constant prompt, tokenised once
         print(f"Loaded model: {self.n_layer} layers, {self.n_embd} dim, "
               f"block_size {self.block_size}, dtype {torch_dtype}")
@@ -306,11 +303,14 @@ class LlamatBackend:
 
 
 def _boundary(ids, prompt_ids) -> int:
-    """Longest prefix of `ids` that still agrees with `prompt_ids`, minus any merged token.
+    """First position where `ids` stops agreeing with `prompt_ids`.
 
-    Only reached when BPE merges the last prompt token with the first answer token. Back
-    off to the last position where the two agree; that token then counts as prompt, which
-    errs toward excluding a position rather than including a constant one.
+    Only reached when BPE merges the last prompt token with the first answer token, which
+    does not happen for the unconditional prompt (verified: the joined sequence starts
+    with the prompt's own 203 ids). If it ever did, the merged token would be INCLUDED in
+    the answer span, since mean_pool masks `pos >= start`. That is the right side to err
+    on: a merged token carries answer content, so its hidden state varies with the
+    structure, which is exactly what the pool is supposed to contain.
     """
     n = 0
     while n < len(prompt_ids) and n < len(ids) and ids[n] == prompt_ids[n]:

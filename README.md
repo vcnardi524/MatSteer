@@ -593,11 +593,21 @@ Gruver conditional-generation route, neither of which we use). Four facts from i
 | weights | fp32 on disk (26.95 GB); load as fp16 for the V100 |
 | `architectures` | absent from config.json, but `model_type: llama`, so AutoModel resolves |
 
-The vocab gap is a crash, not a curiosity: the five added tokens (`<CLS> <SEP> <EOD>
-<MASK> <PAD>`) are ids 32,000–32,004, i.e. **past the end of the embedding matrix**, so
-padding a batch with `tokenizer.pad_token_id` indexes out of bounds. `LlamatBackend`
-falls back to 0, which is safe because padding is masked out of the pool and, being at
-the end of a causally-attended row, is never read.
+The vocab gap is a packaging artifact, not something to defend against. All five added
+tokens (`<CLS> <SEP> <EOD> <MASK> <PAD>`, ids 32,000–32,004) sit past the end of the
+embedding matrix, so none of them can be embedded — they come from **Megatron-LM's
+tokenizer, which adds them by default** (`llamat/Megatron-LLM/megatron/tokenizer/
+tokenizer.py:362`), and the Megatron → HF conversion carried them over without resizing
+the embedding.
+
+They never appear in our input: checked over 3,000 real prompt+crystal-string sequences,
+the highest id produced is 29,999. So we simply do not use one. The only place the
+question arises is the filler for batch padding, and there it is pure bookkeeping —
+excluded from the pooled mean, and never attended to because padding sits at the end of a
+causally-attended row — so the filler just has to be a valid embedding row. `LlamatBackend`
+uses 0, the same value the CrystaLLM backend uses. Asking `tokenizer.pad_token_id` was the
+wrong question; the authors' own inference code sets its own pad token too
+(`src/cifs/crystal-text-llm/condtional_generation.py:112`).
 
 **The wrapper question is now settled, near enough.** It was open because the committed
 training pipeline builds ChatML (`<|im_start|>system …`) while every inference script the
