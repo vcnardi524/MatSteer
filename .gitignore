@@ -13,7 +13,10 @@
 *.ckpt
 
 # Large data / results directories
-embeddings/
+# Anchored to the repo root ON PURPOSE. Unanchored, `embeddings/` also matches
+# scripts/embeddings/, which silently ignored new code added there -- the two
+# files already tracked in it predate the rule.
+/embeddings/
 generated_cifs/
 relaxed/
 predictions/
