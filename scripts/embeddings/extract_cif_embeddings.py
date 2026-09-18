@@ -604,6 +604,7 @@ def main():
             print(f"Layer {l}: resuming — {len(done):,} entries already done")
 
     data = load_cifs(args.pkl, args.limit)
+    n_corpus = len(data)          # before the resume filter, for the accounting check
 
     # filter to entries not yet done (use layer 0 as reference)
     ref_done = done_ids_per_layer[layers[0]]
@@ -722,16 +723,22 @@ def main():
     # Every structure must end up either embedded or logged as skipped. Silently losing
     # some is exactly the failure this run hit, and it was only caught by counting rows
     # afterwards -- so count them here instead.
+    #
+    # Compare against the WHOLE corpus, not `total`. `total` is only what this run had
+    # left to do, while the counts below span every run: the shards hold earlier runs'
+    # embeddings too, and skipped ids are never written to a shard, so a resume always
+    # re-processes and re-logs them and skipped.csv ends up complete either way. Using
+    # `total` here made a correct resume report a negative shortfall.
     n_done = sum(len(pd.read_parquet(f, columns=["id"]))
                  for f in out_dirs[layers[0]].glob("checkpoint_*.parquet"))
     n_seen = n_done + len(skipped)
-    if n_seen != total:
-        print(f"  WARNING: {total:,} structures in, but {n_done:,} embedded + "
-              f"{len(skipped):,} skipped = {n_seen:,}. {total - n_seen:,} unaccounted for.",
-              flush=True)
+    if n_seen != n_corpus:
+        print(f"  WARNING: {n_corpus:,} structures in the corpus, but {n_done:,} embedded "
+              f"+ {len(skipped):,} skipped = {n_seen:,}. "
+              f"{n_corpus - n_seen:,} unaccounted for.", flush=True)
     else:
         print(f"  accounted for: {n_done:,} embedded + {len(skipped):,} skipped "
-              f"= {total:,}")
+              f"= {n_corpus:,} (the whole corpus)")
 
     for h in hooks:
         h.remove()
