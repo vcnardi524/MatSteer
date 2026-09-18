@@ -46,7 +46,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from make_prompts import PATTERN_COMP_SG, extract_prompt
 from extract_cif_embeddings import load_model, load_cifs
 from compute_centroid_target import load_pca
-from utils import analysis_dir
+from utils import DEFAULT_MODEL, MODELS, analysis_dir
 
 TEST_PKL = "CrystaLLM/cifs_v1_test_sample1000.pkl.gz"
 # validity of the matching generation runs, so the two curves can be read together
@@ -57,6 +57,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt-dir", default="CrystaLLM/crystallm_v1_large",
                     help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="which model's results these are; picks the analysis/<model>/ tree")
     ap.add_argument("--property", default="density_atomic")
     ap.add_argument("--target", type=float, default=30.0)
     ap.add_argument("--layer", type=int, default=14)
@@ -140,7 +142,7 @@ def main():
         print("\nd_knn relative to the unsteered activation:")
         for _, r in df.iterrows():
             print(f"  t={r['t']:<5} {r['d_knn_vs_clean']:.3f}x")
-    out = (analysis_dir("v1_all", None, "test")
+    out = (analysis_dir("v1_all", None, "test", model=args.model)
            / f"manifold_distance_{args.property}_layer{args.layer}_target{args.target:g}.csv")
     df.to_csv(out, index=False, float_format="%.6g")
     print(f"\nSaved {out}")

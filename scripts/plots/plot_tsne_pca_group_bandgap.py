@@ -237,7 +237,7 @@ def main():
     fig.tight_layout()
 
     out_dir = analysis_dir(args.dataset, args.variant, args.partition,
-                           subdir=f"plots/layer{args.layer}")
+                           subdir=f"plots/layer{args.layer}", model=args.model)
     tag = "sg" if args.sg else "pg"
     safe = group.replace("/", "_").replace("-", "m")
     out = out_dir / f"bandgap_tsne_pca_{tag}_{safe}.png"

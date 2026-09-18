@@ -4,6 +4,11 @@ from pathlib import Path
 
 import pandas as pd
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
+from utils import analysis_root, CORPUS_DIR
+
 J_TO_EV = 6.2415e18
 
 df = pd.read_parquet("metadata.parquet", columns=["energy_lowest_unoccupied", "energy_highest_occupied"])
@@ -40,6 +45,6 @@ print(results.to_string(index=False))
 
 # analysis/ root, not a partition dir: this is a sanity check over the whole corpus,
 # not a per-split result.
-_out = Path("analysis"); _out.mkdir(exist_ok=True)
+_out = analysis_root(CORPUS_DIR)   # corpus: metadata statistics, no model involved
 results.to_csv(_out / "bandgap_percentile_stats.csv", index=False)
 print("\nSaved bandgap_percentile_stats.csv")

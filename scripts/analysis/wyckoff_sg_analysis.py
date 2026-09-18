@@ -21,8 +21,13 @@ from pathlib import Path
 import pandas as pd
 import pyarrow.parquet as pq
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
+from utils import analysis_root, CORPUS_DIR
+
 INP = "preparsed_metadata_nomad.parquet"
-OUTDIR = Path("analysis")
+OUTDIR = analysis_root(CORPUS_DIR)   # corpus: CIF statistics, no model involved
 BATCH = 2000
 
 

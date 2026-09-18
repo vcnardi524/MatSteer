@@ -38,10 +38,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from utils import steering_path
+from utils import steering_path, analysis_dir
 
 CONTROL = "steered_test_alpha0.0_layer0_nosg"
-OUT = Path("analysis/v1_all/test")
+OUT = analysis_dir("v1_all", None, "test")   # crystallm-only today; see analysis_dir
 COLOR = ["#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7", "#56B4E9"]
 
 

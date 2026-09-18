@@ -33,7 +33,7 @@ SEED = 42
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import DEFAULT_MODEL, MODELS, load_embeddings
+from utils import DEFAULT_MODEL, MODELS, load_embeddings, analysis_root
 
 
 def main():
@@ -90,7 +90,7 @@ def main():
     ax.set_title(f"Layer {args.layer}: held-out separation along steering direction\n"
                  f"steering AUC={auc_steer:.3f}  |  best linear probe AUC={auc_probe:.3f}")
     ax.legend()
-    out = Path("analysis"); out.mkdir(exist_ok=True)
+    out = analysis_root(args.model)
     png = out / f"steering_probe_layer{args.layer}.png"
     plt.tight_layout(); plt.savefig(png, dpi=140)
     print(f"\nSaved {png}")

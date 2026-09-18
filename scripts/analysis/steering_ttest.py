@@ -60,7 +60,7 @@ the top of analyse() demotes any log-scaled property to linear if it sees a valu
 
 OUTPUT
 ------
-analysis/v1_all/test/{prop}_steering_ttest.csv
+analysis/<model>/v1_all/test/{prop}_steering_ttest.csv
 
 Usage:
     python scripts/analysis/steering_ttest.py --property band_gap
@@ -78,7 +78,8 @@ import pandas as pd
 from scipy.stats import levene, ttest_ind, ttest_rel, wilcoxon
 
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-from utils import analysis_dir, write_results_table, RESULT_UNITS, RESULT_COLUMNS
+from utils import (analysis_dir, write_results_table, RESULT_UNITS,
+                   RESULT_COLUMNS, DEFAULT_MODEL, MODELS)
 
 # Every method's stem grammar lives in the loader module (`_ds`, imported below), so it
 # is written once and both the plot and this table agree on what a filename means.
@@ -220,7 +221,7 @@ def analyse(prop: str, method: str, relaxed: bool, family: str = None,
     return out
 
 
-def build_all(out_path=None) -> pd.DataFrame:
+def build_all(out_path=None, model: str = DEFAULT_MODEL) -> pd.DataFrame:
     """Every property x method x source, in one canonical table."""
     frames = []
     for prop in sorted(_ds.PROPS):
@@ -247,7 +248,7 @@ def build_all(out_path=None) -> pd.DataFrame:
     df = pd.concat(frames, ignore_index=True).drop_duplicates(subset=key)
     df = df.sort_values(key, na_position="first").reset_index(drop=True)
     path = write_results_table(df, out_path or
-                               analysis_dir("v1_all", None, "test") / "steering_runs.csv")
+                               analysis_dir("v1_all", None, "test", model=model) / "steering_runs.csv")
     print(f"Wrote {path}  ({len(df)} rows)")
     return df
 
@@ -258,9 +259,12 @@ def main():
     ap.add_argument("--agg", choices=["mean", "max"], default="mean",
                     help="How the 3 samples per prompt collapse to one value: their mean, "
                          "or the best of the 3. Ignored by --all, which writes both.")
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="which model's results these are; picks the "
+                         "analysis/<model>/ tree")
     ap.add_argument("--all", action="store_true",
                     help="Every property x method x source into one canonical table, "
-                         "analysis/v1_all/test/steering_runs.csv, instead of a single "
+                         "analysis/<model>/v1_all/test/steering_runs.csv, instead of a single "
                          "per-property file. Same statistics either way.")
     # choices come from METHODS so the two cannot drift: the list here was stale and
     # rejected --method manifold even though --all had been testing it all along.
@@ -285,7 +289,7 @@ def main():
     args = ap.parse_args()
 
     if args.all:
-        build_all()
+        build_all(model=args.model)
         return
 
     out = analyse(args.property, args.method, args.relaxed, args.family,
@@ -320,7 +324,7 @@ def main():
 
     # The sweep is part of the filename for the same reason it is part of the identity:
     # two targets, or two layers, are different runs and must not share a file.
-    dest = analysis_dir("v1_all", None, "test")
+    dest = analysis_dir("v1_all", None, "test", model=args.model)
     tag = "_relaxed" if args.relaxed else ""
     meth = "" if args.method == "linear" else f"_{args.method}"
     sweep = (f"_target{args.target:g}" if args.target is not None else "") + \

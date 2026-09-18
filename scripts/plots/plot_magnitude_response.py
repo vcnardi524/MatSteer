@@ -30,8 +30,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-MAG = "analysis/v1_all/test/plots/density_injection_magnitude.csv"
-OUT = Path("analysis/v1_all/test/plots")
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
+from utils import analysis_dir
+
+MAG = str(analysis_dir("v1_all", None, "test", subdir="plots") /
+          "density_injection_magnitude.csv")
+OUT = analysis_dir("v1_all", None, "test", subdir="plots")
 
 
 def series_for(d, layer, min_points=4, sign="both"):

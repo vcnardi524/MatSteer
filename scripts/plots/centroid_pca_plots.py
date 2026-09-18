@@ -232,7 +232,8 @@ def main():
         + (f"; {len(S):,} individual structures behind at 10% opacity." if len(S) else "."),
         fontsize=12.5, y=0.99)
 
-    out_dir = analysis_dir(args.dataset, args.variant, args.partition, subdir="plots")
+    out_dir = analysis_dir(args.dataset, args.variant, args.partition, subdir="plots",
+                            model=args.model)
     # The restriction and the bucket width are part of what the figure IS, so they go in
     # the filename: a run over gapped materials only must not overwrite the run over all
     # of them, and two widths are two different pictures.

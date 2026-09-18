@@ -60,7 +60,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                 "embeddings"))
 from extract_cif_embeddings import load_model, load_cifs
-from utils import analysis_dir, write_results_table  # noqa: F401  (analysis_dir only)
+from utils import DEFAULT_MODEL, MODELS, analysis_dir, write_results_table  # noqa: F401  (analysis_dir only)
 
 TEST_PKL = "CrystaLLM/cifs_v1_test_sample1000.pkl.gz"
 DIGITS = [str(d) for d in range(10)]
@@ -95,6 +95,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt-dir", default="CrystaLLM/crystallm_v1_large",
                     help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="which model's results these are; picks the analysis/<model>/ tree")
     ap.add_argument("--property", default="density_atomic",
                     help="steering_vectors/<property>/layer{N}.parquet must exist per layer")
     ap.add_argument("--method", choices=("linear", "pca_centroid"), default="linear",
@@ -245,7 +247,7 @@ def main():
     df = pd.DataFrame(rows)
     tag = ("linear" if args.method == "linear"
            else f"pca_centroid_target{args.target:g}_t{args.t:g}")
-    out = (analysis_dir("v1_all", None, "test")
+    out = (analysis_dir("v1_all", None, "test", model=args.model)
            / f"layer_causal_probe_{args.property}_{tag}.csv")
     df.to_csv(out, index=False, float_format="%.6g")
     print("\nRead the two columns together. High selectivity with d_log10_volume ~ 0 is\n"

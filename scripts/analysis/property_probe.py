@@ -237,7 +237,7 @@ def main():
 
     if not rows:
         raise SystemExit("No rows produced.")
-    out = analysis_dir(args.dataset, args.variant, "val") / \
+    out = analysis_dir(args.dataset, args.variant, "val", model=args.model) / \
         f"property_probe_{args.property.replace('.', '_')}.csv"
     pd.DataFrame(rows).to_csv(out, index=False, float_format="%.6g")
     print(f"\nSaved {len(rows)} rows to {out}")

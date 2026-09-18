@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Two summary figures for density steering, from analysis/v1_all/test/steering_runs.csv.
+"""Two summary figures for density steering, from analysis/<model>/v1_all/test/steering_runs.csv.
 
 1. the layer-7 dose response. One column per sweep, each on its own strength axis --
    the knobs are in different units (arc step, scale, alpha) and do not share one. Top
@@ -19,8 +19,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-CSV = "analysis/v1_all/test/steering_runs.csv"
-OUT = Path("analysis/v1_all/test/plots")
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
+from utils import analysis_dir
+
+CSV = str(analysis_dir("v1_all", None, "test") / "steering_runs.csv")
+OUT = analysis_dir("v1_all", None, "test", subdir="plots")
 
 # Okabe-Ito. Validated for this 4-series case: worst adjacent CVD dE 8.6 (tritan),
 # normal-vision 18.7. Every line is also direct-labelled, which the low

@@ -44,7 +44,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from make_prompts import PATTERN_COMP_SG, extract_prompt
 from extract_cif_embeddings import load_model, load_cifs
 from compute_centroid_target import load_pca
-from utils import analysis_dir
+from utils import DEFAULT_MODEL, MODELS, analysis_dir
 
 TEST_PKL = "CrystaLLM/cifs_v1_test_sample1000.pkl.gz"
 
@@ -93,6 +93,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt-dir", default="CrystaLLM/crystallm_v1_large",
                     help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="which model's results these are; picks the analysis/<model>/ tree")
     ap.add_argument("--method", choices=("linear", "pca_centroid"), default="linear")
     ap.add_argument("--layer", type=int, default=14)
     ap.add_argument("--alpha", type=float, default=40.0, help="[linear]")
@@ -182,7 +184,7 @@ def main():
     print("  >90% means LayerNorm is not erasing the injection and the nulls stand;"
           "\n  a collapse means the sweeps never tested what they were meant to.")
 
-    out = analysis_dir("v1_all", None, "test") / (
+    out = analysis_dir("v1_all", None, "test", model=args.model) / (
         f"layernorm_survival_{args.method}_layer{args.layer}.csv")
     df.to_csv(out, index=False, float_format="%.6g")
     print(f"\nSaved {out}")

@@ -27,12 +27,17 @@ Usage:
     python scripts/data/property_coverage.py metadata.parquet --out analysis/foo.csv
 """
 import argparse
+import os
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
+from utils import analysis_root, CORPUS_DIR
 
 
 def summarise(col: pa.ChunkedArray, name: str, n_rows: int) -> dict:
@@ -88,8 +93,9 @@ def main():
         print(f"  [{i:>2}/{len(names)}] {name}", flush=True)
 
     d = pd.DataFrame(rows).sort_values(["pct_present", "column"], ascending=[False, True])
+    # corpus: this describes a metadata file, not a model
     out = Path(args.out or
-               f"analysis/{Path(args.path).stem}_property_coverage.csv")
+               analysis_root(CORPUS_DIR) / f"{Path(args.path).stem}_property_coverage.csv")
     out.parent.mkdir(parents=True, exist_ok=True)
     d.to_csv(out, index=False, float_format="%.4g")
 

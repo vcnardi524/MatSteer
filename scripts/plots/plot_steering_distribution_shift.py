@@ -53,7 +53,7 @@ ALPHAS AVAILABLE ON DISK (2026-08-17)
 
 OUTPUT
 ------
-analysis/v1_all/test/plots/{prop}_distribution_shift.png
+analysis/<model>/v1_all/test/plots/{prop}_distribution_shift.png
 
 Usage:
     python scripts/plots/plot_steering_distribution_shift.py --property band_gap
@@ -669,7 +669,7 @@ def main():
         f"{pop}", fontsize=12.5, y=1.02)
     fig.tight_layout()
 
-    out_dir = analysis_dir("v1_all", None, "test", subdir="plots")
+    out_dir = analysis_dir("v1_all", None, "test", subdir="plots", model=args.model)
     tag = "_relaxed" if args.relaxed else ""
     meth = "" if args.method == "linear" else f"_{args.method}"
     out = out_dir / f"{args.property}{meth}_distribution_shift{tag}.png"

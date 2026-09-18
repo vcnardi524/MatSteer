@@ -41,7 +41,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", nargs="+", required=True)
     ap.add_argument("--results-dir", default="density_atomic")
-    ap.add_argument("--out", default="analysis/v1_all/test/spacegroup_shift.csv")
+    ap.add_argument("--out", default=None,
+                    help="default: analysis/<model>/v1_all/test/spacegroup_shift.csv")
     args = ap.parse_args()
 
     with gzip.open(TEST_PKL, "rb") as f:

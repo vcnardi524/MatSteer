@@ -35,10 +35,10 @@ from tqdm import tqdm
 
 warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from utils import postprocess
+from utils import postprocess, analysis_dir
 
 PKL = "CrystaLLM/cifs_v1_test_sample1000.pkl.gz"
-OUT = Path("analysis/v1_all/test/eform_reference_check.csv")
+OUT = analysis_dir("v1_all", None, "test") / "eform_reference_check.csv"
 
 
 def main():

@@ -24,7 +24,7 @@ Usage:
     python scripts/plots/plot_effect_by_layer.py \
         --series formation_energy_per_atom:manifold:d=3,s=4 \
         --series formation_energy_per_atom:linear:alpha=16 \
-        --out analysis/v1_all/test/plots/formation_energy_effect_by_layer.png
+        --out analysis/<model>/v1_all/test/plots/formation_energy_effect_by_layer.png
 """
 import argparse
 from pathlib import Path
@@ -35,7 +35,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-CSV = "analysis/v1_all/test/steering_runs.csv"
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
+from utils import analysis_dir
+
+CSV = str(analysis_dir("v1_all", None, "test") / "steering_runs.csv")
 COLOR = ["#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7", "#56B4E9", "#7A3B2E"]
 MARKER = ["s", "o", "^", "D", "v", "P", "X"]
 # which CSV column each coefficient key lives in, per method
@@ -75,7 +80,8 @@ def main():
     ap.add_argument("--family", default="nosg", choices=("nosg", "sg", "any"))
     ap.add_argument("--source", default="raw", choices=("raw", "relaxed"))
     ap.add_argument("--agg", default="mean", choices=("mean", "max"))
-    ap.add_argument("--out", default="analysis/v1_all/test/plots/effect_by_layer.png")
+    ap.add_argument("--out", default=None,
+                    help="default: analysis/<model>/v1_all/test/plots/effect_by_layer.png")
     args = ap.parse_args()
 
     d = pd.read_csv(args.csv)
@@ -114,7 +120,9 @@ def main():
                  "marker size = validity; a line rising while its points shrink is "
                  "reporting degradation, not steering",
                  fontsize=11, loc="left")
-    out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
+    out = Path(args.out or
+               analysis_dir("v1_all", None, "test", subdir="plots") /
+               "effect_by_layer.png"); out.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
     fig.savefig(out, dpi=150, bbox_inches="tight", facecolor="white")
     print(f"\nSaved {out}")

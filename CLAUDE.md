@@ -141,11 +141,30 @@ then drives the shared load/validate/checkpoint loop with no further changes.
 `analysis_dir()` and `embeddings_paths()` build the paths described in the README. Use
 them rather than composing paths by hand.
 
-The embeddings tree carries a **model** level — `embeddings/<dataset>/<model>/<variant>/`
-— because the same corpus read by two models gives two unrelated sets of vectors and the
-second would otherwise overwrite the first layer by layer. `analysis/` does **not** carry
-that level yet; everything under it came from `crystallm`. Add it before running any
-analysis on a second model.
+Both trees carry a **model** level, because the same corpus read by two models gives two
+unrelated sets of vectors and the second would otherwise overwrite the first file for
+file. They put it in **different positions, on purpose**:
+
+    embeddings/<dataset>/<model>/<variant>/cif_layer{N}
+    analysis/<model>/<dataset>/<variant>/<partition>/
+
+`analysis/` leads with the model because an analysis directory is a per-model
+deliverable; `embeddings/` leads with the dataset because a layer's shards are read
+together whichever model wrote them. Do not "harmonise" them.
+
+`analysis/corpus/` is **not a model**. Outputs that never load one — corpus property
+histograms, Wyckoff/space-group counts, MP hull coverage, metadata property coverage —
+go there once rather than being duplicated under every model. `analysis_dir()` and
+`analysis_root()` accept `model=CORPUS_DIR`; `add_partition_args` deliberately does not,
+since no script can load `corpus` as weights.
+
+`variant=None` does NOT imply corpus, and conflating them would file every steering
+result under `corpus/`: the steering tables pass `variant=None` because they come from
+generation rather than from reading a CIF variant, and they are entirely model-dependent.
+Pass `model` explicitly; it cannot be inferred.
+
+Use `analysis_root(model)` for outputs that span datasets (cross-dataset probe summaries)
+or describe the corpus as a whole, rather than writing loose files at `analysis/`.
 
 Two flags that were both `--model` before a second model existed, now split:
 `--model` is the registered NAME (`utils.MODELS`: crystallm, llamat2) and decides the

@@ -164,6 +164,12 @@ ANALYSIS_ROOT = Path("analysis")
 DEFAULT_MODEL = "crystallm"
 MODELS = ("crystallm", "llamat2", "llamat2_cif")
 
+# Not a model: the analysis/ subtree for outputs that never load one. Corpus property
+# histograms, Wyckoff counts, MP hull coverage -- identical whichever model runs, so they
+# are written once rather than duplicated under every model. Accepted by analysis_dir()
+# but NOT by add_partition_args, since no script can load "corpus" as weights.
+CORPUS_DIR = "corpus"
+
 
 # One schema for every steering results table under analysis/<dataset>/<partition>/.
 # These files accumulated four different shapes -- `median` meant A^3/atom in one and
@@ -243,27 +249,61 @@ def steering_path(results_dir: str, sub: str, stem: str) -> str:
 
 
 def analysis_dir(dataset: str = DEFAULT_DATASET, variant: str = DEFAULT_VARIANT,
-                 partition: str = "all", subdir: str = None) -> Path:
-    """Output dir for an analysis run: analysis/<dataset>/<variant>/<partition>[/<subdir>].
+                 partition: str = "all", subdir: str = None,
+                 model: str = DEFAULT_MODEL) -> Path:
+    """Output dir for an analysis run:
+    analysis/<model>/<dataset>[/<variant>]/<partition>[/<subdir>].
 
     Created if missing. `subdir` is for scripts that nest further (e.g. "layer5").
 
-    Pass variant=None for outputs that read metadata but never embeddings (the property
-    histograms): they are identical whichever CIF variant was extracted, so they drop
-    that level rather than write the same bytes under both full/ and nosym/.
+    THE MODEL LEVEL COMES FIRST here, while embeddings/ puts it between dataset and
+    variant. That asymmetry is deliberate: an analysis directory is a per-model
+    deliverable, so reading one model's results should not mean walking two dataset
+    trees. embeddings/ has the opposite pressure -- a layer's shards for one corpus are
+    read together regardless of model.
+
+    Pass model=CORPUS_DIR for outputs that never touch a model at all: corpus property
+    histograms, Wyckoff/space-group counts, MP hull coverage. Those are byte-identical
+    whichever model is loaded, so they live under analysis/corpus/ rather than being
+    regenerated once per model.
+
+    `variant=None` drops the variant level, for outputs not tied to one CIF text. It is
+    INDEPENDENT of `model` and does not imply corpus: the steering tables pass
+    variant=None -- they come from generation, not from reading a CIF variant -- and are
+    entirely model-dependent. Inferring one from the other would file every steering
+    result under corpus/.
     """
     if dataset not in DATASETS:
         raise ValueError(f"dataset must be one of {DATASETS}, got {dataset!r}")
+    if model not in MODELS and model != CORPUS_DIR:
+        raise ValueError(f"model must be one of {MODELS} or {CORPUS_DIR!r}, got {model!r}")
     if variant is not None and variant not in VARIANTS:
         raise ValueError(f"variant must be one of {VARIANTS} or None, got {variant!r}")
     if partition not in PARTITIONS:
         raise ValueError(f"partition must be one of {PARTITIONS}, got {partition!r}")
-    path = ANALYSIS_ROOT / dataset
+    path = ANALYSIS_ROOT / model / dataset
     if variant is not None:
         path = path / variant
     path = path / partition
     if subdir:
         path = path / subdir
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def analysis_root(model: str = DEFAULT_MODEL) -> Path:
+    """analysis/<model>/ -- for outputs that span datasets rather than sitting in one.
+
+    The cross-dataset summaries (probe R^2 by layer, manifold curve overlays) and the
+    corpus-wide data checks (MP hull coverage, metadata property coverage) used to sit
+    loose at the top of analysis/. They still need a model level, or the crystallm and
+    llamat2_cif versions of a summary collide on one filename.
+
+    Pass model=CORPUS_DIR for the ones that never load a model.
+    """
+    if model not in MODELS and model != CORPUS_DIR:
+        raise ValueError(f"model must be one of {MODELS} or {CORPUS_DIR!r}, got {model!r}")
+    path = ANALYSIS_ROOT / model
     path.mkdir(parents=True, exist_ok=True)
     return path
 

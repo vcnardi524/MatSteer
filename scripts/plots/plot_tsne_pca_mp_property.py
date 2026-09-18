@@ -209,7 +209,7 @@ def main():
         fig.tight_layout()
 
         out_dir = analysis_dir(args.dataset, args.variant, args.partition,
-                               subdir=f"plots/layer{layer}")
+                               subdir=f"plots/layer{layer}", model=args.model)
         out = out_dir / f"{prop}_tsne_pca_mp_layer{layer}.png"
         fig.savefig(out, dpi=140, bbox_inches="tight")
         plt.close(fig)
@@ -230,7 +230,8 @@ def main():
                      f"(n={results[args.layers[0]]['n']:,})   [{label}]",
                      y=1.02, fontsize=13)
         fig.tight_layout()
-        out_dir = analysis_dir(args.dataset, args.variant, args.partition, subdir="plots")
+        out_dir = analysis_dir(args.dataset, args.variant, args.partition,
+                               subdir="plots", model=args.model)
         out = out_dir / f"{prop}_tsne_mp_layers{'_'.join(map(str, args.layers))}.png"
         fig.savefig(out, dpi=140, bbox_inches="tight")
         plt.close(fig)

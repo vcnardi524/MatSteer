@@ -31,6 +31,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils import analysis_root, CORPUS_DIR
 from predictors import HullLookup                                    # noqa: E402
 
 
@@ -43,7 +44,8 @@ def main():
                     help="materials sampled per system")
     ap.add_argument("--thermo-type", default="GGA_GGA+U",
                     help="both the hull and the ground truth use this scheme")
-    ap.add_argument("--out", default="analysis/hull_predictor_validation.csv")
+    ap.add_argument("--out", default=None,
+                    help="default: analysis/corpus/hull_predictor_validation.csv")
     args = ap.parse_args()
 
     mp = pd.read_parquet(args.metadata,
@@ -92,6 +94,7 @@ def main():
                   f"MAE {np.nanmean(e):.2e}  max {np.nanmax(e):.2e}")
 
     d = pd.DataFrame(rows)
+    args.out = args.out or str(analysis_root(CORPUS_DIR) / "hull_predictor_validation.csv")
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     d.to_csv(args.out, index=False, float_format="%.8g")
     ok = d.err.abs()

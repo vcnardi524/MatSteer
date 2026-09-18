@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from utils import filter_partition, analysis_dir                      # noqa: E402
+from utils import filter_partition, analysis_dir, CORPUS_DIR          # noqa: E402
 
 THRESHOLDS = (2, 5, 10, 30, 100, 1000)
 
@@ -61,7 +61,9 @@ def main():
                              d.space_group_symbol.astype(str) + " | "
                              + d.wyckoff_sites.astype(str), None)
 
-    out_dir = Path(args.out_dir or analysis_dir("v1_all", None, args.partition))
+    # model=CORPUS_DIR: this reads metadata only and never loads a model, so the output is identical whichever model is registered
+    out_dir = Path(args.out_dir or
+                   analysis_dir("v1_all", None, args.partition, model=CORPUS_DIR))
     out_dir.mkdir(parents=True, exist_ok=True)
 
     rows = []

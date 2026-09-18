@@ -37,7 +37,7 @@ ZERO_EPS = [0.001, 0.01, 0.1, 0.5]  # eV windows around 0 to call "metal"
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import DEFAULT_MODEL, MODELS, load_embeddings
+from utils import DEFAULT_MODEL, MODELS, load_embeddings, analysis_root
 
 
 def measure_residual_norm(model_dir: str, pkl: str, layer: int, n_cifs: int) -> float:
@@ -91,7 +91,7 @@ def main():
     args = ap.parse_args()
 
     out_path = Path(args.out) if args.out else \
-        Path(f"analysis/steering_norm_analysis_layer{args.layer}.csv")
+        analysis_root(args.model) / f"steering_norm_analysis_layer{args.layer}.csv"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     # 1. per-token residual norm

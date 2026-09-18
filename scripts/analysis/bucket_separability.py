@@ -153,7 +153,8 @@ def main():
     args = ap.parse_args()
 
     stem = args.out_stem or f"bucket_separability_{args.property}_w{args.width:g}"
-    out_dir = str(analysis_dir(args.dataset, args.variant, args.partition))
+    out_dir = str(analysis_dir(args.dataset, args.variant, args.partition,
+                                    model=args.model))
     rng = np.random.default_rng(RANDOM_SEED)
 
     print(f"Loading CIFs from {PKL_PATH} ...")

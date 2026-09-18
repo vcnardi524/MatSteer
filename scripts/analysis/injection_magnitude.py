@@ -41,6 +41,7 @@ sys.path.insert(0, str(HERE.parent))                       # scripts/
 sys.path.insert(0, str(HERE.parent / "steering"))          # its neighbours
 sys.path.insert(0, str(HERE.parent.parent / "CrystaLLM"))
 sys.path.insert(0, str(HERE.parent / "embeddings"))
+from utils import analysis_dir
 
 from extract_cif_embeddings import load_model, load_cifs   # noqa: E402
 from compute_centroid_target import load_pca               # noqa: E402
@@ -51,8 +52,8 @@ from crystallm import CIFTokenizer                         # noqa: E402
 _spec = _ilu.spec_from_file_location("sgc", HERE.parent / "steering" / "steer_generate_cif.py")
 _sgc = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_sgc)
 
-CSV = "analysis/v1_all/test/steering_runs.csv"
-OUT = Path("analysis/v1_all/test/plots")
+CSV = str(analysis_dir("v1_all", None, "test") / "steering_runs.csv")
+OUT = analysis_dir("v1_all", None, "test", subdir="plots")
 
 # Where each property's steering artefacts live. hook_for used to hardcode the density
 # paths, so the script could only ever measure density runs.

@@ -29,7 +29,7 @@ legibility and is called out in the title whenever it is not 1.
 
 Usage:
     python scripts/plots/plot_manifold_steering_field.py \
-        --centroids analysis/v1_mp/full/not_heldout/plots/centroid_pca_formation_energy_per_atom_layer7_w0.25.csv \
+        --centroids analysis/crystallm/v1_mp/full/not_heldout/plots/centroid_pca_formation_energy_per_atom_layer7_w0.25.csv \
         --manifold steering_vectors/manifolds/formation_energy_per_atom_layer7_k64_w0.25.parquet \
         --deltas 1 3 6 10 --scale 3
 """

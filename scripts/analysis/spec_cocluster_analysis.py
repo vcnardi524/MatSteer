@@ -46,7 +46,8 @@ if PARTITION is None:
     raise SystemExit("Set PARTITION=all|train|val|test, e.g. "
                      "PARTITION=test python spec_cocluster_analysis.py ...")
 OUTPUT_DIR = str(analysis_dir(DATASET, VARIANT, PARTITION,
-                              subdir=f"cocluster_results/{name}/layer{LAYER}/{N_CLUSTERS}_clusters"))
+                              subdir=f"cocluster_results/{name}/layer{LAYER}/{N_CLUSTERS}_clusters",
+                              model=MODEL))
 
 
 def plot_histogram(data, xlabel, title, path, bins=50):

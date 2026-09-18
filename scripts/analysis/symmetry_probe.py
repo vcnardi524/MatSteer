@@ -95,7 +95,7 @@ MODEL = os.environ.get("MODEL", DEFAULT_MODEL)   # see utils.MODELS
 # was trained on (89.6% of the labelled structures are in the model's train split).
 TRAIN_PARTITION = "train"
 EVAL_PARTITION = "val"
-OUTPUT_DIR = str(analysis_dir(DATASET, VARIANT, EVAL_PARTITION))
+OUTPUT_DIR = str(analysis_dir(DATASET, VARIANT, EVAL_PARTITION, model=MODEL))
 # space_group_symbol (207 classes), point_group (32), wyckoff_letters (750, and
 # 461k rows are null so that label loses ~28% of the data).
 LABEL_COLS = os.environ.get(

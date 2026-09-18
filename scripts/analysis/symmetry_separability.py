@@ -75,7 +75,7 @@ PARTITION = os.environ.get("PARTITION")
 if PARTITION is None:
     raise SystemExit("Set PARTITION=all|train|val|test, e.g. "
                      "PARTITION=test python symmetry_separability.py")
-OUTPUT_DIR = str(analysis_dir(DATASET, VARIANT, PARTITION))
+OUTPUT_DIR = str(analysis_dir(DATASET, VARIANT, PARTITION, model=MODEL))
 OUT_CSV = os.path.join(OUTPUT_DIR, f"symmetry_separability_{LABEL_COL}.csv")
 OUT_PNG = os.path.join(OUTPUT_DIR, f"symmetry_separability_{LABEL_COL}.png")
 OUT_PNG_CENTERED = os.path.join(OUTPUT_DIR, f"symmetry_separability_{LABEL_COL}_centered.png")

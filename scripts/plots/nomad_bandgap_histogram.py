@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
-from utils import DATASETS, PARTITIONS, filter_partition, analysis_dir
+from utils import DATASETS, PARTITIONS, filter_partition, analysis_dir, CORPUS_DIR
 
 J_TO_EV = 6.241509074e18
 
@@ -44,7 +44,7 @@ def main():
     ap.add_argument("--partition", required=True, choices=list(PARTITIONS))
     args = ap.parse_args()
 
-    out = analysis_dir(args.dataset, None, args.partition)
+    out = analysis_dir(args.dataset, None, args.partition, model=CORPUS_DIR)
     print("Loading preparsed NOMAD metadata ...")
     df = pd.read_parquet("preparsed_metadata_nomad.parquet", columns=["id", "results"])
     print(f"  {len(df):,} rows")

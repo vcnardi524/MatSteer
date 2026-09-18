@@ -174,7 +174,7 @@ same data gives p ~ 0.6-0.8, and Levene ~ 0.97 shows the spread does not change.
 
 Nine arms testing whether a curved-path method beats the linear one: two properties, two
 targets each, two layers, plus a per-prompt local-centroid variant. Full table in
-`analysis/v1_all/test/steering_runs.csv` (`steering_ttest.py --all`).
+`analysis/crystallm/v1_all/test/steering_runs.csv` (`steering_ttest.py --all`).
 
 | property | method | layer | target | best \|d\| | note |
 |---|---|---|---:|---:|---|
@@ -332,7 +332,7 @@ injection arrives, not that it directs anything.
   embeddings and reports subspace incoherence
   `epsilon = ||P_k P_i||_op` across layers 1–14 and K = 10/50/150/300.
 - All reported epsilons are 1e-14 to 1e-17 (machine zero):
-  `analysis/v1_all/full/all/cocluster_results/v1/layer*/[K]_clusters/pairwise_epsilons.csv`.
+  `analysis/crystallm/v1_all/full/all/cocluster_results/v1/layer*/[K]_clusters/pairwise_epsilons.csv`.
 - **This is trivial/circular, not a real property.** The code sparsifies `X` by
   zeroing every dimension a point isn't assigned to (`X_sparse`), forcing disjoint
   coordinate supports per cluster — so the subspaces are orthogonal *by construction*
@@ -355,22 +355,36 @@ injection arrives, not that it directs anything.
 
 ### How `embeddings/` and `analysis/` are organised
 
-Built by `utils.py:analysis_dir()` / `embeddings_paths()`.
+Built by `utils.py:analysis_dir()` / `analysis_root()` / `embeddings_paths()`.
 
 ```
 embeddings/<dataset>/<model>/<variant>/cif_layer{0..N}[.parquet]
 
-analysis/<dataset>/<variant>/<partition>/
+analysis/<model>/<dataset>/<variant>/<partition>/
 ├── <global outputs>            # span every layer: probe tables, separability CSVs
 └── plots/
     └── layer{0..N}/            # one figure per layer
+
+analysis/corpus/<dataset>/<partition>/     # never touches a model -- see below
 ```
 
-> **`analysis/` has no `<model>` level yet.** Everything under it was produced by
-> `crystallm`. Adding a second model's analysis outputs requires that level, or the
-> two will overwrite each other file for file — a `llamat2` probe table would land on
-> top of the `crystallm` one at the same path. Add it before running any analysis on
-> `llamat2`, not after.
+**The model level sits in different places in the two trees, on purpose.** `analysis/`
+puts it first because an analysis directory is a per-model deliverable: reading one
+model's results should not mean walking every dataset tree. `embeddings/` has the
+opposite pressure — a layer's shards for one corpus are read together whichever model
+wrote them — so it keeps `<dataset>` first.
+
+**`analysis/corpus/` is not a model.** Corpus property histograms, Wyckoff/space-group
+counts, MP hull coverage and metadata property coverage never load a model and are
+byte-identical whichever one is registered, so they are written once here instead of
+duplicated under every model. `analysis_dir()` and `analysis_root()` accept
+`model=CORPUS_DIR`; `add_partition_args` does not, since nothing can load `corpus` as
+weights.
+
+Note that `variant=None` does **not** mean corpus. The steering tables pass
+`variant=None` — they come from generation, not from reading a CIF variant — and are
+entirely model-dependent. Inferring one from the other would file every steering result
+under `corpus/`.
 
 **1. dataset** — which corpus the CIFs came from.
 
@@ -414,8 +428,9 @@ verbatim into the text, so a probe just reads the copied token back. That is wha
 script pointed at — figures predating the restructure live there and stay there.
 
 Outputs that read metadata but never embeddings (the property histograms) pass
-`variant=None` and **drop this level entirely**: `analysis/v1_mp/all/`. They would be
-byte-identical under `full/` and `nosym/`.
+`variant=None` and **drop this level entirely**. Those same outputs also pass
+`model=CORPUS_DIR`, so they land at `analysis/corpus/v1_mp/all/`: they would be
+byte-identical under `full/` and `nosym/`, and under every model.
 
 **4. partition** — which slice of CrystaLLM's own train/val/test split, one of
 `all` / `train` / `val` / `test`. `analysis_dir` has no default and `add_partition_args`
@@ -423,17 +438,22 @@ makes `--partition` required, on purpose: 89.6% of labelled structures are in th
 model's training set and only 0.45% in its test set, so a result on `all` cannot
 separate learning from memorisation. Filter with `utils.py:filter_partition()`.
 
-**4. inside a partition** — files directly in the partition dir are global (they span
+**5. inside a partition** — files directly in the partition dir are global (they span
 every layer); `plots/` holds figures, with `plots/layer{N}/` for per-layer ones and
 cross-layer comparisons sitting directly in `plots/`.
 
 Worked example:
 
 ```
-analysis/v1_all/nosym/val/plots/layer5/…   symmetry-stripped v1_all embeddings,
-                                            validation split, layer 5
-analysis/v1_mp/all/metadata_mp_*.png        MP metadata histograms — no variant level,
-                                            since no embeddings were read
+analysis/crystallm/v1_all/nosym/val/plots/layer5/…
+        crystallm on symmetry-stripped v1_all embeddings, validation split, layer 5
+
+analysis/llamat2_cif/v1_mp/crystal_uncond/val/…
+        llamat2-cif on crystal strings in the unconditional generation prompt
+
+analysis/corpus/v1_mp/all/metadata_mp_*.png
+        MP metadata histograms — no variant level and no model level, since no
+        embeddings were read and no model was loaded
 ```
 
 ### Key scripts

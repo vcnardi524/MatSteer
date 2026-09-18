@@ -25,10 +25,15 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
+from utils import analysis_dir
+
 # Default location for density at layer 7/14. Anything else -- a different property,
 # dataset or partition -- lives under its own analysis/<dataset>/<variant>/<partition>/
 # tree, so the output is written NEXT TO the centroid CSV it read rather than here.
-PLOTS = Path("analysis/v1_all/full/train/plots")
+PLOTS = analysis_dir("v1_all", "full", "train", subdir="plots")
 TRIPLES = [(0, 1, 2), (3, 4, 5), (1, 2, 3), (2, 3, 4)]
 
 

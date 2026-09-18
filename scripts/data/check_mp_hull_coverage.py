@@ -30,6 +30,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils import analysis_root, CORPUS_DIR
 
 EL = re.compile(r"([A-Z][a-z]?)(\d*)")
 FORMULA = re.compile(r"_chemical_formula_sum\s+'([^']+)'")
@@ -52,7 +53,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ids", default="data/test_sample1000_ids.csv")
     ap.add_argument("--pkl", default="CrystaLLM/cifs_v1_prep.pkl.gz")
-    ap.add_argument("--out", default="analysis/mp_hull_coverage.csv")
+    ap.add_argument("--out", default=None,
+                    help="default: analysis/corpus/mp_hull_coverage.csv")
     ap.add_argument("--sleep", type=float, default=0.0, help="seconds between API calls")
     args = ap.parse_args()
 
@@ -67,7 +69,7 @@ def main():
     print(f"{len(sysmap):,} prompts -> {len(uniq):,} distinct chemical systems "
           f"({n_prompt.value_counts().sort_index().to_dict()} elements each)\n")
 
-    out = Path(args.out)
+    out = Path(args.out or analysis_root(CORPUS_DIR) / "mp_hull_coverage.csv")
     done = {}
     if out.exists():
         prev = pd.read_csv(out)

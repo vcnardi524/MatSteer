@@ -31,7 +31,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/ -> utils.py
-from utils import DATASETS, PARTITIONS, filter_partition, analysis_dir
+from utils import DATASETS, PARTITIONS, filter_partition, analysis_dir, CORPUS_DIR
 
 # properties that want band-gap-style threshold markers on the zoom panel
 BANDGAP_THRESHOLDS = (0.05, 0.5, 1.0)
@@ -59,7 +59,8 @@ def main():
                         "over the rest (e.g. band_gap's spike at 0), else linear.")
     args = p.parse_args()
 
-    out = analysis_dir(args.dataset, None, args.partition)
+    # model=CORPUS_DIR: this reads metadata only and never loads a model, so the output is identical whichever model is registered
+    out = analysis_dir(args.dataset, None, args.partition, model=CORPUS_DIR)
     df = pd.read_parquet(args.file, columns=["id", args.column])
     df = filter_partition(df, args.partition)
 

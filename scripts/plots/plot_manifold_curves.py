@@ -24,6 +24,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
+from utils import analysis_root
+
 TRIPLES = [(0, 1, 2), (1, 2, 3), (3, 4, 5)]
 
 
@@ -35,7 +40,8 @@ def main():
                     help="report what fraction of the arc lies above this property "
                          "value; defaults to the curve's own median, which is 50%% by "
                          "construction and therefore uninformative -- set it")
-    ap.add_argument("--out", default="analysis/manifold_curves.png")
+    ap.add_argument("--out", default=None,
+                    help="default: analysis/<model>/manifold_curves.png")
     args = ap.parse_args()
 
     files = sorted(f for f in glob.glob(f"{args.dir}/*.parquet") if args.match in f)
@@ -83,7 +89,8 @@ def main():
     fig.suptitle("Fitted manifolds in PCA space — colour runs low (blue) to high (yellow) "
                  "along the property", fontsize=13)
     fig.tight_layout()
-    out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
+    out = Path(args.out or analysis_root() / "manifold_curves.png")
+    out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=130, bbox_inches="tight", facecolor="white")
     print(f"\nSaved {out}")
 

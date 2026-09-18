@@ -208,7 +208,7 @@ def main():
 
     df = load_joined(args.layer, args.dataset, args.model, args.variant, args.partition)
     out_dir = analysis_dir(args.dataset, args.variant, args.partition,
-                           subdir=f"plots/layer{args.layer}")
+                           subdir=f"plots/layer{args.layer}", model=args.model)
 
     modes = ["split", "combined"] if args.mode == "both" else [args.mode]
     for mode in modes:

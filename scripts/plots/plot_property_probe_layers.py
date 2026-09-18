@@ -24,19 +24,24 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
+from utils import analysis_dir, analysis_root
+
 # Okabe-Ito, validated for the four-series case: worst adjacent CVD dE 11.0,
 # normal-vision 18.4. Every line is also direct-labelled, which is what the
 # low contrast-vs-surface of the two lighter hues requires.
 SERIES = [
-    ("density_atomic",          "analysis/v1_all/full/val/property_probe_density_atomic.csv",
+    ("density_atomic",          str(analysis_dir("v1_all", "full", "val") / "property_probe_density_atomic.csv"),
      "volume per atom",     "#D55E00", "o"),
-    ("efermi",                  "analysis/v1_mp/full/val/property_probe_efermi.csv",
+    ("efermi",                  str(analysis_dir("v1_mp", "full", "val") / "property_probe_efermi.csv"),
      "Fermi level",         "#0072B2", "s"),
-    ("energy_above_hull",       "analysis/v1_mp/full/val/property_probe_energy_above_hull.csv",
+    ("energy_above_hull",       str(analysis_dir("v1_mp", "full", "val") / "property_probe_energy_above_hull.csv"),
      "energy above hull",   "#009E73", "^"),
-    ("dos_electronic.band_gap", "analysis/v1_all/full/val/property_probe_dos_electronic_band_gap.csv",
+    ("dos_electronic.band_gap", str(analysis_dir("v1_all", "full", "val") / "property_probe_dos_electronic_band_gap.csv"),
      "band gap",            "#E69F00", "D"),
-    ("formation_energy_per_atom", "analysis/v1_mp/full/val/property_probe_formation_energy_per_atom.csv",
+    ("formation_energy_per_atom", str(analysis_dir("v1_mp", "full", "val") / "property_probe_formation_energy_per_atom.csv"),
      "formation energy",    "#CC79A7", "v"),
 ]
 
@@ -46,7 +51,8 @@ def main():
     ap.add_argument("--split", default="by_formula", choices=("by_formula", "random"))
     # top level of analysis/, not under a dataset tree: this figure combines
     # v1_all (density, band gap) with v1_mp (efermi, energy above hull)
-    ap.add_argument("--out", default="analysis/property_probe_r2_by_layer.png")
+    ap.add_argument("--out", default=None,
+                    help="default: analysis/<model>/property_probe_r2_by_layer.png")
     ap.add_argument("--properties", nargs="+", default=None,
                     help="Subset of SERIES names to plot, in any order. Default: all "
                          "that have a CSV on disk. Colours are bound to the property, not "
@@ -116,7 +122,8 @@ def main():
     fig.suptitle(f"CrystaLLM linear probes, {args.split} split "
                  "(no test formula seen in training)", fontsize=13)
     fig.tight_layout()
-    out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
+    out = Path(args.out or analysis_root() / "property_probe_r2_by_layer.png")
+    out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=140, bbox_inches="tight")
 
     summary = pd.DataFrame(rows)
