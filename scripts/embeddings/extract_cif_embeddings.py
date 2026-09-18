@@ -471,6 +471,27 @@ def existing_dtype(ckpt_dir: Path):
     return None
 
 
+def flush(out_dirs, layers, pending, checkpoint_num, skipped, truncated,
+          skip_path, trunc_path):
+    """Write whatever is buffered. Safe to call with nothing pending.
+
+    Split out so the end of the run can call it unconditionally. Relying on the loop
+    alone lost the tail once already: the last batches were entirely skipped, so the
+    in-loop call never ran.
+    """
+    for l in layers:
+        if not pending[l]["id"]:
+            continue
+        ckpt_file = out_dirs[l] / f"checkpoint_{checkpoint_num[l]:05d}.parquet"
+        pd.DataFrame(pending[l]).to_parquet(ckpt_file, index=False)
+        checkpoint_num[l] += 1
+        pending[l] = {"id": [], "embedding": [], "n_answer_tokens": []}
+    if skipped:
+        pd.DataFrame(skipped).to_csv(skip_path, index=False)
+    if truncated:
+        pd.DataFrame(truncated).to_csv(trunc_path, index=False)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
@@ -651,50 +672,66 @@ def main():
                 continue
             ids.append(cid)
             encoded.append((seq, start))
-        if not encoded:
-            completed += len(batch)
-            continue
+        # NO `continue` when the whole batch was skipped. An earlier version bailed out
+        # here, which jumped over the checkpoint block below -- and that block is where
+        # BOTH the embeddings and the skip log get written. The corpus is sorted
+        # shortest-first, so the tail is entirely over-context structures and every tail
+        # batch took that branch: neither buffer was flushed again, and 3,584 structures
+        # vanished from both outputs at once. Missing from the skip log too, they could
+        # not even be accounted for. Guard the forward pass instead of the loop body.
+        if encoded:
+            try:
+                input_ids, starts, ends = pad_batch(encoded, backend.pad_id, device)
+                captured.clear()
+                with torch.no_grad():
+                    backend.forward(input_ids)
 
-        try:
-            input_ids, starts, ends = pad_batch(encoded, backend.pad_id, device)
-            captured.clear()
-            with torch.no_grad():
-                backend.forward(input_ids)
+                n_answer = (ends - starts).cpu().numpy()
+                for l in layers:
+                    embeddings = mean_pool(captured[l], starts,
+                                           ends).cpu().numpy().astype(store_dtype)
+                    pending[l]["id"].extend(ids)
+                    pending[l]["embedding"].extend(list(embeddings))
+                    pending[l]["n_answer_tokens"].extend(n_answer.tolist())
 
-            n_answer = (ends - starts).cpu().numpy()
-            for l in layers:
-                embeddings = mean_pool(captured[l], starts, ends).cpu().numpy().astype(store_dtype)
-                pending[l]["id"].extend(ids)
-                pending[l]["embedding"].extend(list(embeddings))
-                pending[l]["n_answer_tokens"].extend(n_answer.tolist())
-
-        except Exception as e:
-            # A failed batch is recorded as skipped, NOT written as zero vectors: a zero
-            # row looks like a real embedding to every downstream consumer.
-            print(f"  WARNING: batch at {i} failed, skipping {len(ids)}: {e}", flush=True)
-            skipped.extend({"id": cid, "reason": f"forward failed: {type(e).__name__}"}
-                           for cid in ids)
+            except Exception as e:
+                # A failed batch is recorded as skipped, NOT written as zero vectors: a
+                # zero row looks like a real embedding to every downstream consumer.
+                print(f"  WARNING: batch at {i} failed, skipping {len(ids)}: {e}",
+                      flush=True)
+                skipped.extend({"id": cid, "reason": f"forward failed: {type(e).__name__}"}
+                               for cid in ids)
 
         completed += len(batch)
         batch_num = i // args.batch_size + 1
 
         if batch_num % args.checkpoint_every == 0 or completed == total:
-            for l in layers:
-                if not pending[l]["id"]:
-                    continue
-                ckpt_file = out_dirs[l] / f"checkpoint_{checkpoint_num[l]:05d}.parquet"
-                pd.DataFrame(pending[l]).to_parquet(ckpt_file, index=False)
-                checkpoint_num[l] += 1
-                pending[l] = {"id": [], "embedding": [], "n_answer_tokens": []}
-            if skipped:
-                pd.DataFrame(skipped).to_csv(skip_path, index=False)
-            if truncated:
-                pd.DataFrame(truncated).to_csv(trunc_path, index=False)
+            flush(out_dirs, layers, pending, checkpoint_num, skipped, truncated,
+                  skip_path, trunc_path)
 
         elapsed = time.time() - start_time
         rate = completed / elapsed * 3600
         remaining = (total - completed) / (completed / elapsed) if completed else 0
         print(f"  {completed:,} / {total:,}  ({rate:,.0f}/hr, ~{remaining/3600:.1f}h left)", flush=True)
+
+    # Unconditional: the in-loop call is conditional on batch_num/completed and has
+    # already been shown to miss the tail. Cheap when there is nothing buffered.
+    flush(out_dirs, layers, pending, checkpoint_num, skipped, truncated,
+          skip_path, trunc_path)
+
+    # Every structure must end up either embedded or logged as skipped. Silently losing
+    # some is exactly the failure this run hit, and it was only caught by counting rows
+    # afterwards -- so count them here instead.
+    n_done = sum(len(pd.read_parquet(f, columns=["id"]))
+                 for f in out_dirs[layers[0]].glob("checkpoint_*.parquet"))
+    n_seen = n_done + len(skipped)
+    if n_seen != total:
+        print(f"  WARNING: {total:,} structures in, but {n_done:,} embedded + "
+              f"{len(skipped):,} skipped = {n_seen:,}. {total - n_seen:,} unaccounted for.",
+              flush=True)
+    else:
+        print(f"  accounted for: {n_done:,} embedded + {len(skipped):,} skipped "
+              f"= {total:,}")
 
     for h in hooks:
         h.remove()
