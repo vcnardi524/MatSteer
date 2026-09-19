@@ -27,23 +27,49 @@ import matplotlib.pyplot as plt
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import analysis_dir, analysis_root
+from utils import (analysis_dir, analysis_root, DEFAULT_MODEL, MODELS,
+                   DATASETS, VARIANTS, PARTITIONS)
 
 # Okabe-Ito, validated for the four-series case: worst adjacent CVD dE 11.0,
 # normal-vision 18.4. Every line is also direct-labelled, which is what the
 # low contrast-vs-surface of the two lighter hues requires.
-SERIES = [
-    ("density_atomic",          str(analysis_dir("v1_all", "full", "val") / "property_probe_density_atomic.csv"),
-     "volume per atom",     "#D55E00", "o"),
-    ("efermi",                  str(analysis_dir("v1_mp", "full", "val") / "property_probe_efermi.csv"),
-     "Fermi level",         "#0072B2", "s"),
-    ("energy_above_hull",       str(analysis_dir("v1_mp", "full", "val") / "property_probe_energy_above_hull.csv"),
-     "energy above hull",   "#009E73", "^"),
-    ("dos_electronic.band_gap", str(analysis_dir("v1_all", "full", "val") / "property_probe_dos_electronic_band_gap.csv"),
-     "band gap",            "#E69F00", "D"),
-    ("formation_energy_per_atom", str(analysis_dir("v1_mp", "full", "val") / "property_probe_formation_energy_per_atom.csv"),
-     "formation energy",    "#CC79A7", "v"),
+# name -> (label, colour, marker). Colour is bound to the PROPERTY, not to plot order,
+# so a subset figure keeps the same colours as the full one and the two can be read side
+# by side.
+STYLE = {
+    "density_atomic":            ("volume per atom",   "#D55E00", "o"),
+    "efermi":                    ("Fermi level",       "#0072B2", "s"),
+    "energy_above_hull":         ("energy above hull", "#009E73", "^"),
+    "dos_electronic.band_gap":   ("band gap",          "#E69F00", "D"),
+    "band_gap":                  ("band gap",          "#E69F00", "D"),
+    "formation_energy_per_atom": ("formation energy",  "#CC79A7", "v"),
+}
+
+# The crystallm figure combines two corpora, so each series names its own dataset. Any
+# other model reads one tree, set by --model/--dataset/--variant/--partition.
+CRYSTALLM_SERIES = [
+    ("density_atomic",            "v1_all", "full", "val"),
+    ("efermi",                    "v1_mp",  "full", "val"),
+    ("energy_above_hull",         "v1_mp",  "full", "val"),
+    ("dos_electronic.band_gap",   "v1_all", "full", "val"),
+    ("formation_energy_per_atom", "v1_mp",  "full", "val"),
 ]
+
+
+def build_series(args):
+    """[(name, csv_path, label, colour, marker)] for the requested model."""
+    if args.model == "crystallm" and not args.properties_from_tree:
+        spec = [(n, d, v, p) for n, d, v, p in CRYSTALLM_SERIES]
+    else:
+        spec = [(n, args.dataset, args.variant, args.partition)
+                for n in (args.properties or sorted(STYLE))]
+    out = []
+    for name, ds, var, part in spec:
+        label, colour, marker = STYLE[name]
+        csv = analysis_dir(ds, var, part, model=args.model) / \
+            f"property_probe_{name.replace('.', '_')}.csv"
+        out.append((name, str(csv), label, colour, marker))
+    return out
 
 
 def main():
@@ -58,16 +84,24 @@ def main():
                          "that have a CSV on disk. Colours are bound to the property, not "
                          "to plot order, so a subset keeps the same colours as the full "
                          "figure and the two can be read side by side.")
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS))
+    ap.add_argument("--dataset", default="v1_mp", choices=list(DATASETS))
+    ap.add_argument("--variant", default="crystal_uncond", choices=list(VARIANTS))
+    ap.add_argument("--partition", default="test", choices=list(PARTITIONS),
+                    help="which pool the probe was SCORED on (property_probe files it "
+                         "under that name)")
+    ap.add_argument("--properties-from-tree", action="store_true",
+                    help="For crystallm, read every series from one "
+                         "dataset/variant/partition instead of the built-in mixed-corpus "
+                         "layout")
+    ap.add_argument("--title", default=None)
     args = ap.parse_args()
 
-    series = SERIES
-    if args.properties:
-        known = {n for n, *_ in SERIES}
-        unknown = [p for p in args.properties if p not in known]
-        if unknown:
-            raise SystemExit(f"unknown propert{'y' if len(unknown)==1 else 'ies'}: "
-                             f"{unknown}. Known: {sorted(known)}")
-        series = [t for t in SERIES if t[0] in set(args.properties)]
+    unknown = [p for p in (args.properties or []) if p not in STYLE]
+    if unknown:
+        raise SystemExit(f"unknown propert{'y' if len(unknown)==1 else 'ies'}: "
+                         f"{unknown}. Known: {sorted(STYLE)}")
+    series = build_series(args)
 
     loaded = []
     for name, path, label, color, marker in series:
