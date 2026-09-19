@@ -56,3 +56,11 @@ api_keys.json
 models/
 *.safetensors
 *.pt
+
+# ---- untracked reference clones ----
+# Both are full git checkouts of other projects kept here for reference (llamat 726 MB,
+# CrystaLLM-pi 91 MB). They are NOT submodules; committing them would nest a repo inside
+# this one. The parts of llamat we actually depend on are vendored into
+# scripts/llamat_prompts.py precisely so this directory can stay untracked.
+llamat/
+CrystaLLM-pi/
