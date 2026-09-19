@@ -79,17 +79,21 @@ from sklearn.preprocessing import StandardScaler
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import DEFAULT_MODEL, load_labeled_embeddings, load_split_index, analysis_dir
+from utils import (DEFAULT_MODEL, load_labeled_embeddings, load_split_index,
+                   analysis_dir, DATASET_PKL)
 
 # -------------------------------
 # Configuration
 # -------------------------------
 LAYERS = [int(a) for a in sys.argv[1:]] or [5]
 METADATA_PATH = "./metadata.parquet"
-PKL_PATH = "./CrystaLLM/cifs_v1_prep.pkl.gz"
 DATASET = os.environ.get("DATASET", "v1_all")
 VARIANT = os.environ.get("VARIANT", "full")
 MODEL = os.environ.get("MODEL", DEFAULT_MODEL)   # see utils.MODELS
+
+# From the DATASET's own pickle: hardcoding v1_all's cuts a v1_mp run to the 58,650-id
+# overlap between the two corpora, silently and without error.
+PKL_PATH = os.environ.get("PKL_PATH") or DATASET_PKL[DATASET]
 # Fixed by design, not exposed as knobs: fit on train, score on val. Anything else
 # risks scoring the probe on rows it was fit on, or on rows the language model itself
 # was trained on (89.6% of the labelled structures are in the model's train split).

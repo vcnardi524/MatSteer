@@ -9,7 +9,8 @@ and if the buckets are not separable in the first place, that follows automatica
 does every steering null.
 
 This is symmetry_separability.py's experiment with property buckets as the label. Buckets
-are np.floor(value / width), the same expression as manifold.py:50, so the groups here are
+are np.floor(value / width) by default -- the same expression as manifold.bucket_centroids,
+so the groups here are
 exactly the groups the curve was fitted through.
 
 THREE MEASUREMENTS, each per layer
@@ -56,9 +57,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import load_embeddings, filter_partition, analysis_dir, add_partition_args
+from utils import load_embeddings, filter_partition, analysis_dir, add_partition_args, DATASET_PKL
 
-PKL_PATH = "./CrystaLLM/cifs_v1_prep.pkl.gz"
+# Formulas come from the DATASET's own pickle. Hardcoding v1_all's here silently cut
+# a v1_mp run to the 58,650-id overlap between the two corpora -- 48,820 rows after
+# the other joins, against the 132,839 actually available.
+PKL_PATH = None          # resolved from --dataset via utils.DATASET_PKL
 DATA_RE = re.compile(r"^data_(\S+)", re.M)
 RANDOM_SEED = 1
 
@@ -145,6 +149,11 @@ def main():
                          "material_id, NOT by metadata_mp's own `id` column.")
     ap.add_argument("--width", type=float, required=True,
                     help="Bucket width, in the property's units. Match the manifold.")
+    ap.add_argument("--closed", choices=("left", "right"), default="left",
+                    help="Bucket edges; MUST match the manifold being tested, or these "
+                         "are not the groups the curve was fitted through. Band gap "
+                         "uses right, which isolates the metals at exactly 0.0 in their "
+                         "own bucket -- see manifold.bucket_centroids.")
     ap.add_argument("--min-count", type=int, default=30,
                     help="Drop buckets thinner than this from the distance curve")
     ap.add_argument("--layers", type=int, nargs="+", default=list(range(16)))
@@ -152,13 +161,15 @@ def main():
     add_partition_args(ap)
     args = ap.parse_args()
 
-    stem = args.out_stem or f"bucket_separability_{args.property}_w{args.width:g}"
+    stem = args.out_stem or (f"bucket_separability_{args.property}_w{args.width:g}"
+                             + ("_rc" if args.closed == "right" else ""))
     out_dir = str(analysis_dir(args.dataset, args.variant, args.partition,
                                     model=args.model))
     rng = np.random.default_rng(RANDOM_SEED)
 
-    print(f"Loading CIFs from {PKL_PATH} ...")
-    with gzip.open(PKL_PATH, "rb") as f:
+    pkl = PKL_PATH or DATASET_PKL[args.dataset]
+    print(f"Loading CIFs from {pkl} ...")
+    with gzip.open(pkl, "rb") as f:
         cifs = pickle.load(f)
     ids, forms = [], []
     for cid, cif in cifs:
@@ -190,7 +201,9 @@ def main():
 
         X = np.vstack(df["embedding"].values)
         # the manifold's own bucketing, manifold.py:50
-        raw_b = np.floor(df[args.property].to_numpy() / args.width).astype(np.int64)
+        v = df[args.property].to_numpy()
+        raw_b = (np.floor(v / args.width) if args.closed == "left"
+                 else np.ceil(v / args.width) - 1).astype(np.int64)
         bucket, bucket_vals = pd.factorize(raw_b, sort=True)
         n_bucket = len(bucket_vals)
         comp = pd.factorize(df["formula"])[0]
