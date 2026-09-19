@@ -91,7 +91,7 @@ def load_joined(layer: int, column: str, invert: bool, dataset: str, model: str,
     print(f"  metadata rows with {column}: {len(meta):,}")
 
     emb = load_embeddings(layer, dataset=dataset, variant=variant, model=model)
-    emb = filter_partition(emb, partition)
+    emb = filter_partition(emb, partition, model=model)
     df = emb.merge(meta[["id", "value"]], on="id", how="inner")
     print(f"  layer-{layer} embeddings: {len(emb):,}  ->  after join: {len(df):,}")
     if len(df) < 10:

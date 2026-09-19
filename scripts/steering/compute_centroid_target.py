@@ -79,7 +79,8 @@ def main():
     labels = pd.read_parquet(args.labels, columns=["id", args.property])
     labels = labels.dropna(subset=[args.property])
     if args.partition != "all":
-        labels = filter_partition(labels, args.partition, verbose=False)
+        labels = filter_partition(labels, args.partition, verbose=False,
+                                  model=args.model)
         keep = None
         if keep is not None:
             labels = labels[labels["id"].isin(keep)]

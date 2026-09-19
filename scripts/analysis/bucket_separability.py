@@ -183,7 +183,7 @@ def main():
         emb = load_embeddings(layer, dataset=args.dataset, variant=args.variant,
                               model=args.model)
         df = emb.merge(lab, on="id", how="inner")
-        df = filter_partition(df, args.partition)
+        df = filter_partition(df, args.partition, model=args.model)
         df = df.merge(formula_df, on="id", how="inner").reset_index(drop=True)
         if df.empty:
             print("  no rows after the joins -- check --id-col"); continue

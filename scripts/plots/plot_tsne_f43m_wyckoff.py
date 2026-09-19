@@ -98,7 +98,7 @@ def main():
 
     emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant,
                           model=args.model)
-    emb = filter_partition(emb, args.partition)
+    emb = filter_partition(emb, args.partition, model=args.model)
     df = emb[emb["id"].isin(set(ids))].reset_index(drop=True)
     print(f"  with embeddings: {len(df):,}")
 

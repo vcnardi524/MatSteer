@@ -96,7 +96,7 @@ def main():
         df = load_labeled_embeddings(LAYER, dataset=DATASET, model=MODEL,
                                      metadata_path=METADATA_PATH,
                                      variant=VARIANT)
-        df = filter_partition(df, PARTITION)
+        df = filter_partition(df, PARTITION, model=MODEL)
 
     # Space group + occupied Wyckoff letters. A letter is only meaningful relative
     # to its space group ("c" is a different orbit in Pnma than in P6_3/mmc), so the

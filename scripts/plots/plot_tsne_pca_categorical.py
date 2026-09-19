@@ -49,7 +49,7 @@ def main():
     emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant,
                           model=args.model)
     print(f"  Embeddings: {len(emb):,}")
-    emb = filter_partition(emb, args.partition)
+    emb = filter_partition(emb, args.partition, model=args.model)
 
     df = emb.merge(meta, on="id", how="inner")
     print(f"  After join: {len(df):,}")

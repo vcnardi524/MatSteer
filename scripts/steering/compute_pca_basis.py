@@ -77,7 +77,7 @@ def main():
     if args.batch_size <= args.k:
         raise SystemExit(f"--batch-size ({args.batch_size}) must exceed --k ({args.k})")
 
-    keep_ids, drop_ids = partition_id_sets(args.partition)
+    keep_ids, drop_ids = partition_id_sets(args.partition, model=args.model)
     if keep_ids is not None:
         print(f"Partition '{args.partition}': keeping {len(keep_ids):,} ids")
     elif drop_ids is not None:

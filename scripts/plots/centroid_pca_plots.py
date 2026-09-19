@@ -111,7 +111,8 @@ def main():
     labels[args.property] = pd.to_numeric(labels[args.property], errors="coerce")
     labels = labels.dropna(subset=[args.property])
     if args.partition != "all":
-        labels = filter_partition(labels, args.partition, verbose=False)
+        labels = filter_partition(labels, args.partition, verbose=False,
+                                  model=args.model)
         keep = None
         if keep is not None:
             labels = labels[labels["id"].isin(keep)]

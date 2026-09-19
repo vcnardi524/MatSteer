@@ -83,7 +83,7 @@ def load_group(group_col: str, group: str, layer: int, dataset: str, model: str,
         raise SystemExit(f"Every {group} entry has a null {bg_col} -- nothing to plot.")
 
     emb = load_embeddings(layer, dataset=dataset, variant=variant, model=model)
-    emb = filter_partition(emb, partition)
+    emb = filter_partition(emb, partition, model=model)
     df = emb.merge(meta[["id", "band_gap_ev"]], on="id", how="inner")
     print(f"  with layer-{layer} embeddings: {len(df):,}")
     if len(df) < 10:

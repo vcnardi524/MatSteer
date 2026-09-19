@@ -127,7 +127,7 @@ def main():
         labels = labels[labels[args.property] >= args.min_value]
     if args.max_value is not None:
         labels = labels[labels[args.property] <= args.max_value]
-    labels = filter_partition(labels, args.partition, verbose=False)
+    labels = filter_partition(labels, args.partition, verbose=False, model=args.model)
     print(f"{len(labels):,} labelled structures in partition '{args.partition}'")
 
     print(f"Streaming layer-{args.layer} embeddings, bucketing by {args.width:g} ...")

@@ -74,7 +74,7 @@ def load_joined(layer: int, dataset: str, model: str, variant: str,
     print(f"  {len(meta):,} entries with clean band gap")
 
     emb = load_embeddings(layer, dataset=dataset, variant=variant, model=model)
-    emb = filter_partition(emb, partition)
+    emb = filter_partition(emb, partition, model=model)
     print(f"  Embeddings: {len(emb):,}")
     df = emb.merge(meta[["id", "band_gap_ev"]], on="id", how="inner")
     print(f"  After join: {len(df):,}")
