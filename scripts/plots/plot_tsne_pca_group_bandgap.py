@@ -57,7 +57,7 @@ from sklearn.neighbors import NearestNeighbors
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
-from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir
+from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir, display_name
 
 METADATA_PATH = "metadata.parquet"
 # The clean gap in eV. NOT the LUMO-HOMO difference -- see the module docstring.
@@ -231,7 +231,7 @@ def main():
     ax.legend(markerscale=2, fontsize=9, loc="best", framealpha=0.9)
 
     fig.suptitle(
-        f"{group_col} = {group} — CrystaLLM layer {args.layer} embeddings by band gap\n"
+        f"{group_col} = {group} — {display_name(args.model)} layer {args.layer} embeddings by band gap\n"
         f"n={len(df):,} ({args.sample_mode} sample), gap = {args.bg_col} in eV",
         y=1.00, fontsize=13)
     fig.tight_layout()

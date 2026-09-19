@@ -199,6 +199,16 @@ MODELS = ("crystallm", "llamat2", "llamat2_cif")
 # but NOT by add_partition_args, since no script can load "corpus" as weights.
 CORPUS_DIR = "corpus"
 
+# How each registered model is spelled in a figure title. MODELS holds filesystem-safe
+# names; a plot hardcoding one model's name mislabels every other model's figure, which
+# is worse than an ugly axis because a wrong label survives being pasted into a document.
+DISPLAY_NAME = {"crystallm": "CrystaLLM", "llamat2": "LLaMat-2",
+                "llamat2_cif": "LLaMat-2-CIF", CORPUS_DIR: "corpus"}
+
+
+def display_name(model: str) -> str:
+    return DISPLAY_NAME.get(model, model)
+
 
 # One schema for every steering results table under analysis/<dataset>/<partition>/.
 # These files accumulated four different shapes -- `median` meant A^3/atom in one and

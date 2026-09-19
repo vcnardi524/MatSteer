@@ -24,7 +24,7 @@ from sklearn.manifold import TSNE
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir
+from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir, display_name
 
 
 def main():
@@ -37,12 +37,22 @@ def main():
     parser.add_argument("--top-n", type=int, default=20,
                         help="Keep top-N most common labels; rest become 'Other'")
     parser.add_argument("--tsne-perplexity", type=float, default=30)
+    parser.add_argument("--labels", default=None,
+                        help="Parquet with id + the label column. Default: "
+                             "symmetry_v1_mp.parquet for v1_mp, else metadata.parquet")
     args = parser.parse_args()
 
     np.random.seed(RANDOM_SEED)
 
-    print("Loading metadata ...")
-    meta = pd.read_parquet("metadata.parquet", columns=["id", args.property])
+    # metadata.parquet (NOMAD) is the only shipped file carrying symmetry columns and it
+    # does not cover v1_mp -- metadata_mp.parquet has none in any of its 56. For v1_mp the
+    # labels come from symmetry_v1_mp.parquet, derived from the CIF text by
+    # scripts/data/build_symmetry_mp.py, whose id is already MP_-prefixed so it joins
+    # straight onto the embedding ids.
+    labels = args.labels or ("symmetry_v1_mp.parquet" if args.dataset == "v1_mp"
+                             else "metadata.parquet")
+    print(f"Loading labels from {labels} ...")
+    meta = pd.read_parquet(labels, columns=["id", args.property])
     meta = meta[meta[args.property].notna()].reset_index(drop=True)
     print(f"  Entries with {args.property}: {len(meta):,}")
 
@@ -111,7 +121,8 @@ def main():
     fig.legend(handles=handles, loc="center right", bbox_to_anchor=(1.0, 0.5),
                fontsize=7, ncol=1, framealpha=0.8)
 
-    plt.suptitle(f"{prop_title} — CrystaLLM Layer {args.layer} (n={len(df):,})", y=1.01)
+    plt.suptitle(f"{prop_title} — {display_name(args.model)} layer {args.layer} "
+                 f"({args.dataset}/{args.variant}/{args.partition}, n={len(df):,})", y=1.01)
     plt.tight_layout(rect=[0, 0, 0.85, 1])
 
     fname = args.property.replace("_", "")

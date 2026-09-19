@@ -33,11 +33,6 @@ from utils import (analysis_dir, analysis_root, DEFAULT_MODEL, MODELS,
 # Okabe-Ito, validated for the four-series case: worst adjacent CVD dE 11.0,
 # normal-vision 18.4. Every line is also direct-labelled, which is what the
 # low contrast-vs-surface of the two lighter hues requires.
-# How each registered model is spelled in a figure title; utils.MODELS holds the
-# filesystem-safe names, which are not how anyone writes them.
-DISPLAY_NAME = {"crystallm": "CrystaLLM", "llamat2": "LLaMat-2",
-                "llamat2_cif": "LLaMat-2-CIF"}
-
 # name -> (label, colour, marker). Colour is bound to the PROPERTY, not to plot order,
 # so a subset figure keeps the same colours as the full one and the two can be read side
 # by side.
@@ -181,7 +176,7 @@ def main():
         for s in ("top", "right"):
             ax.spines[s].set_visible(False)
 
-    fig.suptitle(args.title or f"{DISPLAY_NAME.get(args.model, args.model)} linear "
+    fig.suptitle(args.title or f"{display_name(args.model)} linear "
                  f"probes, {args.split} split (no test formula seen in training)",
                  fontsize=13)
     fig.tight_layout()
