@@ -46,7 +46,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from make_prompts import PATTERN_COMP_SG, extract_prompt
 from extract_cif_embeddings import load_model, load_cifs
 from compute_centroid_target import load_pca
-from utils import DEFAULT_MODEL, MODELS, analysis_dir
+from utils import DEFAULT_MODEL, MODELS, analysis_dir, steering_vectors_dir
 
 TEST_PKL = "CrystaLLM/cifs_v1_test_sample1000.pkl.gz"
 # validity of the matching generation runs, so the two curves can be read together
@@ -75,7 +75,8 @@ def main():
 
     mean, comps = load_pca(args.layer, args.k)
     stem = f"layer{args.layer}_k{args.k}_target{args.target:g}"
-    bank_path = (f"steering_vectors/pca_centroid/{args.property}/{stem}_bank.parquet")
+    bank_path = str(steering_vectors_dir(args.model, "pca_centroid")
+                    / args.property / f"{stem}_bank.parquet")
     Z = np.vstack(pd.read_parquet(bank_path)["coord"].to_numpy()).astype(np.float32)
     print(f"reference manifold: {Z.shape[0]:,} real training activations x {Z.shape[1]} dims")
 

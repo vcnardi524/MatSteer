@@ -24,7 +24,7 @@ J_TO_EV = 6.2415e18
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import DEFAULT_MODEL, MODELS, load_embeddings
+from utils import DEFAULT_MODEL, MODELS, load_embeddings, steering_vectors_dir
 
 
 def main():
@@ -88,7 +88,7 @@ def main():
         })
         print(f"    -> steering vector norm={np.linalg.norm(steer):.4f}, dim={steer.shape[0]}")
 
-    out_dir = Path("steering_vectors")
+    out_dir = steering_vectors_dir(args.model)
     out_dir.mkdir(exist_ok=True)
     out_path = out_dir / f"bandgap_layer{args.layer}.parquet"
     pd.DataFrame(rows).to_parquet(out_path, index=False)

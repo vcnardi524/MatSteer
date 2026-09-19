@@ -33,14 +33,14 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
 from manifold import Manifold, bucket_centroids
-from utils import load_split_index, add_partition_args, filter_partition
-
-OUT_DIR = "steering_vectors/manifolds"
+from utils import load_split_index, add_partition_args, filter_partition, steering_vectors_dir, DEFAULT_MODEL
 
 
-def load_pca(layer, k):
-    """(mean (1024,), components (k, 1024)) from the shared basis file."""
-    path = f"steering_vectors/pca_centroid/pca_layer{layer}_k{k}.parquet"
+
+def load_pca(layer, k, model=DEFAULT_MODEL):
+    """(mean (D,), components (k, D)) from that model's shared basis file."""
+    path = str(steering_vectors_dir(model, "pca_centroid")
+               / f"pca_layer{layer}_k{k}.parquet")
     if not os.path.exists(path):
         raise SystemExit(f"No PCA basis at {path} -- run compute_pca_basis.py first")
     row = pd.read_parquet(path).iloc[0]
@@ -96,6 +96,17 @@ def main():
                     help="Drop structures above this. For a steerable curve, trim the "
                          "sparse tail: on density it holds ~1%% of structures but over "
                          "half the arc length, so a step mostly traverses empty space.")
+    ap.add_argument("--closed", choices=("left", "right"), default="left",
+                    help="Bucket edges. left: [x, x+w) -- the original behaviour. "
+                         "right: (x, x+w], which isolates a hard floor value in its "
+                         "own bucket. Use right for band gap, where MP records every "
+                         "metal as exactly 0.0 and left-closed would merge them with "
+                         "genuine small-gap structures.")
+    ap.add_argument("--prop-value", choices=("center", "mean"), default="center",
+                    help="The property value the curve passes through at each bucket: "
+                         "its nominal centre, or the observed mean of the structures "
+                         "in it. Use mean with --closed right, or the metals bucket is "
+                         "labelled with a negative band gap.")
     ap.add_argument("--min-count", type=int, default=30,
                     help="Drop buckets with fewer structures; their centroids are noise")
     ap.add_argument("--n-samples", type=int, default=2048,
@@ -120,19 +131,25 @@ def main():
     print(f"{len(labels):,} labelled structures in partition '{args.partition}'")
 
     print(f"Streaming layer-{args.layer} embeddings, bucketing by {args.width:g} ...")
-    sums, counts, _, _ = bucket_centroids(labels, args.property, args.width, args.layer,
-                                          args.dataset, args.variant, args.batch_size,
-                                          model=args.model)
+    sums, counts, _, _, prop_sums = bucket_centroids(
+        labels, args.property, args.width, args.layer, args.dataset, args.variant,
+        args.batch_size, model=args.model, closed=args.closed)
     kept = sorted(b for b, n in counts.items() if n >= args.min_count)
     if len(kept) < 4:
         raise SystemExit(f"Only {len(kept)} buckets survived --min-count; need >= 4")
     C = np.vstack([sums[b] / counts[b] for b in kept])
-    prop = np.array(kept, float) * args.width + args.width / 2      # bucket centre
+    if args.prop_value == "mean":
+        # The value the curve passes through is each bucket's OBSERVED mean, not its
+        # nominal centre. Required for right-closed band gap: the metals bin
+        # (-w, 0] has centre -w/2, an unphysical negative gap, but mean exactly 0.
+        prop = np.array([prop_sums[b] / counts[b] for b in kept], float)
+    else:
+        prop = np.array(kept, float) * args.width + args.width / 2  # bucket centre
     n = np.array([counts[b] for b in kept])
     print(f"  {len(kept)} buckets, {n.min():,}-{n.max():,} structures each "
           f"(sqrt-weight range {np.sqrt(n.min()):.0f}-{np.sqrt(n.max()):.0f})")
 
-    mean, comps = load_pca(args.layer, args.k)
+    mean, comps = load_pca(args.layer, args.k, args.model)
     Y = (C - mean) @ comps.T
     print(f"  projected into the layer-{args.layer} k={args.k} subspace")
 
@@ -190,8 +207,11 @@ def main():
         tag += f"_min{args.min_value:g}"
     if args.max_value is not None:
         tag += f"_max{args.max_value:g}"
-    out = args.out or (f"{OUT_DIR}/{args.property.replace('.', '_')}"
-                       f"_layer{args.layer}_k{args.k}{tag}.parquet")
+    if args.closed == "right":
+        tag += "_rc"
+    out = args.out or str(steering_vectors_dir(args.model, "manifolds")
+                          / f"{args.property.replace('.', '_')}"
+                            f"_layer{args.layer}_k{args.k}{tag}.parquet")
     print(f"\nSaved {m.save(out)}")
     print(f"  {m!r}")
 

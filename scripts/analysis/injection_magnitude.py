@@ -41,7 +41,7 @@ sys.path.insert(0, str(HERE.parent))                       # scripts/
 sys.path.insert(0, str(HERE.parent / "steering"))          # its neighbours
 sys.path.insert(0, str(HERE.parent.parent / "CrystaLLM"))
 sys.path.insert(0, str(HERE.parent / "embeddings"))
-from utils import analysis_dir
+from utils import analysis_dir, steering_vectors_dir, DEFAULT_MODEL
 
 from extract_cif_embeddings import load_model, load_cifs   # noqa: E402
 from compute_centroid_target import load_pca               # noqa: E402
@@ -57,19 +57,21 @@ OUT = analysis_dir("v1_all", None, "test", subdir="plots")
 
 # Where each property's steering artefacts live. hook_for used to hardcode the density
 # paths, so the script could only ever measure density runs.
+# Relative to steering_vectors/<model>/; the model level is filled in at call time so
+# one registry serves every model.
 PROPERTY_PATHS = {
     "density_atomic": dict(
-        vector="steering_vectors/density_atomic/layer{layer}.parquet",
-        manifold="steering_vectors/manifolds/density_atomic_layer{layer}_k64_w1_max40.parquet"),
+        vector="density_atomic/layer{layer}.parquet",
+        manifold="manifolds/density_atomic_layer{layer}_k64_w1_max40.parquet"),
     "band_gap": dict(
-        vector="steering_vectors/bandgap/layer{layer}.parquet",
-        manifold="steering_vectors/manifolds/dos_electronic_band_gap_layer{layer}_k64_w0.05.parquet"),
+        vector="bandgap/layer{layer}.parquet",
+        manifold="manifolds/dos_electronic_band_gap_layer{layer}_k64_w0.05.parquet"),
     "energy_above_hull": dict(
-        vector="steering_vectors/energy_above_hull/layer{layer}.parquet",
-        manifold="steering_vectors/manifolds/energy_above_hull_layer{layer}_k64_w0.1_max5.parquet"),
+        vector="energy_above_hull/layer{layer}.parquet",
+        manifold="manifolds/energy_above_hull_layer{layer}_k64_w0.1_max5.parquet"),
     "formation_energy_per_atom": dict(
-        vector="steering_vectors/formation_energy_per_atom/layer{layer}.parquet",
-        manifold="steering_vectors/manifolds/formation_energy_per_atom_layer{layer}_k64_w0.25.parquet"),
+        vector="formation_energy_per_atom/layer{layer}.parquet",
+        manifold="manifolds/formation_energy_per_atom_layer{layer}_k64_w0.25.parquet"),
 }
 COLOR = {"linear": "#D55E00", "manifold": "#0072B2", "pca_centroid": "#009E73"}
 MARKER = {"linear": "o", "manifold": "s", "pca_centroid": "^"}
@@ -95,24 +97,25 @@ def capture(model, tokenizer, cifs, layers, device):
     return {l: torch.cat(v) for l, v in grabbed.items()}
 
 
-def hook_for(row, device, prop="density_atomic"):
+def hook_for(row, device, prop="density_atomic", model=DEFAULT_MODEL):
     """The real hook for one table row, or None if this method is not measurable here."""
     m, layer = row.method, int(row.layer)
+    root = steering_vectors_dir(model)          # PROPERTY_PATHS is relative to this
     paths = PROPERTY_PATHS[prop]
     if m == "linear":
-        sv = Path(paths["vector"].format(layer=layer))
+        sv = root / paths["vector"].format(layer=layer)
         vec = np.asarray(pd.read_parquet(sv).iloc[0]["steering_vector"], np.float32)
         return _sgc.linear_hook(vec, float(row.strength), device)
-    mean, comps = load_pca(layer, 64)
+    mean, comps = load_pca(layer, 64, model)
     if m == "pca_centroid":
-        cen = Path("steering_vectors/pca_centroid/density_atomic/"
-                   f"layer{layer}_k64_target{row.target:g}.parquet")
+        cen = (root / "pca_centroid" / "density_atomic"
+               / f"layer{layer}_k64_target{row.target:g}.parquet")
         if not cen.exists():
             return None
         c = np.asarray(pd.read_parquet(cen).iloc[0]["centroid_pca"], np.float32)
         return _sgc.pca_centroid_hook(mean, comps, c, float(row.strength), device)
     if m == "manifold":
-        man = Path(paths["manifold"].format(layer=layer))
+        man = root / paths["manifold"].format(layer=layer)
         if not man.exists():
             return None
         return _sgc.manifold_hook(mean, comps, Manifold.load(str(man)),
@@ -163,7 +166,7 @@ def main():
 
     rows = []
     for _, r in runs.iterrows():
-        hook = hook_for(r, device, args.property)
+        hook = hook_for(r, device, args.property, args.model)
         if hook is None:
             print(f"  ! {r.run}: no artifact, skipped")
             continue

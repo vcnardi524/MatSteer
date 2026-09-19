@@ -60,7 +60,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                 "embeddings"))
 from extract_cif_embeddings import load_model, load_cifs
-from utils import DEFAULT_MODEL, MODELS, analysis_dir, write_results_table  # noqa: F401  (analysis_dir only)
+from utils import (DEFAULT_MODEL, MODELS, analysis_dir, write_results_table,
+                   steering_vectors_dir)  # noqa: F401  (analysis_dir only)
 
 TEST_PKL = "CrystaLLM/cifs_v1_test_sample1000.pkl.gz"
 DIGITS = [str(d) for d in range(10)]
@@ -124,15 +125,17 @@ def main():
     vecs, pca = {}, {}
     if args.method == "linear":
         for L in range(config.n_layer):
-            p = f"steering_vectors/{args.property}/layer{L}.parquet"
+            p = str(steering_vectors_dir(args.model, args.property)
+                    / f"layer{L}.parquet")
             if os.path.exists(p):
                 v = np.array(pd.read_parquet(p).iloc[0]["steering_vector"], dtype=np.float32)
                 vecs[L] = torch.tensor(v, device=device)
         print(f"linear vectors found for layers: {sorted(vecs)}\n")
     else:
         for L in range(config.n_layer):
-            base = f"steering_vectors/pca_centroid/pca_layer{L}_k{args.k}.parquet"
-            cen = (f"steering_vectors/pca_centroid/{args.property}/"
+            pc = steering_vectors_dir(args.model, "pca_centroid")
+            base = str(pc / f"pca_layer{L}_k{args.k}.parquet")
+            cen = (f"{pc}/{args.property}/"
                    f"layer{L}_k{args.k}_target{args.target:g}.parquet")
             if os.path.exists(base) and os.path.exists(cen):
                 b = pd.read_parquet(base).iloc[0]

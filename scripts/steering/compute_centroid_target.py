@@ -27,16 +27,19 @@ import pandas as pd
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
 # sys.path[0] is this script's own dir, so its neighbour imports directly.
-from compute_pca_basis import METHOD_DIR, embedding_files, stream_batches
-from utils import filter_partition, load_split_index, add_partition_args
+from compute_pca_basis import embedding_files, stream_batches
+from utils import (filter_partition, load_split_index, add_partition_args,
+                   steering_vectors_dir, DEFAULT_MODEL)
 
 DEFAULT_LABELS = "density_atomic_v1.parquet"
 DEFAULT_PROPERTY = "density_atomic"
 
 
-def load_pca(layer: int, k: int) -> tuple[np.ndarray, np.ndarray]:
+def load_pca(layer: int, k: int,
+             model: str = DEFAULT_MODEL) -> tuple[np.ndarray, np.ndarray]:
     """(mean (1024,), components (k, 1024)) from the shared basis file."""
-    path = METHOD_DIR / f"pca_layer{layer}_k{k}.parquet"
+    path = (steering_vectors_dir(model, "pca_centroid")
+            / f"pca_layer{layer}_k{k}.parquet")
     if not path.exists():
         raise FileNotFoundError(f"No PCA basis at {path} — run compute_pca_basis.py first")
     row = pd.read_parquet(path).iloc[0]
@@ -71,7 +74,7 @@ def main():
                          "nearest each prompt, instead of using one global centroid.")
     args = ap.parse_args()
 
-    mean, comps = load_pca(args.layer, args.k)
+    mean, comps = load_pca(args.layer, args.k, args.model)
 
     labels = pd.read_parquet(args.labels, columns=["id", args.property])
     labels = labels.dropna(subset=[args.property])
@@ -114,7 +117,7 @@ def main():
           f"|c - mean|={np.linalg.norm(centroid - mean):.3f}, "
           f"of which {np.linalg.norm(centroid_pca):.3f} lies in the top-{args.k} subspace")
 
-    out_dir = METHOD_DIR / (args.name or args.property)
+    out_dir = steering_vectors_dir(args.model, "pca_centroid") / (args.name or args.property)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"layer{args.layer}_k{args.k}_target{args.target:g}.parquet"
     pd.DataFrame([{

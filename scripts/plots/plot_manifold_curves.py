@@ -27,14 +27,16 @@ import matplotlib.pyplot as plt
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import analysis_root
+from utils import analysis_root, steering_vectors_dir, DEFAULT_MODEL, MODELS
 
 TRIPLES = [(0, 1, 2), (1, 2, 3), (3, 4, 5)]
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="steering_vectors/manifolds")
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS))
+    ap.add_argument("--dir", default=None,
+                    help="default: steering_vectors/<model>/manifolds")
     ap.add_argument("--match", default="", help="substring filter on the filename")
     ap.add_argument("--threshold", type=float, default=None,
                     help="report what fraction of the arc lies above this property "
@@ -44,9 +46,10 @@ def main():
                     help="default: analysis/<model>/manifold_curves.png")
     args = ap.parse_args()
 
-    files = sorted(f for f in glob.glob(f"{args.dir}/*.parquet") if args.match in f)
+    man_dir = args.dir or steering_vectors_dir(args.model, "manifolds")
+    files = sorted(f for f in glob.glob(f"{man_dir}/*.parquet") if args.match in f)
     if not files:
-        raise SystemExit(f"no manifolds matching {args.match!r} in {args.dir}")
+        raise SystemExit(f"no manifolds matching {args.match!r} in {man_dir}")
     print(f"{len(files)} manifolds\n")
 
     fig = plt.figure(figsize=(5.2 * len(TRIPLES), 4.6 * len(files)))

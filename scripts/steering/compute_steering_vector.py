@@ -35,6 +35,7 @@ import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
 import pyarrow.parquet as pq
 from utils import (DEFAULT_MODEL, DEFAULT_VARIANT, MODELS, embedding_files,
+                   steering_vectors_dir,
                    embeddings_paths)  # noqa: F401  (embedding_files re-exported)
 
 
@@ -131,7 +132,7 @@ def main():
     steer = steer / raw_norm
     print(f"  raw mean-diff norm = {raw_norm:.3f}")
 
-    out_dir = Path("steering_vectors") / name
+    out_dir = steering_vectors_dir(args.model, name)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"layer{args.layer}.parquet"
     pd.DataFrame([{

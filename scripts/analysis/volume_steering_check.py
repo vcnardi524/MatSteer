@@ -37,7 +37,7 @@ import pandas as pd
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import analysis_root
+from utils import analysis_root, steering_vectors_dir
 
 VOL_RE = re.compile(r"_cell_volume\s+([-\d.eE]+)")
 # Single-element formulas have no space, so pymatgen writes them unquoted
@@ -134,7 +134,7 @@ def main():
     ref = load_reference()
     print(f"  {len(ref):,} reference structures parsed")
 
-    sv = Path("steering_vectors") / args.property / f"layer{args.layer}.parquet"
+    sv = steering_vectors_dir(args.model, args.property) / f"layer{args.layer}.parquet"
     if sv.exists():
         s = pd.read_parquet(sv).drop(columns=["steering_vector"], errors="ignore")
         print(f"Steering vector: {s.to_dict('records')[0]}")

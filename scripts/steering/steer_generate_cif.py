@@ -48,11 +48,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLL
 from crystallm import CIFTokenizer
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
+from utils import steering_vectors_dir
 _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "embeddings"))   # -> extract_cif_embeddings.py
 from make_prompts import PATTERN_COMP, PATTERN_COMP_SG, extract_prompt
 from extract_cif_embeddings import load_model, load_cifs
 # sys.path[0] is this script's own dir, so its neighbour imports directly.
-from compute_pca_basis import METHOD_DIR as PCA_DIR
 from compute_centroid_target import load_pca
 from manifold import Manifold
 
@@ -185,10 +185,12 @@ def generate(model, tokenizer, device, prompt_str, max_new_tokens, temperature, 
 
 def build_linear(args, device):
     """(hook, filename stem suffix) for the mean-difference method."""
-    sv_path = Path("steering_vectors") / args.steering_property / f"layer{args.layer}.parquet"
+    sv_path = (steering_vectors_dir(args.model, args.steering_property)
+               / f"layer{args.layer}.parquet")
     if not sv_path.exists():
         # legacy flat location (pre per-property dirs)
-        legacy = Path("steering_vectors") / f"{args.steering_property}_layer{args.layer}.parquet"
+        legacy = (steering_vectors_dir(args.model)
+                  / f"{args.steering_property}_layer{args.layer}.parquet")
         if not legacy.exists():
             raise FileNotFoundError(f"No steering vector at {sv_path} or {legacy}")
         sv_path = legacy
@@ -208,7 +210,8 @@ def build_pca_centroid(args, device):
     if args.target is None:
         raise SystemExit("--method pca_centroid needs --target")
     mean, comps = load_pca(args.layer, args.k)
-    cen_path = (PCA_DIR / args.steering_property /
+    pca_dir = steering_vectors_dir(args.model, "pca_centroid")
+    cen_path = (pca_dir / args.steering_property /
                 f"layer{args.layer}_k{args.k}_target{args.target:g}.parquet")
     if not cen_path.exists():
         raise FileNotFoundError(
@@ -230,7 +233,8 @@ def build_pca_local(args, device):
         raise SystemExit("--method pca_local needs --target")
     mean, comps = load_pca(args.layer, args.k)
     stem = f"layer{args.layer}_k{args.k}_target{args.target:g}"
-    bank_path = PCA_DIR / args.steering_property / f"{stem}_bank.parquet"
+    bank_path = (steering_vectors_dir(args.model, "pca_centroid")
+                 / args.steering_property / f"{stem}_bank.parquet")
     if not bank_path.exists():
         raise FileNotFoundError(
             f"No class bank at {bank_path} -- rerun compute_centroid_target.py with "

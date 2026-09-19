@@ -28,12 +28,11 @@ import matplotlib.pyplot as plt
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import analysis_dir
+from utils import analysis_dir, add_partition_args, steering_vectors_dir
 
-# Default location for density at layer 7/14. Anything else -- a different property,
-# dataset or partition -- lives under its own analysis/<dataset>/<variant>/<partition>/
-# tree, so the output is written NEXT TO the centroid CSV it read rather than here.
-PLOTS = analysis_dir("v1_all", "full", "train", subdir="plots")
+# Resolved inside main(), NOT at module level: analysis_dir() creates the directory as a
+# side effect, so importing this file used to conjure a crystallm tree regardless of which
+# model was being plotted. The output is written NEXT TO the centroid CSV it read.
 TRIPLES = [(0, 1, 2), (3, 4, 5), (1, 2, 3), (2, 3, 4)]
 
 
@@ -45,15 +44,20 @@ def main():
     ap.add_argument("--centroids", default=None)
     ap.add_argument("--manifold", default=None)
     ap.add_argument("--suffix", default="",
-                    help="extra tag on the manifold filename, e.g. _max5")
+                    help="extra tag on the manifold filename, e.g. _max5 or _rc")
+    ap.add_argument("--k", type=int, default=64)
+    add_partition_args(ap)                      # --dataset / --model / --variant / --partition
     args = ap.parse_args()
 
+    plots = analysis_dir(args.dataset, args.variant, args.partition,
+                         subdir="plots", model=args.model)
     cen_path = Path(args.centroids or
-                    PLOTS / f"centroid_pca_{args.property}_layer{args.layer}"
+                    plots / f"centroid_pca_{args.property}_layer{args.layer}"
                             f"_w{args.width:g}{args.suffix}.csv")
     man_path = Path(args.manifold or
-                    f"steering_vectors/manifolds/{args.property}_layer{args.layer}"
-                    f"_k64_w{args.width:g}{args.suffix or '_max40'}.parquet")
+                    steering_vectors_dir(args.model, "manifolds")
+                    / f"{args.property}_layer{args.layer}"
+                      f"_k{args.k}_w{args.width:g}{args.suffix}.parquet")
     c = pd.read_csv(cen_path).sort_values("bucket_lo").reset_index(drop=True)
     m = pd.read_parquet(man_path)
     curve = np.vstack(m["point"].to_numpy()).astype(float)

@@ -44,7 +44,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from make_prompts import PATTERN_COMP_SG, extract_prompt
 from extract_cif_embeddings import load_model, load_cifs
 from compute_centroid_target import load_pca
-from utils import DEFAULT_MODEL, MODELS, analysis_dir
+from utils import DEFAULT_MODEL, MODELS, analysis_dir, steering_vectors_dir
 
 TEST_PKL = "CrystaLLM/cifs_v1_test_sample1000.pkl.gz"
 
@@ -113,14 +113,15 @@ def main():
     # depends on the hidden state, so it is built per prompt inside the loop.
     if args.method == "linear":
         sv = pd.read_parquet(
-            f"steering_vectors/{args.steering_property}/layer{args.layer}.parquet").iloc[0]
+            steering_vectors_dir(args.model, args.steering_property)
+            / f"layer{args.layer}.parquet").iloc[0]
         vec = torch.tensor(np.array(sv["steering_vector"], dtype=np.float32) * args.alpha,
                            device=device).view(1, 1, -1)
         label = f"linear alpha={args.alpha:g}"
     else:
         mean, comps = load_pca(args.layer, args.k)
         cen = pd.read_parquet(
-            f"steering_vectors/pca_centroid/{args.steering_property}/"
+            f"{steering_vectors_dir(args.model, 'pca_centroid')}/{args.steering_property}/"
             f"layer{args.layer}_k{args.k}_target{args.target:g}.parquet").iloc[0]
         mu = torch.tensor(mean, device=device)
         W = torch.tensor(comps, device=device)

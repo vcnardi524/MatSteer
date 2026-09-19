@@ -40,7 +40,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d projection)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import filter_partition, analysis_dir, load_split_index, add_partition_args
+from utils import (filter_partition, analysis_dir, load_split_index,
+                   add_partition_args, steering_vectors_dir)
 from manifold import bucket_centroids, embedding_files
 
 DEFAULT_LABELS = "density_atomic_v1.parquet"
@@ -71,6 +72,9 @@ def main():
                          "comparable across properties.")
     ap.add_argument("--dims", type=int, nargs="+", default=None,
                     help="Flat list of principal directions, in triples: 0 1 2 3 4 5")
+    ap.add_argument("--closed", choices=("left", "right"), default="left",
+                    help="Bucket edges; must match the manifold being overlaid. "
+                         "See fit_manifold.py --closed.")
     ap.add_argument("--min-count", type=int, default=30,
                     help="Drop buckets with fewer structures than this")
     ap.add_argument("--max-per-bucket", type=int, default=0,
@@ -144,9 +148,9 @@ def main():
 
     print(f"Streaming layer-{args.layer} embeddings, bucketing '{args.property}' "
           f"by {args.width:g} ...")
-    sums, counts, S, s_ids = bucket_centroids(labels, args.property, args.width, args.layer,
-                                              args.dataset, args.variant, args.batch_size,
-                                              sample_ids, model=args.model)
+    sums, counts, S, s_ids, _ = bucket_centroids(
+        labels, args.property, args.width, args.layer, args.dataset, args.variant,
+        args.batch_size, sample_ids, model=args.model, closed=args.closed)
     kept = sorted(b for b, n in counts.items() if n >= args.min_count)
     dropped = len(counts) - len(kept)
     if not kept:
@@ -160,7 +164,8 @@ def main():
           f"{n.min():,}-{n.max():,} structures per bucket")
 
     if args.basis == "corpus":
-        bp = f"steering_vectors/pca_centroid/pca_layer{args.layer}_k{args.k}.parquet"
+        bp = str(steering_vectors_dir(args.model, "pca_centroid")
+                 / f"pca_layer{args.layer}_k{args.k}.parquet")
         if not os.path.exists(bp):
             raise SystemExit(f"No PCA basis at {bp} -- run compute_pca_basis.py, or pass "
                              f"--basis centroids")

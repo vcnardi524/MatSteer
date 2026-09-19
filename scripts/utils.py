@@ -320,6 +320,30 @@ def analysis_dir(dataset: str = DEFAULT_DATASET, variant: str = DEFAULT_VARIANT,
     return path
 
 
+STEERING_VECTORS_ROOT = Path("steering_vectors")
+
+
+def steering_vectors_dir(model: str = DEFAULT_MODEL, sub: str = None) -> Path:
+    """steering_vectors/<model>[/<sub>] -- linear vectors, PCA bases, fitted manifolds.
+
+    Every artifact under here is FITTED ON one model's activations and is meaningless
+    for another: the hidden sizes differ (crystallm 1024, llamat2_cif 4096), a layer
+    index means a different depth, and a PCA basis or manifold lives in a subspace of
+    the model it was built from. Without the model level a llamat2_cif
+    pca_layer8_k32.parquet would overwrite crystallm's at the identical path.
+
+    `sub` is "manifolds", "pca_centroid", or a property name -- the layout inside is
+    unchanged, so only the root moved.
+    """
+    if model not in MODELS:
+        raise ValueError(f"model must be one of {MODELS}, got {model!r}")
+    path = STEERING_VECTORS_ROOT / model
+    if sub:
+        path = path / sub
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def analysis_root(model: str = DEFAULT_MODEL) -> Path:
     """analysis/<model>/ -- for outputs that span datasets rather than sitting in one.
 

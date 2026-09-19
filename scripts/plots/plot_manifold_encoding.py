@@ -32,7 +32,8 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
 from manifold import Manifold, embedding_files
-from utils import filter_partition, analysis_dir, load_split_index, add_partition_args
+from utils import (filter_partition, analysis_dir, load_split_index,
+                   add_partition_args, steering_vectors_dir)
 
 
 def main():
@@ -56,7 +57,8 @@ def main():
     print(f"{m!r}\n  curve spans {args.property} {lo:.2f}..{hi:.2f}, arc 0..{m.length:.2f}")
 
     row = pd.read_parquet(
-        f"steering_vectors/pca_centroid/pca_layer{args.layer}_k{args.k}.parquet").iloc[0]
+        steering_vectors_dir(args.model, "pca_centroid")
+        / f"pca_layer{args.layer}_k{args.k}.parquet").iloc[0]
     mu = np.asarray(row["mean"], np.float32)
     W = np.asarray(row["components"], np.float32).reshape(int(row["k"]), -1)
 

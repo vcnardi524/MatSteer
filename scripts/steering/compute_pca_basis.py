@@ -31,9 +31,9 @@ from sklearn.decomposition import IncrementalPCA
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
 from utils import (filter_partition, partition_id_sets, embedding_files,
+                   steering_vectors_dir,
                    embeddings_paths, load_split_index, add_partition_args)  # noqa: F401
 
-METHOD_DIR = Path("steering_vectors") / "pca_centroid"
 
 
 
@@ -108,8 +108,8 @@ def main():
     for i in sorted({i for i in (0, 3, 7, 15, 31, args.k - 1) if i < args.k}):
         print(f"  pc{i+1:<3} {evr[i]:7.3%}   cumulative {cum[i]:6.1%}")
 
-    METHOD_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = METHOD_DIR / f"pca_layer{args.layer}_k{args.k}.parquet"
+    out_path = (steering_vectors_dir(args.model, "pca_centroid")
+                / f"pca_layer{args.layer}_k{args.k}.parquet")
     pd.DataFrame([{
         "layer": args.layer,
         "dataset": args.dataset,

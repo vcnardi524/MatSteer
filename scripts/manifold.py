@@ -31,18 +31,38 @@ from utils import (DEFAULT_MODEL, embedding_files,
 
 
 def bucket_centroids(labels, prop, width, layer, dataset, variant, batch_size,
-                     sample_ids=None, model=DEFAULT_MODEL):
-    """Per-bucket (sum, count) by streaming the layer, plus the raw rows for sample_ids.
+                     sample_ids=None, model=DEFAULT_MODEL, closed="left"):
+    """Per-bucket (sum, count, property sum) by streaming the layer, plus sample rows.
 
-    Buckets are [x, x+width). The sample is drawn as ids up front rather than
-    reservoir-sampled, so one pass builds the centroids and collects the individual
-    points a plot draws behind them.
+    closed="left"  buckets are [x, x+width)   -- floor(v/w), the original behaviour
+    closed="right" buckets are (x, x+width]   -- ceil(v/w)-1
+
+    WHY RIGHT-CLOSED EXISTS. Band gap is non-negative and MP records every metal as
+    exactly 0.0. Under left-closed bins the first bucket is [0, 0.1), which merges
+    64,165 metals with 4,905 genuine small-gap semiconductors -- 52% of the corpus in
+    one centroid that means "metal, or nearly one". Right-closed puts the metals alone
+    in (-0.1, 0] and gives (0, 0.1] its own centroid. It only works because the property
+    is non-negative with a hard floor at 0; for a signed property like formation energy
+    the two are equivalent and "left" stays the default.
+
+    The PROPERTY SUM is returned alongside so a caller can use each bucket's observed
+    mean rather than its nominal centre. That matters for exactly the same reason: the
+    metals bin (-0.1, 0] has centre -0.05, an unphysical negative band gap, while its
+    observed mean is exactly 0.0.
+
+    The sample is drawn as ids up front rather than reservoir-sampled, so one pass
+    builds the centroids and collects the individual points a plot draws behind them.
     """
-    idx = np.floor(labels[prop].to_numpy() / width).astype(np.int64)
+    if closed not in ("left", "right"):
+        raise ValueError(f"closed must be 'left' or 'right', got {closed!r}")
+    v = labels[prop].to_numpy()
+    idx = (np.floor(v / width) if closed == "left"
+           else np.ceil(v / width) - 1).astype(np.int64)
     bucket_of = dict(zip(labels["id"].to_numpy(), idx))
+    prop_of = dict(zip(labels["id"].to_numpy(), v))
     want = set() if sample_ids is None else set(sample_ids)
 
-    sums, counts, s_vec, s_id = {}, {}, [], []
+    sums, counts, prop_sums, s_vec, s_id = {}, {}, {}, [], []
     for path in embedding_files(layer, dataset, variant, model):
         for rb in pq.ParquetFile(path).iter_batches(batch_size=batch_size,
                                                     columns=["id", "embedding"]):
@@ -53,17 +73,19 @@ def bucket_centroids(labels, prop, width, layer, dataset, variant, batch_size,
                 continue
             b = b[b.notna()].to_numpy().astype(np.int64)
             X = np.vstack(df["embedding"].to_numpy()).astype(np.float64)
+            pv = df["id"].map(prop_of).to_numpy(float)
             for u in np.unique(b):
                 m = b == u
                 sums[u] = sums.get(u, 0) + X[m].sum(0)
                 counts[u] = counts.get(u, 0) + int(m.sum())
+                prop_sums[u] = prop_sums.get(u, 0.0) + float(pv[m].sum())
             if want:
                 m = df["id"].isin(want).to_numpy()
                 if m.any():
                     s_vec.append(X[m])
                     s_id.extend(df["id"].to_numpy()[m])
     S = np.vstack(s_vec) if s_vec else np.empty((0, 1024))
-    return sums, counts, S, s_id
+    return sums, counts, S, s_id, prop_sums
 
 
 class Manifold:
