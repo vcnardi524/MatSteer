@@ -17,6 +17,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 from pathlib import Path
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -79,13 +80,23 @@ def main():
     codes = df["label"].map(label2int).values
     n_colors = len(ordered)
 
-    # pick a colormap with enough distinct colors
-    if n_colors <= 20:
-        cmap = plt.get_cmap("tab20", n_colors)
-    else:
-        cmap = plt.get_cmap("gist_ncar", n_colors)
-
-    colors = [cmap(label2int[lbl]) for lbl in df["label"]]
+    # COLOUR x MARKER, not 21 hues. The previous version fell back to gist_ncar -- a
+    # rainbow colormap -- once there were more than 20 categories, which put Pm-3m and
+    # Immm 0.125 apart in RGB and P4/mmm and P6_3/mmc 0.200 apart. Anything under ~0.25
+    # is not reliably distinguishable, so two different labels in two different clusters
+    # looked like one label scattered across the plot, i.e. like the labels were wrong.
+    #
+    # Okabe-Ito is colourblind-safe; 8 hues x 3 markers gives 24 series that stay
+    # distinguishable, and the marker carries the distinction when the hue repeats.
+    OKABE_ITO = ["#E69F00", "#56B4E9", "#009E73", "#F0E442",
+                 "#0072B2", "#D55E00", "#CC79A7", "#000000"]
+    MARKERS = ["o", "^", "s"]
+    if n_colors > len(OKABE_ITO) * len(MARKERS):
+        print(f"  ! {n_colors} categories exceeds the {len(OKABE_ITO)*len(MARKERS)} "
+              f"distinguishable combinations -- lower --top-n")
+    style = {lbl: (OKABE_ITO[i % len(OKABE_ITO)], MARKERS[i // len(OKABE_ITO)])
+             for i, lbl in enumerate(ordered)}
+    style["Other"] = ("#BBBBBB", ".")          # never competes with a real class
 
     X = np.vstack(df["embedding"].values)
     prop_title = args.property.replace("_", " ").title()
@@ -107,9 +118,11 @@ def main():
     ]:
         for lbl in ordered:
             mask = df["label"].values == lbl
-            ax.scatter(coords[mask, 0], coords[mask, 1],
-                       c=[cmap(label2int[lbl])],
-                       s=6, alpha=0.6, linewidths=0, label=lbl)
+            colour, marker = style[lbl]
+            ax.scatter(coords[mask, 0], coords[mask, 1], c=colour, marker=marker,
+                       s=7 if lbl != "Other" else 4,
+                       alpha=0.75 if lbl != "Other" else 0.25,
+                       linewidths=0, label=lbl)
         # perplexity is a t-SNE hyperparameter only; it means nothing for PCA
         detail = f" (perplexity={args.tsne_perplexity:g})" if method == "t-SNE" else ""
         ax.set_title(f"{method} — Layer {args.layer}{detail}")
@@ -117,7 +130,10 @@ def main():
         ax.set_ylabel("Component 2")
 
     # shared legend outside the plots
-    handles = [mpatches.Patch(color=cmap(label2int[lbl]), label=lbl) for lbl in ordered]
+    # Line2D, not Patch: the marker is half the identity now, so the legend has to show it
+    handles = [mlines.Line2D([], [], color=style[lbl][0], marker=style[lbl][1],
+                             linestyle="none", markersize=5, label=lbl)
+               for lbl in ordered]
     fig.legend(handles=handles, loc="center right", bbox_to_anchor=(1.0, 0.5),
                fontsize=7, ncol=1, framealpha=0.8)
 
