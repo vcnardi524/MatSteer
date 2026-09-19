@@ -33,6 +33,11 @@ from utils import (analysis_dir, analysis_root, DEFAULT_MODEL, MODELS,
 # Okabe-Ito, validated for the four-series case: worst adjacent CVD dE 11.0,
 # normal-vision 18.4. Every line is also direct-labelled, which is what the
 # low contrast-vs-surface of the two lighter hues requires.
+# How each registered model is spelled in a figure title; utils.MODELS holds the
+# filesystem-safe names, which are not how anyone writes them.
+DISPLAY_NAME = {"crystallm": "CrystaLLM", "llamat2": "LLaMat-2",
+                "llamat2_cif": "LLaMat-2-CIF"}
+
 # name -> (label, colour, marker). Colour is bound to the PROPERTY, not to plot order,
 # so a subset figure keeps the same colours as the full one and the two can be read side
 # by side.
@@ -115,6 +120,7 @@ def main():
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 5.8), sharex=True)
     rows = []
+    ends = {0: [], 1: []}       # per-panel (x, y, label, colour) for the direct labels
     for label, color, marker, d in loaded:
         x = d["layer"].to_numpy()
         y = d["embedding_r2"].to_numpy()
@@ -123,16 +129,30 @@ def main():
 
         axes[0].plot(x, y, color=color, lw=2, marker=marker, ms=5, label=label)
         axes[0].plot(x[0], l0, marker=marker, ms=11, mfc="none", mec=color, mew=2)
-        axes[0].annotate(f" {label}", (x[-1], y[-1]), color=color, fontsize=10,
-                         va="center", fontweight="bold")
-
         axes[1].plot(x, y - l0, color=color, lw=2, marker=marker, ms=5)
-        axes[1].annotate(f" {label}", (x[-1], y[-1] - l0), color=color, fontsize=10,
-                         va="center", fontweight="bold")
+        # direct labels are placed after the loop, once every endpoint is known
+        ends[0].append((x[-1], y[-1], label, color))
+        ends[1].append((x[-1], y[-1] - l0, label, color))
 
         rows.append({"property": label, "composition_r2": d["composition_r2"].iloc[0],
                      "layer0_r2": l0, "peak_layer": peak, "peak_r2": y.max(),
                      "gain_over_layer0": y.max() - l0})
+
+    # Place the direct labels with a minimum vertical gap. Series that converge -- which
+    # density and formation energy do in the right panel -- would otherwise print their
+    # labels on top of each other.
+    for panel, items in ends.items():
+        ax = axes[panel]
+        lo_y = min(v for _, v, _, _ in items)
+        hi_y = max(v for _, v, _, _ in items)
+        gap = max((hi_y - lo_y) * 0.06, 1e-9)
+        placed = []
+        for xe, ye, label, color in sorted(items, key=lambda t: t[1]):
+            if placed and ye - placed[-1] < gap:
+                ye = placed[-1] + gap
+            placed.append(ye)
+            ax.annotate(f" {label}", (xe, ye), color=color, fontsize=10,
+                        va="center", fontweight="bold")
 
     ax = axes[0]
     ax.set_ylabel("probe $R^2$")
@@ -145,16 +165,25 @@ def main():
     ax.set_ylabel("$R^2$ minus layer 0")
     ax.set_title("what depth adds beyond the first block\n(layer 0 subtracted)")
 
+    # Axis limits come from the DATA, not from a constant. These were hardcoded to
+    # (-0.5, 18.5) with ticks stopping at 14, which silently cut off everything past
+    # layer 18 -- fine for crystallm's 16 blocks, wrong for llamat2-cif's 32.
+    lo = min(d["layer"].min() for *_, d in loaded)
+    hi = max(d["layer"].max() for *_, d in loaded)
+    span = max(hi - lo, 1)
+    step = 2 if span <= 16 else 4
     for ax in axes:
         ax.set_xlabel("layer")
-        ax.set_xlim(-0.5, 18.5)
-        ax.set_xticks(range(0, 16, 2))
+        # right margin carries the direct labels, which are drawn at the last point
+        ax.set_xlim(lo - 0.5, hi + 0.22 * span)
+        ax.set_xticks(range(int(lo), int(hi) + 1, step))
         ax.grid(alpha=0.25, lw=0.6)
         for s in ("top", "right"):
             ax.spines[s].set_visible(False)
 
-    fig.suptitle(f"CrystaLLM linear probes, {args.split} split "
-                 "(no test formula seen in training)", fontsize=13)
+    fig.suptitle(args.title or f"{DISPLAY_NAME.get(args.model, args.model)} linear "
+                 f"probes, {args.split} split (no test formula seen in training)",
+                 fontsize=13)
     fig.tight_layout()
     out = Path(args.out or analysis_root() / "property_probe_r2_by_layer.png")
     out.parent.mkdir(parents=True, exist_ok=True)
