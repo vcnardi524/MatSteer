@@ -34,8 +34,8 @@ import pandas as pd
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
 import pyarrow.parquet as pq
-from utils import (DEFAULT_MODEL, DEFAULT_VARIANT, MODELS, embedding_files,
-                   steering_vectors_dir,
+from utils import (DEFAULT_MODEL, DEFAULT_VARIANT, MODELS, VARIANTS, PARTITIONS,
+                   embedding_files, steering_vectors_dir, filter_partition,
                    embeddings_paths)  # noqa: F401  (embedding_files re-exported)
 
 
@@ -64,6 +64,14 @@ def main():
                     help="which model's hidden states to read (see utils.MODELS)")
     ap.add_argument("--id-col", default="id",
                     help="Metadata join key against the embedding id (e.g. material_id for MP)")
+    ap.add_argument("--variant", default=DEFAULT_VARIANT, choices=list(VARIANTS),
+                    help="which CIF text the embeddings came from. llamat2_cif has\n"
+                         "only crystal_uncond; the default full does not exist for it.")
+    ap.add_argument("--partition", default="all", choices=list(PARTITIONS),
+                    help="Slice to FIT on. Defaults to all for backwards "
+                         "compatibility, but a steering vector fitted on the held-out "
+                         "set has seen the structures it will later be scored against "
+                         "-- use not_heldout.")
     ap.add_argument("--layer", type=int, default=14)
     ap.add_argument("--low", type=float, default=0.05,
                     help="Low/negative-set threshold, in the property's units")
@@ -92,6 +100,12 @@ def main():
     # holding the layer in memory. A consolidated layer is 2.29M x 1024 floats (9.4 GB
     # raw, several times that once pandas has boxed the list column), so loading one
     # outright is what stopped this script running over every layer.
+    # Filter BEFORE the percentiles: thresholds taken over a pool that includes the
+    # held-out set would be set by structures the vector must not see.
+    if args.partition != "all":
+        before = len(join)
+        join = filter_partition(join, args.partition, verbose=False, model=args.model)
+        print(f"  partition={args.partition}: {len(join):,} of {before:,} kept")
     if args.pct is not None:
         low_thresh = float(np.percentile(join["val"].to_numpy(), args.pct))
         high_thresh = float(np.percentile(join["val"].to_numpy(), 100 - args.pct))
@@ -104,8 +118,11 @@ def main():
     high_ids = set(join.loc[join["val"] >= high_thresh, "id"])
 
     print(f"Streaming layer-{args.layer} embeddings (dataset={args.dataset}) ...")
-    files = embedding_files(args.layer, args.dataset, DEFAULT_VARIANT, args.model)
-    sums = {"low": np.zeros(1024), "high": np.zeros(1024)}
+    files = embedding_files(args.layer, args.dataset, args.variant, args.model)
+    # dim from the data: 1024 was hardcoded, which is crystallm's. llamat2_cif is 4096.
+    dim = len(pq.ParquetFile(files[0]).read_row_group(0, columns=["embedding"])
+              .column("embedding")[0])
+    sums = {"low": np.zeros(dim), "high": np.zeros(dim)}
     counts = {"low": 0, "high": 0}
     for path in files:
         for rb in pq.ParquetFile(path).iter_batches(batch_size=50_000,
