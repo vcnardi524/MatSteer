@@ -264,38 +264,56 @@ def main():
     cur.to_csv(os.path.join(out_dir, f"{stem}_distance.csv"), index=False,
                float_format="%.6g")
 
-    # ratios by layer
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.2), sharex=True)
-    for ax, var in zip(axes, ("centered", "raw")):
-        r = res[res.variant == var].sort_values("layer")
-        if r.empty:
+    # SAME LAYOUT AS symmetry_separability.plot_results, deliberately: these are the
+    # same two experiments with property buckets as the label, and the pair is only
+    # comparable if drawn the same way. Colour = quantity, solid+dots = centered,
+    # faded thin = raw, dotted = that quantity's permutation null.
+    #
+    # The Exp 1.1 RATIO cannot share the axis after centering: mean_cos_diff passes
+    # through zero (formation energy runs +0.0044, +0.0005, -0.0029 over layers 0-4),
+    # so same/diff blows up. It is plotted for parity with the symmetry figure but goes
+    # off-scale by construction -- read the delta, which stays on-scale and is the
+    # statistic that means something once the data are centered.
+    lbl = f"bucket (w={args.width:g})"
+    series = [
+        ("e1_mean_same",  "C0", "-",  f"1.1 mean cos, same {lbl}"),
+        ("e1_mean_diff",  "C0", "--", f"1.1 mean cos, diff {lbl}"),
+        ("e1_ratio",      "C1", "-",  "1.1 ratio (off-scale when centered)"),
+        ("e1_null_ratio", "C1", ":",  "1.1 ratio, permuted-label null"),
+        ("e1_delta",      "C4", "-",  "1.1 delta (same - diff)"),
+        ("e2_mean_same",  "C2", "-",  f"1.2 mean cos, same formula + same {lbl}"),
+        ("e2_mean_diff",  "C2", "--", f"1.2 mean cos, same formula + diff {lbl}"),
+        ("e2_ratio",      "C3", "-",  "1.2 ratio"),
+        ("e2_null_ratio", "C3", ":",  "1.2 ratio, permuted-label null"),
+        ("e2_delta",      "C5", "-",  "1.2 delta (same - diff)"),
+    ]
+    fig, ax = plt.subplots(figsize=(13, 8))
+    for var in ("centered", "raw"):
+        d = res[res.variant == var].sort_values("layer")
+        if d.empty:
             continue
-        # centered -> delta (ratio is unstable there, see ratio_vs_null); raw -> ratio
-        c1, c2 = ("e1_delta", "e2_delta") if var == "centered" else ("e1_ratio", "e2_ratio")
-        n1, n2 = (c1.replace("delta", "null_delta").replace("e1_", "e1_").replace("e2_", "e2_"),
-                  c2.replace("delta", "null_delta"))
-        n1 = "e1_null_delta" if var == "centered" else "e1_null_ratio"
-        n2 = "e2_null_delta" if var == "centered" else "e2_null_ratio"
-        ax.plot(r.layer, r[c1], "-o", color="#0072B2", lw=2, label="same vs diff bucket")
-        ax.plot(r.layer, r[n1], "--", color="#0072B2", lw=1.2, label="null")
-        ax.plot(r.layer, r[c2], "-s", color="#D55E00", lw=2, label="same composition")
-        ax.plot(r.layer, r[n2], "--", color="#D55E00", lw=1.2, label="null")
-        ax.axhline(0.0 if var == "centered" else 1.0, color="#999", lw=1)
-        ax.set_xlabel("layer"); ax.set_title(var, loc="left", fontsize=11)
-        ax.grid(alpha=0.25, lw=0.6)
-        for sp in ("top", "right"):
-            ax.spines[sp].set_visible(False)
-    axes[0].set_ylabel("centered: cosine difference (same - different)")
-    if len(axes) > 1:
-        axes[1].set_ylabel("raw: cosine ratio (same / different)")
-    axes[0].legend(frameon=False, fontsize=9)
-    fig.suptitle(f"{args.property}: are buckets of width {args.width:g} separable?\n"
-                 f"{args.dataset}/{args.variant}/{args.partition}   "
-                 f"no separation = 0 (centered) or 1.0 (raw); dashed line is the "
-                 f"permuted-label null",
-                 fontsize=12)
+        centered = var == "centered"
+        for col, colour, style, name in series:
+            ax.plot(d["layer"], d[col], style, color=colour,
+                    marker="o" if centered else None, markersize=4,
+                    linewidth=1.8 if centered else 1.0,
+                    alpha=1.0 if centered else 0.30,
+                    label=f"{name} [{var}]")
+    ax.axhline(1.0, color="grey", linewidth=0.8)    # ratio 1.0 = no separation
+    ax.axhline(0.0, color="grey", linewidth=0.8)    # delta 0   = no separation
+    ax.set_xlim(res["layer"].min(), res["layer"].max())
+    ax.set_ylim(-0.1, 2.0)
+    ax.set_xticks(sorted(res["layer"].unique()))
+    ax.set_xlabel("transformer block (output of h[layer])")
+    ax.set_ylabel("cosine / ratio")
+    ax.set_title(f"Bucket separability by layer \u2014 {args.property}, width {args.width:g}"
+                 f"{' (right-closed)' if args.closed == 'right' else ''}\n"
+                 f"{args.model}  {args.dataset}/{args.variant}/{args.partition}   "
+                 f"bold = centered embeddings, faded = raw")
+    ax.grid(alpha=0.25)
+    ax.legend(fontsize=7, ncol=3, loc="upper center", bbox_to_anchor=(0.5, -0.08))
     fig.tight_layout()
-    fig.savefig(os.path.join(out_dir, f"{stem}.png"), dpi=150, bbox_inches="tight",
+    fig.savefig(os.path.join(out_dir, f"{stem}.png"), dpi=150,
                 facecolor="white")
 
     # the decay curve
