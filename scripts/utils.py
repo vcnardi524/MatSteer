@@ -133,14 +133,43 @@ DEFAULT_LABEL_COLS = ("point_group", "space_group_symbol", "structural_type",
 DEFAULT_VARIANT = "full"
 VARIANTS = ("full", "nosym", "crystal_uncond")
 
-# Which slice of CrystaLLM's own train/val/test split an analysis runs on. This matters
-# because 89.6% of the structures with metadata are in the model's training set and only
+# Which slice of a model's own train/val/test split an analysis runs on. This matters
+# because 89.6% of the structures with metadata are in CrystaLLM's training set and only
 # 0.45% are in its test set -- results on "all" cannot distinguish learning from
 # memorization. There is deliberately no default: pick one explicitly.
 DATASETS = ("v1_all", "v1_mp")
 PARTITIONS = ("all", "train", "val", "test", "not_heldout")
-SPLIT_INDEX_PATH = "splits_v1.parquet"
 ANALYSIS_ROOT = Path("analysis")
+
+# A SPLIT BELONGS TO A MODEL, not to the corpus. CrystaLLM's train/val/test says nothing
+# about what LLaMat held out, so scoring llamat2_cif on CrystaLLM's "val" would evaluate
+# it on rows it may well have trained on.
+#
+#   crystallm_splits_v1  flattened from CrystaLLM's own three split pickles.
+#   llamat_splits_v1     the ONLY evidence we have about LLaMat: the 9,046 materials in
+#                        llamat/src/cifs/crystal-text-llm/data/test.csv. It lists nothing
+#                        else, deliberately -- we do not know what LLaMat trained on, only
+#                        what it held out. `not_heldout` is defined by EXCLUSION, so with
+#                        just those test rows present it resolves to "everything we have
+#                        no evidence was held out", which is the honest fitting pool.
+#                        `train` and `val` are empty for this model by design.
+#
+# Both files share the (id, split) schema. The base model and its CIF finetune share a
+# split because the finetune inherited that corpus.
+SPLIT_FILES = {
+    "crystallm": "crystallm_splits_v1.parquet",
+    "llamat2": "llamat_splits_v1.parquet",
+    "llamat2_cif": "llamat_splits_v1.parquet",
+}
+SPLIT_INDEX_PATH = SPLIT_FILES["crystallm"]     # back-compat default
+
+# Which CIF pickle a dataset's `data_` header formulas come from. The probe and the
+# separability test both read formulas to build their composition controls, and both used
+# to hardcode the v1_all pickle -- on a v1_mp run that silently joins to nothing.
+DATASET_PKL = {
+    "v1_all": "CrystaLLM/cifs_v1_prep.pkl.gz",
+    "v1_mp": "CrystaLLM/cifs_v1_mp.pkl.gz",
+}
 
 # Which model produced the hidden states. This sits between <dataset> and <variant> in
 # the embeddings tree, because the same corpus read by two models gives two unrelated
@@ -308,18 +337,29 @@ def analysis_root(model: str = DEFAULT_MODEL) -> Path:
     return path
 
 
-def load_split_index(path: str = SPLIT_INDEX_PATH) -> pd.DataFrame:
-    """[id, split] for every CIF in CrystaLLM's train/val/test split.
+def split_path(model: str = DEFAULT_MODEL) -> str:
+    """Which split file belongs to a model. See SPLIT_FILES for why this is per-model."""
+    if model not in SPLIT_FILES:
+        raise ValueError(f"no split registered for model {model!r}; "
+                         f"known: {sorted(SPLIT_FILES)}")
+    return SPLIT_FILES[model]
 
-    Built by scripts/data/build_split_index.py from the three cifs_v1_*.pkl.gz files.
+
+def load_split_index(path: str = None, model: str = DEFAULT_MODEL) -> pd.DataFrame:
+    """[id, split] for one model's own train/val/test split.
+
+    `path` overrides; otherwise the file is chosen by `model`. crystallm's is built by
+    scripts/data/build_split_index.py from the three cifs_v1_*.pkl.gz files; llamat's by
+    scripts/data/build_llamat_split.py from the crystal-text-llm test set.
     """
+    path = path or split_path(model)
     if not Path(path).exists():
         raise FileNotFoundError(
-            f"{path} not found -- run: python scripts/data/build_split_index.py")
+            f"{path} not found -- run the matching builder in scripts/data/")
     return pd.read_parquet(path)
 
 
-def partition_id_sets(partition: str):
+def partition_id_sets(partition: str, model: str = DEFAULT_MODEL):
     """(keep, drop) id sets for a partition. Exactly one is not None; "all" gives both None.
 
     train/val/test are defined by MEMBERSHIP, so they yield a `keep` set. not_heldout is
@@ -335,13 +375,14 @@ def partition_id_sets(partition: str):
         raise ValueError(f"partition must be one of {PARTITIONS}, got {partition!r}")
     if partition == "all":
         return None, None
-    sp = load_split_index()
+    sp = load_split_index(model=model)
     if partition == "not_heldout":
         return None, set(sp.query("split in ['val', 'test']")["id"])
     return set(sp.query("split == @partition")["id"]), None
 
 
-def filter_partition(df: pd.DataFrame, partition: str, verbose: bool = True) -> pd.DataFrame:
+def filter_partition(df: pd.DataFrame, partition: str, verbose: bool = True,
+                     model: str = DEFAULT_MODEL) -> pd.DataFrame:
     """Restrict a frame with an `id` column to one CrystaLLM split.
 
     partition="all" is a no-op. Ids missing from the split index are treated as
@@ -361,7 +402,7 @@ def filter_partition(df: pd.DataFrame, partition: str, verbose: bool = True) -> 
     if partition == "all":
         return df
     if partition == "not_heldout":
-        sp = load_split_index()
+        sp = load_split_index(model=model)
         drop = set(sp.query("split in ['val', 'test']")["id"])
         out = df[~df["id"].isin(drop)].reset_index(drop=True)
         if verbose:
@@ -370,7 +411,7 @@ def filter_partition(df: pd.DataFrame, partition: str, verbose: bool = True) -> 
         if out.empty:
             raise SystemExit("No rows left after filtering to partition='not_heldout'.")
         return out
-    keep = set(load_split_index().query("split == @partition")["id"])
+    keep = set(load_split_index(model=model).query("split == @partition")["id"])
     out = df[df["id"].isin(keep)].reset_index(drop=True)
     if verbose:
         print(f"  partition={partition}: {len(out):,} of {len(df):,} rows kept")

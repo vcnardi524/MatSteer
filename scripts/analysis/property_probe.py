@@ -54,15 +54,15 @@ from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import (analysis_dir, load_split_index, DATASETS, VARIANTS,
+from utils import (analysis_dir, filter_partition, DATASETS, VARIANTS,
+                   DATASET_PKL, PARTITIONS,
                    DEFAULT_MODEL, MODELS)
-from manifold import embedding_files
+from manifold import embedding_files  # noqa: F401
 
 import pyarrow.parquet as pq
 
 DATA_RE = re.compile(r"^data_(\S+)", re.MULTILINE)
 ELEMENT_RE = re.compile(r"([A-Z][a-z]?)(\d*)")
-PKL_PATH = "CrystaLLM/cifs_v1_prep.pkl.gz"
 SEED = 42
 
 
@@ -131,6 +131,14 @@ def main():
     ap.add_argument("--variant", default="full", choices=list(VARIANTS))
     ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
                     help="which model's hidden states to read (see utils.MODELS)")
+    ap.add_argument("--fit-pool", default="train", choices=list(PARTITIONS),
+                    help="Split to FIT the probe on. crystallm uses train. llamat2_cif "
+                         "has no train rows -- its split lists only what we know was "
+                         "held out -- so use not_heldout, which is everything else.")
+    ap.add_argument("--eval-pool", default="val", choices=list(PARTITIONS),
+                    help="Split to SCORE on. crystallm uses val; llamat2_cif uses test, "
+                         "the 8,670 embedded structures from the crystal-text-llm test "
+                         "set, the only rows we know it did not train on.")
     ap.add_argument("--train-sample", type=int, default=200_000)
     ap.add_argument("--eval-sample", type=int, default=50_000)
     ap.add_argument("--alpha", type=float, default=1.0, help="Ridge regularisation")
@@ -158,8 +166,9 @@ def main():
         lab = lab[lab[args.property] > 0]
     print(f"  {len(lab):,} labelled structures")
 
-    print(f"Loading formulas from {PKL_PATH} ...")
-    with gzip.open(PKL_PATH, "rb") as f:
+    pkl = DATASET_PKL[args.dataset]
+    print(f"Loading formulas from {pkl} ...")
+    with gzip.open(pkl, "rb") as f:
         cifs = pickle.load(f)
     ids, forms = [], []
     for cid, cif in cifs:
@@ -170,12 +179,41 @@ def main():
     lab = lab.merge(pd.DataFrame({"id": ids, "formula": forms}), on="id", how="inner")
     print(f"  {len(lab):,} with a data_ header formula")
 
-    split = load_split_index().set_index("id")["split"]
-    lab["pool"] = lab["id"].map(split)
-    lab = lab[lab["pool"].isin(["train", "val"])].reset_index(drop=True)
+    # Keep only structures that actually HAVE an embedding. For crystallm every labelled
+    # id does, but llamat2_cif skipped 8.6% of v1_mp -- structures whose crystal string
+    # exceeds its 2,048-token context, plus a few whose parsed composition disagreed with
+    # the CIF. Without this the layer loop finds missing rows and drops the whole layer.
+    have = set(pd.read_parquet(embedding_files(args.layers[0], args.dataset, args.variant,
+                                               args.model)[0], columns=["id"])["id"])
+    n_before = len(lab)
+    lab = lab[lab["id"].isin(have)].reset_index(drop=True)
+    if len(lab) < n_before:
+        print(f"  {n_before - len(lab):,} labelled structures have no embedding "
+              f"(not extracted) -- dropped, {len(lab):,} remain")
+
+    # The split is the MODEL's, not the corpus's: CrystaLLM's val says nothing about
+    # what llamat2_cif held out. A pool named in PARTITIONS but absent from the file
+    # (llamat has no train/val rows) is resolved by filter_partition, which understands
+    # not_heldout as an exclusion rather than a membership set.
+    if args.fit_pool == args.eval_pool:
+        raise SystemExit(f"--fit-pool and --eval-pool are both {args.fit_pool!r}; "
+                         f"the probe would be scored on its own training rows")
+    fit_ids = set(filter_partition(lab[["id"]], args.fit_pool, verbose=False,
+                                   model=args.model)["id"])
+    ev_ids = set(filter_partition(lab[["id"]], args.eval_pool, verbose=False,
+                                  model=args.model)["id"])
+    overlap = fit_ids & ev_ids
+    if overlap:
+        raise SystemExit(f"{len(overlap):,} ids are in both --fit-pool {args.fit_pool} "
+                         f"and --eval-pool {args.eval_pool}")
+    lab["pool"] = np.where(lab["id"].isin(fit_ids), "fit",
+                           np.where(lab["id"].isin(ev_ids), "eval", None))
+    lab = lab[lab["pool"].isin(["fit", "eval"])].reset_index(drop=True)
+    print(f"  pools: fit={args.fit_pool} ({len(fit_ids):,} labelled), "
+          f"eval={args.eval_pool} ({len(ev_ids):,} labelled)")
     rng = np.random.default_rng(SEED)
-    tr = np.flatnonzero(lab["pool"].to_numpy() == "train")
-    ev = np.flatnonzero(lab["pool"].to_numpy() == "val")
+    tr = np.flatnonzero(lab["pool"].to_numpy() == "fit")
+    ev = np.flatnonzero(lab["pool"].to_numpy() == "eval")
     if len(tr) > args.train_sample:
         tr = rng.choice(tr, args.train_sample, replace=False)
     if args.eval_sample and len(ev) > args.eval_sample:
@@ -237,7 +275,10 @@ def main():
 
     if not rows:
         raise SystemExit("No rows produced.")
-    out = analysis_dir(args.dataset, args.variant, "val", model=args.model) / \
+    # partition dir is the pool actually SCORED on, not a hardcoded "val" -- a
+    # llamat run evaluates on test and must not be filed under val/
+    out = analysis_dir(args.dataset, args.variant, args.eval_pool,
+                       model=args.model) / \
         f"property_probe_{args.property.replace('.', '_')}.csv"
     pd.DataFrame(rows).to_csv(out, index=False, float_format="%.6g")
     print(f"\nSaved {len(rows)} rows to {out}")
