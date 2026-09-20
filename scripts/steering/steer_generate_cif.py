@@ -204,6 +204,9 @@ class CifPrefixPrompts:
         # is keyed on (CLAUDE.md). Unchanged from before the refactor -- crystallm stems
         # are join keys across four stores, so they must not move.
         self.tag = "" if with_spacegroup else "_nosg"
+        # Unchanged from before: inferred from the pkl filename (cifs_v1_test -> test).
+        stem = Path(pkl).stem
+        self.split = next((s for s in ("train", "test", "val") if s in stem), stem)
         pattern = PATTERN_COMP_SG if with_spacegroup else PATTERN_COMP
         self._prompts = []
         for id_, cif in load_cifs(pkl):
@@ -236,6 +239,7 @@ class UnconditionalPrompts:
     """
 
     tag = ""                 # no sg/nosg choice exists: the prompt names no space group
+    split = "uncond"         # not a split at all -- these draws come from no corpus
 
     def __init__(self, n_prompts, system_index=0, wrapper="notebook"):
         if not n_prompts:
@@ -281,6 +285,8 @@ class ConditionalPrompts:
     tag = "_sg"              # composition + space group; there is no nosg counterpart
 
     def __init__(self, csv_path, n_prompts, system_index=0, wrapper="notebook"):
+        stem = Path(csv_path).stem
+        self.split = next((s for s in ("train", "test", "val") if s in stem), stem)
         df = pd.read_csv(csv_path)
         if n_prompts:
             df = df.iloc[:n_prompts]
@@ -346,8 +352,10 @@ def build_linear(args, device):
         alpha = args.alpha_rel * raw_norm
         print(f"  --alpha-rel {args.alpha_rel:g} x raw_norm {raw_norm:.2f} "
               f"-> alpha {alpha:.3f}")
-    print(f"Method=linear  alpha={alpha:g}  layer={args.layer}")
-    return linear_hook(steer_vec, alpha, device), f"alpha{alpha:g}"
+    print(f"Method=linear  alpha={alpha}  layer={args.layer}")
+    # NOT :g -- that renders 8.0 as "8" and the stem is a join key across four stores
+    # (CLAUDE.md: "Renaming one breaks the joins"). Existing runs are alpha8.0.
+    return linear_hook(steer_vec, alpha, device), f"alpha{alpha}"
 
 
 def build_pca_centroid(args, device):
@@ -553,12 +561,7 @@ def main():
     prompts = source.prompts()
     print(f"{len(prompts):,} prompts from {type(source).__name__}")
 
-    if args.pkl:
-        # infer split name from pkl filename (train/test/val)
-        pkl_stem = Path(args.pkl).stem  # e.g. cifs_v1_test
-        split = next((s for s in ("train", "test", "val") if s in pkl_stem), pkl_stem)
-    else:
-        split = "uncond"
+    split = source.split
 
     # The property is encoded by the output directory (per-property <results-dir>), so
     # the filename carries method/split/strength/layer. The method prefix keeps the two
