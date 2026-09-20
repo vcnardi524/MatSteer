@@ -4,6 +4,34 @@ Active experiments. See `README.md` for everything completed so far and the
 overall pipeline.
 ## consider probing at the layers to see if they are actually encoding information
 
+## llamat2-cif steered generation (2026-09-19)
+
+The generation path now works for both models. `scripts/backends.py` holds one backend
+per model, shared by extraction and steered generation because both hook the same
+`blocks` attribute. `steer_generate_cif.py` gained a PromptSource axis -- CifPrefixPrompts
+for crystallm, UnconditionalPrompts for llamat -- and both steering scripts gained the
+`--model` flag they had been using without defining.
+
+Verified: extraction is bitwise identical to the pre-refactor code at matching flags, and
+crystallm generation is byte-identical cached and uncached, same three output columns.
+
+**Three decode findings, all measured:**
+- Writing with `symprec=0.1` is what makes the CIFs valid at all. llamat never emits a
+  space group, so a naive decode states `P 1` while 87% of structures have real symmetry
+  and every one fails `is_space_group_consistent`: 0/40. pymatgen deriving it: 27/40.
+- pymatgen's parenthesised data-block names (`data_LiFe(PO3)4`) made
+  `is_formula_consistent` RAISE on 25% of compositions, which `eval_one` swallowed as an
+  error and scored invalid. Renaming the block to the alphanumeric form: 73.3% -> 98.3%.
+- `CifWriter(symprec=…)` refines to the conventional cell, so ~3.5% come back with twice
+  the atoms in twice the volume. Harmless -- same crystal, intensive properties
+  unchanged -- and `refine_struct=False` is worse, not better.
+
+**Open, and it decides how the sweep is analysed:** unconditional generation has no
+per-structure id, so the paired t-test every crystallm result rests on does not apply.
+`--paired-seed` (common random numbers per draw index) is implemented and off by default.
+Decide between that and an unpaired comparison before running a full sweep.
+
+
 ## Experiment settings live in `experiments/*.conf`, run via `./run.sh` (2026-08-28)
 `./run.sh <name> [--local|--dry-run] [overrides]`. See CLAUDE.md for the contract.
 
