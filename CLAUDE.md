@@ -161,11 +161,23 @@ test it can fail. llamat2-cif never writes a space group, so the decoder derives
 `SpacegroupAnalyzer` and writes it, which makes the check LOOK tautological. It is not,
 and the difference matters when comparing the two models' numbers.
 
-It is near-tautological on round-tripped REAL structures: 120/120 pass. On GENERATED ones
-it can fail, because the crystal-string format rounds cell lengths to 1 decimal. `6.2 6.2
-6.2` is a cubic metric by rounding whether or not the material is cubic, and the symbol
-written from the P1 coordinates then need not survive refinement and re-expansion --
-`Fmmm` written, `I4/mmm` detected, on the raw decoded CIF before any operator restoration.
+It is near-tautological on round-tripped REAL structures: 120/120 pass. It can still fail,
+and the reason is a TOLERANCE artifact of changing the cell setting, not anything the
+model did wrong.
+
+`CifWriter(symprec=…)` captures the space-group symbol from the structure it is handed
+(`pymatgen/io/cif.py:1570`) and only then replaces that structure with
+`get_refined_structure()` (:1578) -- the conventional setting. So the symbol describes the
+cell that went in, and the coordinates written are the cell that came out. When the check
+re-parses the file it re-detects on the latter, and the two can disagree.
+
+Worked example, `MP_mp-1006246`: generated cell 6.2/6.2/6.2 with angles 131/131/70,
+exactly `Fmmm` even at symprec 1e-5. The conventional cell is 7.112/7.429/10.157 -- still
+exactly `Fmmm` at 1e-5, but a and b now differ by only 0.316 A, which at symprec 0.1 reads
+as tetragonal, so spglib returns `I4/mmm`. Stated `Fmmm`, detected `I4/mmm`, is_valid
+False. The atoms never needed to move; the primitive cell simply had no near-degeneracy
+for the tolerance to swallow and the conventional one does.
+
 Measured on 4 generated structures, 3/4 passed; n is far too small to put a rate on, so
 read the real number off the first full arm rather than assuming ~100%.
 
