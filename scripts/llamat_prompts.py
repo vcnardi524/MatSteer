@@ -194,7 +194,7 @@ def clean_first_line(line):
     return numeric_parts if len(numeric_parts) >= 3 else []
 
 
-def parse_fn(gen_str):
+def parse_fn(gen_str, defaulted=None):
     """(lengths, angles, species, coords) from a generated crystal string. Theirs, verbatim.
 
     Two behaviours the caller must handle rather than trust:
@@ -202,6 +202,12 @@ def parse_fn(gen_str):
       * a malformed coordinate line becomes [0.0, 0.0, 0.0], silently placing an atom at
         the origin. A structure that parses but is wrong is worse than one that fails, so
         crystal_string_to_cif counts these and reports them.
+
+    `defaulted` is the ONLY addition to their code: pass a list and the index of every
+    site that got the [0,0,0] fallback is appended to it. It has to be collected here,
+    during the parse, because afterwards a substituted origin is indistinguishable from
+    an atom that genuinely sits at the origin -- and most real structures have one.
+    Leaving it None reproduces their function exactly.
     """
     gen_str = gen_str.strip().strip('"')
     lines = [x.strip() for x in gen_str.split("\n") if len(x.strip()) > 0]
@@ -225,12 +231,20 @@ def parse_fn(gen_str):
             if i + 1 < len(lines):
                 parts = lines[i + 1].strip().split()
                 try:
-                    coords.append([float(x) for x in parts[:3]] if len(parts) >= 3
-                                  else [0.0, 0.0, 0.0])
+                    if len(parts) >= 3:
+                        coords.append([float(x) for x in parts[:3]])
+                    else:
+                        coords.append([0.0, 0.0, 0.0])
+                        if defaulted is not None:
+                            defaulted.append(len(coords) - 1)
                 except ValueError:
                     coords.append([0.0, 0.0, 0.0])
+                    if defaulted is not None:
+                        defaulted.append(len(coords) - 1)
             else:
                 coords.append([0.0, 0.0, 0.0])
+                if defaulted is not None:
+                    defaulted.append(len(coords) - 1)
         return lengths, angles, species, coords
     except (ValueError, IndexError):
         return [], [], [], []
@@ -269,7 +283,8 @@ def crystal_string_to_cif(text, symprec=DEFAULT_SYMPREC):
     from pymatgen.core.lattice import Lattice
     from pymatgen.core.structure import Structure
 
-    lengths, angles, species, coords = parse_fn(text or "")
+    defaulted = []
+    lengths, angles, species, coords = parse_fn(text or "", defaulted)
     if len(lengths) != 3:
         return None, "no line with three positive numbers (lattice) found"
     if len(angles) != 3:
@@ -280,7 +295,7 @@ def crystal_string_to_cif(text, symprec=DEFAULT_SYMPREC):
         return None, f"{len(species)} elements against {len(coords)} coordinate lines"
     # Their parser substitutes [0,0,0] for an unparseable coordinate line, which reads as
     # a real atom at the origin. Report it; the caller decides whether to keep the row.
-    n_origin = sum(1 for c in coords if c == [0.0, 0.0, 0.0])
+    n_origin = len(defaulted)
     try:
         struct = Structure(Lattice.from_parameters(*lengths, *angles), species, coords,
                            coords_are_cartesian=False)

@@ -34,6 +34,7 @@ Usage:
         --target 30 --t 0.5 --k 64 --layer 14 --n-samples 3 --with-spacegroup
 """
 import argparse
+import zlib
 import os
 import sys
 from pathlib import Path
@@ -45,13 +46,14 @@ import torch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM", "bin"))
 
-from crystallm import CIFTokenizer
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import steering_vectors_dir
+from utils import steering_vectors_dir, MODELS, DEFAULT_MODEL
+from backends import BACKENDS
+import llamat_prompts
 _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "embeddings"))   # -> extract_cif_embeddings.py
 from make_prompts import PATTERN_COMP, PATTERN_COMP_SG, extract_prompt
-from extract_cif_embeddings import load_model, load_cifs
+from extract_cif_embeddings import load_cifs
 # sys.path[0] is this script's own dir, so its neighbour imports directly.
 from compute_centroid_target import load_pca
 from manifold import Manifold
@@ -90,24 +92,6 @@ def pca_centroid_hook(mean, components, centroid_pca, t, device):
         return rewrap(out, h + (t * (c - z) @ W).to(h.dtype))
 
     return hook
-
-
-def prompt_embedding(model, tokenizer, device, prompt_str, layer):
-    """Mean-pooled layer-L hidden state of the prompt, matching how the training
-    embeddings were built -- except those pooled a whole CIF and this pools a header,
-    which is the only view available before generation starts."""
-    captured = {}
-
-    def grab(module, inp, out):
-        captured["h"] = (out[0] if isinstance(out, tuple) else out).detach()
-
-    handle = model.transformer.h[layer].register_forward_hook(grab)
-    tokens = tokenizer.encode(tokenizer.tokenize_cif(prompt_str))
-    x = torch.tensor(tokens, dtype=torch.long, device=device).unsqueeze(0)
-    with torch.no_grad():
-        model(x)
-    handle.remove()
-    return captured["h"][0].float().mean(0)          # (1024,)
 
 
 def local_centroid(z_prompt, bank, n_neighbours):
@@ -164,23 +148,95 @@ def manifold_hook(mean, components, manifold, delta, device, scale=1.0,
     return hook
 
 
-def generate(model, tokenizer, device, prompt_str, max_new_tokens, temperature, top_k,
-             hook=None, layer=None, use_cache=False):
-    handle = model.transformer.h[layer].register_forward_hook(hook) if hook else None
+def generate(backend, prompt_str, args, hook=None):
+    """One sample, with the steering hook attached to the layer for its lifetime only."""
+    handle = backend.blocks[args.layer].register_forward_hook(hook) if hook else None
+    try:
+        return backend.generate(prompt_str, args.max_new_tokens,
+                                temperature=args.temperature, top_k=args.top_k,
+                                top_p=args.top_p, use_cache=args.use_cache)
+    finally:
+        if handle:
+            handle.remove()
 
-    tokens = tokenizer.encode(tokenizer.tokenize_cif(prompt_str))
-    x = torch.tensor(tokens, dtype=torch.long, device=device).unsqueeze(0)
 
-    with torch.no_grad():
-        if use_cache:
-            y = model.generate_cached(x, max_new_tokens, temperature=temperature, top_k=top_k)
-        else:
-            y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
+# ---------------------------------------------------------------------------------
+# Prompt sources -- what the model is asked, and how its output becomes a CIF
+# ---------------------------------------------------------------------------------
+#
+# A separate axis from the backend, for the same reason the text builders are separate
+# in extract_cif_embeddings.py: the weights decide HOW to run the model, the prompt
+# source decides WHAT it is asked and what its answer means. Each one supplies
+#
+#   prompts() -> [(id, text)]
+#   to_cif(raw) -> (cif or "", reason)
+#
+# `raw` is always kept alongside the CIF, so a decode failure can be diagnosed from the
+# stored generation instead of being re-run.
 
-    if handle:
-        handle.remove()
 
-    return tokenizer.decode(y[0].tolist())
+class CifPrefixPrompts:
+    """CrystaLLM: the head of a real CIF, which the model continues.
+
+    Every arm draws from the SAME 1,000 test structures, which is what makes the paired
+    t-test valid -- each arm and the alpha=0 control pair on `id`. See CLAUDE.md.
+    """
+
+    def __init__(self, pkl, with_spacegroup, n_prompts):
+        pattern = PATTERN_COMP_SG if with_spacegroup else PATTERN_COMP
+        self._prompts = []
+        for id_, cif in load_cifs(pkl):
+            try:
+                self._prompts.append((id_, extract_prompt(cif, pattern)))
+            except Exception:
+                pass
+            if n_prompts and len(self._prompts) >= n_prompts:
+                break
+
+    def prompts(self):
+        return self._prompts
+
+    decodes = False          # output already is a CIF; nothing to keep beside it
+
+    def to_cif(self, raw):
+        """Identity. CrystaLLM emits a CIF directly -- pymatgen never runs on this path,
+        so every existing crystallm result is reproduced unchanged."""
+        return raw, ""
+
+
+class UnconditionalPrompts:
+    """llamat2-cif: one constant instruction, and each sample is an independent draw.
+
+    THIS BREAKS THE PAIRED t-TEST. There is no per-structure id to pair an arm against
+    its control on, because there is no per-structure prompt -- the ids below are draw
+    indices, not materials. Use --paired-seed so draw k of every arm starts from the
+    same random state (common random numbers), which recovers most of the variance
+    reduction; without it the arms must be compared as unpaired distributions.
+    """
+
+    def __init__(self, n_prompts, system_index=0, wrapper="notebook"):
+        if not n_prompts:
+            raise SystemExit("--n-prompts is required for unconditional generation "
+                             "(there is no corpus to size it from)")
+        self.text = llamat_prompts.unconditional_prompt(system_index, wrapper)
+        self.n = n_prompts
+
+    def prompts(self):
+        return [(f"draw{i:05d}", self.text) for i in range(self.n)]
+
+    decodes = True           # always keep the raw crystal string beside the CIF
+
+    def to_cif(self, raw):
+        """Decode the crystal string. pymatgen derives the space group here, at
+        generation time, so the CIF is self-consistent before validation ever reads it."""
+        cif, reason = llamat_prompts.crystal_string_to_cif(raw)
+        return (cif or ""), reason
+
+
+def build_prompts(args):
+    if args.model == "crystallm":
+        return CifPrefixPrompts(args.pkl, args.with_spacegroup, args.n_prompts)
+    return UnconditionalPrompts(args.n_prompts, args.system_index, args.wrapper)
 
 
 def build_linear(args, device):
@@ -277,7 +333,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt-dir", required=True,
                  help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
-    parser.add_argument("--pkl", required=True)
+    parser.add_argument("--model", choices=MODELS, default=DEFAULT_MODEL,
+                        help="Registered model NAME. Picks the backend, and the "
+                             "steering_vectors/<model>/ tree to read vectors from. "
+                             "Distinct from --ckpt-dir, which is where the weights are.")
+    parser.add_argument("--torch-dtype", choices=("float16", "bfloat16", "float32"),
+                        default="float16",
+                        help="[llamat] weight dtype. bfloat16 needs sm_80; the V100s "
+                             "here are sm_70, so float16. Ignored by crystallm.")
+    parser.add_argument("--pkl", default=None,
+                        help="[crystallm] corpus the CIF-prefix prompts are cut from. "
+                             "Unused for unconditional generation, which has no corpus.")
     parser.add_argument("--method",
                         choices=("linear", "pca_centroid", "pca_local", "manifold"),
                         default="linear",
@@ -326,6 +392,23 @@ def main():
     parser.add_argument("--max-new-tokens", type=int, default=3000)
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--top-p", type=float, default=None,
+                        help="[llamat] nucleus sampling. The authors used "
+                             "temperature=0.01, top_p=0.95 in the notebooks that "
+                             "produced their published CIFs. Ignored by crystallm, "
+                             "which samples with top_k only.")
+    parser.add_argument("--system-index", type=int, default=0,
+                        help="[llamat] which generation system prompt to use")
+    parser.add_argument("--wrapper", choices=("notebook", "chatml"), default="notebook",
+                        help="[llamat] prompt wrapper; notebook matches extraction")
+    parser.add_argument("--paired-seed", action=argparse.BooleanOptionalAction,
+                        default=False,
+                        help="Seed the RNG per (id, sample) so draw k of every arm "
+                             "starts from the same random state. Common random numbers: "
+                             "it restores a defensible paired comparison when the prompt "
+                             "is constant. OFF by default -- turning it on changes the "
+                             "sampling stream, so existing crystallm results would not "
+                             "reproduce byte-for-byte.")
     parser.add_argument("--with-spacegroup", action="store_true",
                         help="Include space group in prompt (recommended)")
     parser.add_argument("--results-dir", default="steering_results",
@@ -345,8 +428,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    model, config = load_model(args.ckpt_dir, device)
-    tokenizer = CIFTokenizer()
+    backend = BACKENDS[args.model](args.ckpt_dir, device, args.torch_dtype)
 
     local = None
     if args.method == "linear":
@@ -359,25 +441,18 @@ def main():
         local = build_pca_local(args, device)
         hook = None                      # rebuilt per prompt, once its centroid is known
         run_tag = f"target{args.target:g}_t{args.t}_k{args.k}_nb{args.neighbours}"
-    print(f"KV cache={'on' if args.use_cache else 'off'}  dropout={config.dropout}")
+    print(f"Model={args.model}  KV cache={'on' if args.use_cache else 'off'}")
 
-    data = load_cifs(args.pkl)
+    source = build_prompts(args)
+    prompts = source.prompts()
+    print(f"{len(prompts):,} prompts from {type(source).__name__}")
 
-    pattern = PATTERN_COMP_SG if args.with_spacegroup else PATTERN_COMP
-    prompts = []
-    for id_, cif in data:
-        try:
-            p = extract_prompt(cif, pattern)
-            prompts.append((id_, p))
-        except Exception:
-            pass
-        if args.n_prompts and len(prompts) >= args.n_prompts:
-            break
-    print(f"Extracted {len(prompts)} prompts")
-
-    # infer split name from pkl filename (train/test/val)
-    pkl_stem = Path(args.pkl).stem  # e.g. cifs_v1_test
-    split = next((s for s in ("train", "test", "val") if s in pkl_stem), pkl_stem)
+    if args.pkl:
+        # infer split name from pkl filename (train/test/val)
+        pkl_stem = Path(args.pkl).stem  # e.g. cifs_v1_test
+        split = next((s for s in ("train", "test", "val") if s in pkl_stem), pkl_stem)
+    else:
+        split = "uncond"
 
     # The property is encoded by the output directory (per-property <results-dir>), so
     # the filename carries method/split/strength/layer. The method prefix keeps the two
@@ -406,8 +481,7 @@ def main():
         if local is not None:
             # This prompt's own neighbourhood of the class, not the class average.
             mean_t, comps_t, bank = local
-            z = (prompt_embedding(model, tokenizer, device, prompt, args.layer)
-                 - mean_t) @ comps_t.T
+            z = (backend.hidden_mean(prompt, args.layer) - mean_t) @ comps_t.T
             c_local, dist = local_centroid(z, bank, args.neighbours)
             hook = pca_centroid_hook(mean_t.cpu().numpy(), comps_t.cpu().numpy(),
                                      c_local.cpu().numpy(), args.t, device)
@@ -415,14 +489,25 @@ def main():
                 print(f"    local centroid {dist:.2f} from prompt in subspace", flush=True)
 
         for j in range(args.n_samples):
-            steered = generate(model, tokenizer, device, prompt,
-                               args.max_new_tokens, args.temperature, args.top_k,
-                               hook=hook, layer=args.layer, use_cache=args.use_cache)
-            pending.append({
+            if args.paired_seed:
+                # Common random numbers: the same (id, sample) draws the same random
+                # stream in every arm, so arms differ by the hook and nothing else.
+                torch.manual_seed(zlib.crc32(f"{id_}|{j}".encode()))
+            raw = generate(backend, prompt, args, hook=hook)
+            cif, reason = source.to_cif(raw)
+            row = {
                 "id":          id_,
                 "sample":      j + 1,
-                "cif_steered": steered,
-            })
+                "cif_steered": cif,
+            }
+            if source.decodes:
+                # Keyed on whether a decode step exists, NOT on whether the text changed:
+                # a generation that decoded to nothing has raw == cif == "" and would
+                # otherwise lose its reason. crystallm, where to_cif is the identity,
+                # never sets these and keeps exactly the schema and size it had.
+                row["raw_output"] = raw
+                row["decode_reason"] = reason
+            pending.append(row)
 
         if len(pending) >= CHECKPOINT_EVERY * args.n_samples:
             chunk = pd.DataFrame(pending)

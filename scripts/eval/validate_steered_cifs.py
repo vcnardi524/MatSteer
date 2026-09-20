@@ -67,6 +67,14 @@ def eval_one(args):
         "error": None,
     }
     try:
+        # An empty CIF means generation or decoding produced nothing usable. It must
+        # short-circuit: crystallm's is_sensible only range-checks the cell lengths and
+        # angles it FINDS, so a string with none passes vacuously -- is_sensible("") is
+        # True. Without this every failed llamat decode would be counted as sensible.
+        if not cif or not cif.strip():
+            result["error"] = "empty CIF (generation or decoding produced nothing)"
+            return result
+
         tokenizer = CIFTokenizer()
         result["gen_len"] = len(tokenizer.tokenize_cif(cif))
 
@@ -128,6 +136,10 @@ def main():
     out_df["atom_site_consistent"]   = results_df["atom_site_consistent"].values
     out_df["gen_len"]                = results_df["gen_len"].values
     out_df["error"]                  = results_df["error"].values
+    # Carried through from generation, so decode failures are countable here without
+    # re-reading the generations. Absent for models whose output already is a CIF.
+    if "decode_reason" in df.columns:
+        out_df["decode_reason"] = df["decode_reason"].values
 
     out_df.to_parquet(out_path, index=False)
     print(f"\nSaved to {out_path}")
@@ -136,6 +148,11 @@ def main():
     n_sensible = out_df["is_sensible"].sum()
     n_valid    = out_df["is_valid"].sum()
     n_errors   = out_df["error"].notna().sum()
+    if "decode_reason" in out_df.columns:
+        failed = out_df["decode_reason"].fillna("").str.len().gt(0)
+        print(f"decode: {len(out_df) - failed.sum():,}/{len(out_df):,} produced a CIF")
+        for reason, k in out_df.loc[failed, "decode_reason"].value_counts().head(5).items():
+            print(f"    {k:>6,}  {reason}")
 
     sg  = out_df["space_group_consistent"].sum()
     ams = out_df["atom_site_consistent"].sum()

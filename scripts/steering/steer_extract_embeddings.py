@@ -87,7 +87,7 @@ import validate_steered_cifs as _val
 CHECKPOINT_EVERY = 50          # prompts between validation+write passes
 
 
-def capture_hooks(model, layers, buffer):
+def capture_hooks(backend, layers, buffer):
     """Read-only hooks appending each forward's hidden states. Returns the handles.
 
     Must be registered AFTER any steering hook on a shared layer -- see module docstring.
@@ -100,7 +100,7 @@ def capture_hooks(model, layers, buffer):
                 buffer[layer_idx].append(h.detach()[0].float().cpu())
                 return None                        # read-only: never modify the output
             return fn
-        handles.append(model.transformer.h[l].register_forward_hook(make(l)))
+        handles.append(backend.blocks[l].register_forward_hook(make(l)))
     return handles
 
 
@@ -118,6 +118,9 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ckpt-dir", required=True,
                  help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
+    p.add_argument("--model", choices=_sg.MODELS, default=_sg.DEFAULT_MODEL,
+                   help="Registered model NAME. Picks the backend and the "
+                        "steering_vectors/<model>/ tree. Distinct from --ckpt-dir.")
     p.add_argument("--pkl", required=True)
     p.add_argument("--method", choices=("linear", "manifold"), default="manifold")
     p.add_argument("--manifold", default=None)
@@ -149,8 +152,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    model, config = _sg.load_model(args.ckpt_dir, device)
-    tokenizer = _sg.CIFTokenizer()
+    backend = _sg.BACKENDS[args.model](args.ckpt_dir, device)
+    config = backend.config
     layers = [int(x) for x in args.capture_layers.split(",")]
     assert all(0 <= l < config.n_layer for l in layers), f"layers outside 0..{config.n_layer-1}"
 
@@ -184,23 +187,23 @@ def main():
     print(f"Extracted {len(prompts)} prompts")
 
     # ---- registration order is the whole correctness argument: steering first ----
-    steer_handle = model.transformer.h[args.layer].register_forward_hook(hook)
+    steer_handle = backend.blocks[args.layer].register_forward_hook(hook)
     buffer = {l: [] for l in layers}
-    cap_handles = capture_hooks(model, layers, buffer)
+    cap_handles = capture_hooks(backend, layers, buffer)
 
     if args.check_hook_order:
         id_, prompt = prompts[0]
-        x = torch.tensor(tokenizer.encode(tokenizer.tokenize_cif(prompt)),
+        x = torch.tensor(backend.encode(prompt),
                          dtype=torch.long, device=device).unsqueeze(0)
         with torch.no_grad():
-            model(x)
+            backend.model(x)
         steered = torch.cat(buffer[args.layer], 0).clone()
         for h in cap_handles + [steer_handle]:
             h.remove()
         buffer = {l: [] for l in layers}
-        cap_handles = capture_hooks(model, layers, buffer)     # no steering hook now
+        cap_handles = capture_hooks(backend, layers, buffer)     # no steering hook now
         with torch.no_grad():
-            model(x)
+            backend.model(x)
         clean = torch.cat(buffer[args.layer], 0)
         gap = (steered - clean).norm(dim=-1).mean().item()
         rel = gap / clean.norm(dim=-1).mean().item()
@@ -247,21 +250,18 @@ def main():
         if all((id_, j + 1) in done for j in range(args.n_samples)):
             continue
         print(f"[{i+1}/{len(prompts)}] {id_}", flush=True)
-        x = torch.tensor(tokenizer.encode(tokenizer.tokenize_cif(prompt)),
-                         dtype=torch.long, device=device).unsqueeze(0)
         for j in range(args.n_samples):
             if (id_, j + 1) in done:
                 continue
             for l in layers:
                 buffer[l].clear()
-            with torch.no_grad():
-                y = model.generate_cached(x, args.max_new_tokens,
-                                          temperature=args.temperature, top_k=args.top_k)
+            y, _ = backend.generate_ids(prompt, args.max_new_tokens,
+                                        temperature=args.temperature, top_k=args.top_k)
             emb, n_tok = pooled(buffer, layers)
             if i == 0 and j == 0:
                 print(f"  captured {n_tok} token states vs {y.shape[1]} generated tokens")
             pending_rows.append({"id": id_, "sample": j + 1, "emb": emb})
-            pending_cifs.append(tokenizer.decode(y[0].tolist()))
+            pending_cifs.append(backend.decode(y[0].tolist()))
         if len(pending_rows) >= CHECKPOINT_EVERY * args.n_samples:
             flush()
 

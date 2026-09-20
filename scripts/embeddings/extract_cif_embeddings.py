@@ -153,174 +153,22 @@ def mean_pool(hidden: torch.Tensor, starts: torch.Tensor,
 
 
 # ---------------------------------------------------------------------------------
-# Backends -- the only architecture-specific code
+# Backends -- the only architecture-specific code, and it lives in scripts/backends.py
 # ---------------------------------------------------------------------------------
 #
-# Each backend exposes exactly what the extraction loop needs:
+# They moved there because steered generation hooks the SAME `blocks` attribute this
+# script does -- one to capture a hidden state, one to modify it -- and two copies of
+# `model.transformer.h` vs `model.model.layers` would drift. See scripts/backends.py.
 #
-#   n_layer, n_embd, block_size   ints
-#   blocks                        the per-layer nn.Modules to hook, in order
-#   encode(cif) -> list[int]      token ids for one CIF, already truncated
-#   forward(input_ids)            one no-grad forward; hooks do the capturing
+# Re-exported here, not just imported, because seven scripts do
+# `from extract_cif_embeddings import load_model, load_cifs`.
 #
 # The heavy imports live INSIDE the loaders on purpose. crystallm pulls in omegaconf and
 # a pinned pymatgen; transformers pulls in its own stack; and the two will not be
 # installed in the same venv. A top-level import of either would make this file
-# unimportable for the other model -- and seven scripts import load_model from here.
+# unimportable for the other model.
 
-
-def load_model(model_dir: str, device: torch.device):
-    """Load CrystaLLM from a nanoGPT-style ckpt.pt. Returns (model, config).
-
-    Kept at this name and signature because steer_generate_cif.py, test_kv_cache.py,
-    layer_causal_probe.py, layernorm_survival.py, manifold_distance.py,
-    injection_magnitude.py and analyze_steering_norms.py all import it from here.
-    """
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM"))
-    from crystallm import GPTConfig, GPT
-
-    ckpt = torch.load(os.path.join(model_dir, "ckpt.pt"), map_location=device)
-    config = GPTConfig(**ckpt["model_args"])
-    # Disable dropout for inference. The checkpoint ships dropout=0.1, and the functional
-    # SDPA dropout_p (_model.py) is NOT gated by model.eval(), so leaving it on drops ~10%
-    # of attention weights on every forward -> nondeterministic generation. This loader is
-    # inference-only, so force dropout to 0 here (covers SDPA + all nn.Dropout modules).
-    config.dropout = 0.0
-    model = GPT(config)
-    state_dict = ckpt["model"]
-    # strip compile prefix if present
-    for k in list(state_dict.keys()):
-        if k.startswith("_orig_mod."):
-            state_dict[k[len("_orig_mod."):]] = state_dict.pop(k)
-    model.load_state_dict(state_dict)
-    model.to(device)
-    model.eval()
-    for p in model.parameters():
-        p.requires_grad = False
-    print(f"Loaded model: {config.n_layer} layers, {config.n_embd} dim, block_size {config.block_size}")
-    return model, config
-
-
-class CrystaLLMBackend:
-    """CrystaLLM v1: nanoGPT blocks at model.transformer.h, CIFTokenizer."""
-
-    def __init__(self, ckpt_dir: str, device: torch.device, torch_dtype: str = None):
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM"))
-        from crystallm import CIFTokenizer
-
-        self.model, config = load_model(ckpt_dir, device)
-        self.tokenizer = CIFTokenizer()
-        self.device = device
-        self.n_layer = config.n_layer
-        self.n_embd = config.n_embd
-        self.block_size = config.block_size
-        self.blocks = self.model.transformer.h
-        self.pad_id = 0
-
-    def encode_pair(self, prompt: str, answer: str):
-        """(ids, answer_start). CrystaLLM has no prompt form, so prompt must be empty."""
-        assert prompt == "", "the CrystaLLM tokenizer has no prompt/answer split"
-        return self.tokenizer.encode(self.tokenizer.tokenize_cif(answer))[:self.block_size], 0
-
-    def forward(self, input_ids):
-        self.model(input_ids)
-
-
-class LlamatBackend:
-    """LLaMat-2: HuggingFace LLaMA-2, blocks at model.model.layers, BPE tokenizer.
-
-    Loaded in half precision by default -- a 7B model is ~27 GB in float32 and ~13 GB in
-    float16, and only the latter leaves room for activations on a 32 GB card. bfloat16
-    needs sm_80 (Ampere); the V100s here are sm_70, so float16 is the default.
-    """
-
-    def __init__(self, ckpt_dir: str, device: torch.device, torch_dtype: str = "float16"):
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        self.tokenizer = AutoTokenizer.from_pretrained(ckpt_dir, use_fast=True)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            ckpt_dir, torch_dtype=getattr(torch, torch_dtype), low_cpu_mem_usage=True)
-        self.model.to(device)
-        self.model.eval()
-        for p in self.model.parameters():
-            p.requires_grad = False
-
-        config = self.model.config
-        self.device = device
-        self.n_layer = config.num_hidden_layers
-        self.n_embd = config.hidden_size
-        self.block_size = config.max_position_embeddings
-        self.blocks = self.model.model.layers
-        # Padding is pure bookkeeping: it is excluded from the pooled mean, and with right
-        # padding and causal attention no real token ever attends to it. The filler only
-        # has to be a valid embedding row, so 0 -- the same value the CrystaLLM backend
-        # uses -- is fine.
-        #
-        # Deliberately NOT tokenizer.pad_token_id. That is <PAD> = 32004, one of five
-        # tokens (<CLS> <SEP> <EOD> <MASK> <PAD>) that Megatron-LM's tokenizer adds by
-        # default (llamat/Megatron-LLM/megatron/tokenizer/tokenizer.py:362) and the
-        # Megatron -> HF conversion carried across. The embedding matrix was never
-        # resized to match: it has 32,000 rows against the tokenizer's 32,005, so none of
-        # those five can be embedded at all. They never appear in our text -- checked over
-        # 3,000 real prompt+crystal-string sequences, the highest id produced is 29,999 --
-        # so nothing here needs to defend against them; we simply do not use one.
-        self.pad_id = 0
-        self._prompt_text, self._prompt_ids = None, None   # constant prompt, tokenised once
-        print(f"Loaded model: {self.n_layer} layers, {self.n_embd} dim, "
-              f"block_size {self.block_size}, dtype {torch_dtype}")
-
-    def encode_pair(self, prompt: str, answer: str):
-        """(ids, answer_start) for prompt+answer, tokenised as ONE string.
-
-        The model must see the joined text, not two pieces glued together, so the whole
-        thing is tokenised at once and the boundary is then located by checking that the
-        result still starts with the prompt's own tokens. BPE can merge across a
-        boundary ("output-" then "4"), which would shift the split by a token and
-        silently pool one prompt position; the caller asserts the prefix matches.
-
-        The prompt is constant across the corpus, so its ids are cached on first use.
-        """
-        if self._prompt_ids is None or prompt != self._prompt_text:
-            self._prompt_text = prompt
-            self._prompt_ids = self.tokenizer(
-                prompt, add_special_tokens=True)["input_ids"] if prompt else \
-                self.tokenizer("", add_special_tokens=True)["input_ids"]
-        # Deliberately NOT truncated here. Truncating inside the tokenizer would silently
-        # drop atoms off the end of a crystal string and hand back an embedding of a
-        # smaller cell; the caller checks the length against block_size and applies
-        # --on-overflow instead.
-        ids = self.tokenizer(prompt + answer, add_special_tokens=True)["input_ids"]
-        start = len(self._prompt_ids)
-        if ids[:start] != self._prompt_ids:
-            # BPE merged across the boundary -- find the real split by re-encoding.
-            start = _boundary(ids, self._prompt_ids)
-        return ids, start
-
-    def forward(self, input_ids):
-        # No attention_mask: right-padding plus causal attention means real tokens never
-        # see the pads, and mean_pool drops them from the average.
-        self.model(input_ids)
-
-
-def _boundary(ids, prompt_ids) -> int:
-    """First position where `ids` stops agreeing with `prompt_ids`.
-
-    Only reached when BPE merges the last prompt token with the first answer token, which
-    does not happen for the unconditional prompt (verified: the joined sequence starts
-    with the prompt's own 203 ids). If it ever did, the merged token would be INCLUDED in
-    the answer span, since mean_pool masks `pos >= start`. That is the right side to err
-    on: a merged token carries answer content, so its hidden state varies with the
-    structure, which is exactly what the pool is supposed to contain.
-    """
-    n = 0
-    while n < len(prompt_ids) and n < len(ids) and ids[n] == prompt_ids[n]:
-        n += 1
-    return n
-
-
-BACKENDS = {"crystallm": CrystaLLMBackend,
-            "llamat2": LlamatBackend, "llamat2_cif": LlamatBackend}
-assert set(BACKENDS) == set(MODELS), "every registered model needs a backend"
+from backends import load_model, BACKENDS, CrystaLLMBackend, LlamatBackend   # noqa: F401,E402
 
 
 # ---------------------------------------------------------------------------------
