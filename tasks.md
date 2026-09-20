@@ -77,10 +77,28 @@ condition that is not also a steering target; and the element list must come fro
 CIF's `_chemical_formula_sum`, not test.csv's alphabetised `elements` column, which
 disagrees 63.7% of the time.
 
-**Still to settle:** the steering vectors were fitted on UNCONDITIONAL-generation
-activations, and the sweep will run on conditional prompts. Whether the direction
-transfers is an empirical question -- the first arm against `baseline_llamat2_cif` answers
-it. If it does not, re-extract under the conditional prompt and refit (~12 GPU-h).
+**Sweep submitted 2026-09-20, jobs 487082-487094.** Twelve arms against one control:
+band gap L8/L24, formation energy L8/L24, density L12/L24, each at `--alpha-rel` 2 and 4.
+
+Strength is relative, not absolute, because |h| is 6.4 at layer 8, 8.7 at 12 and 22.2 at
+24. A flat alpha 2 would be 31% of the residual stream at layer 8 against 9% at layer 24,
+which would confound "does the layer matter" with "layer 8 was pushed 3.5x harder".
+`--alpha-rel 2` is ~20% of |h| everywhere, `4` is ~40%.
+
+One alpha-0 control at layer 0 serves all twelve: the hook adds exactly zero, verified
+byte-identical to registering no hook at all, so the output is independent of layer and
+property. It loads no steering vector -- there is none at layer 0, and the contents would
+be multiplied by zero anyway.
+
+**First thing to check when they land:** the vectors were fitted on UNCONDITIONAL
+generation activations and these arms run on conditional prompts, so whether the
+direction transfers is an open empirical question. If the property does not move at
+alpha-rel 4, that is the first suspect -- not the method. The fallback is to re-extract
+under the conditional prompt and refit (~12 GPU-h).
+
+**Second:** alpha-rel 4 at layer 8 is ~40% of |h|, close to crystallm's most extreme arm.
+Watch the validity and decode-failure rates there; `decode_reason` will say whether the
+model degenerated rather than steered.
 
 
 ## Experiment settings live in `experiments/*.conf`, run via `./run.sh` (2026-08-28)
