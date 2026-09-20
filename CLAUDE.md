@@ -200,6 +200,28 @@ RAISES on those, so `is_formula_consistent` threw and `is_valid` read False for 
 perfectly good structures. `llamat_prompts.py` rewrites the header to the alphanumeric
 form; the check is unchanged, since it compares all three formulas by `.reduced_formula`.
 
+**A truncated generation is INVALID, and only `n_new_tokens` can tell you.** A sample that
+reached `--max-new-tokens` was cut off mid-structure. The cell comes from line 1, written
+before the cutoff, so it is complete -- but most of its atoms were never written, and
+volume per atom reads ~7% high (19.95 against 18.73 in the control). Truncation is not
+random: it hits large cells, median 34 sites against 8. And the rate scales with steering
+strength -- 8.2% in the control against 12.5-17.6% at `--alpha-rel 4` -- so it shifts an
+arm against its control for reasons that have nothing to do with steering.
+
+Nothing in the CIF records it. `is_formula_consistent` and
+`is_atom_site_multiplicity_consistent` both pass at 100% on truncated structures, because
+`CifWriter` derives every formula it compares from the same structure: a cut-off crystal
+is perfectly self-consistent. `bond_length_reasonableness_score` catches ~90% of them
+incidentally, since what is left is too sparse to bond, but a tenth still score valid.
+
+The token count is exact. Over 3,000 control generations at a 600-token cap, 245 sit at
+exactly 600, NOTHING sits at 599, and nothing exceeds it -- nothing stops naturally one
+token short of the cap, so reaching it means cut off. Guessing from `raw_output` length
+instead found only 197 of those 245. Validate with `--max-new-tokens` matching what
+generation used; the check is gated on the column, so crystallm runs are untouched. Runs
+generated before `n_new_tokens` was recorded are fixed by
+`scripts/data/backfill_token_counts.py` (tokenizer only, no GPU, run it in llamat_venv).
+
 **The decode policy is revisable without the GPU.** `raw_output` holds the model's text
 verbatim and `crystal_string_to_cif` is deterministic, so
 `scripts/data/redecode_llamat_cifs.py` reapplies a changed policy to existing parquets.
