@@ -155,6 +155,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, help="Path to steered parquet file")
     parser.add_argument("--out", default=None, help="Output parquet path (default: validation_<input_stem>.parquet)")
+    parser.add_argument("--max-new-tokens", type=int, default=None,
+                        help="The generation cap these runs used. With it, any sample "
+                             "whose n_new_tokens reached the cap is marked truncated and "
+                             "is_valid False: it was cut off mid-structure, so the cell "
+                             "is complete but most of its atoms were never written. "
+                             "Needs the n_new_tokens column -- crystallm runs do not have "
+                             "one and are unaffected. Backfill older llamat runs with "
+                             "scripts/data/backfill_token_counts.py.")
     parser.add_argument("--space-group-check", action=argparse.BooleanOptionalAction,
                         default=True,
                         help="Include is_space_group_consistent in is_valid. ON for "
@@ -196,6 +204,20 @@ def main():
     out_df["atom_site_consistent"]   = results_df["atom_site_consistent"].values
     out_df["formula_consistent"]     = results_df["formula_consistent"].values
     out_df["space_group_detected"]   = results_df["space_group_detected"].values
+
+    # Truncation, folded into is_valid. It cannot be detected from the CIF -- a cut-off
+    # structure is internally consistent, so formula and multiplicity both pass at 100%.
+    # bond_length catches ~90% of them incidentally, because what is left is too sparse
+    # to bond sensibly, but that leaves a tenth of them scoring valid while describing a
+    # crystal the model never finished writing. n_new_tokens settles it exactly: nothing
+    # stops naturally one token short of the cap, so reaching it means cut off.
+    if args.max_new_tokens and "n_new_tokens" in df.columns:
+        trunc = df["n_new_tokens"].fillna(0).astype(int) >= args.max_new_tokens
+        out_df["truncated"] = trunc.values
+        out_df.loc[trunc.values, "is_valid"] = False
+    elif args.max_new_tokens:
+        print("  ! --max-new-tokens given but the input has no n_new_tokens column -- "
+              "no truncation check applied")
     out_df["gen_len"]                = results_df["gen_len"].values
     out_df["error"]                  = results_df["error"].values
     # Carried through from generation, so decode failures are countable here without
@@ -237,9 +259,16 @@ def main():
     print(f"--- Sample level ({n:,} CIFs) ---")
     print(f"Sensible:                 {n_sensible:>8,}  ({n_sensible/n:.1%})")
     print(f"Valid:                    {n_valid:>8,}  ({n_valid/n:.1%})")
-    print(f"Space group consistent:   {sg:>8,}  ({sg/n:.1%})")
+    if out_df["space_group_consistent"].notna().any():
+        print(f"Space group consistent:   {sg:>8,}  ({sg/n:.1%})")
+    else:
+        print(f"Space group consistent:   {'not checked':>16}  "
+              f"(--no-space-group-check; see space_group_detected)")
     print(f"Atom site consistent:     {ams:>8,}  ({ams/n:.1%})")
     print(f"Formula consistent:       {fc:>8,}  ({fc/n:.1%})")
+    if "truncated" in out_df.columns:
+        t = out_df["truncated"].sum()
+        print(f"Truncated (hit the cap):  {t:>8,}  ({t/n:.1%})  -> forced invalid")
     det = out_df["space_group_detected"].dropna()
     if len(det):
         p1 = (det == "P1").sum()
