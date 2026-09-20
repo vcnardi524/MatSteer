@@ -247,15 +247,44 @@ submodule, so `scripts/data/make_test_sample.py` reproduces it
 ids. Run it with `--verify` before trusting a comparison against older results; it refuses
 to overwrite a subset that differs from what it would draw.
 
-**That pairing does not exist for llamat2-cif.** Its prompt is UNCONDITIONAL -- one
-constant 203-token instruction -- so there is no per-structure `id` to pair an arm
-against its control on, and each sample is an independent draw. The ids in those runs
-(`draw00000`, …) are draw indices, not materials. Generate with `--paired-seed`, which
-gives draw k of every arm the same random stream (common random numbers) and recovers
-most of the variance reduction; without it the arms must be compared as unpaired
-distributions, with the loss of power stated. `--paired-seed` is OFF by default because
-turning it on changes the sampling stream, so existing crystallm results would not
-reproduce byte-for-byte.
+**llamat2-cif pairs through `--prompt-csv`, not through its default prompt.** Its
+UNCONDITIONAL prompt is one constant 203-token instruction, so there is no per-structure
+`id` to pair on and each sample is an independent draw; the ids in those runs
+(`draw00000`, …) are draw indices, not materials. `data/llamat_test_sample1000.csv`
+fixes that: 1,000 structures drawn from llamat's own test split with
+`random.Random(42).sample` (fingerprint `11da7395271991ca`), each turned into a
+CONDITIONAL prompt naming its formula, elements and space group. That gives 1,000
+distinct prompts, so arms pair on `id` exactly as crystallm's do. Regenerate with
+`scripts/data/make_llamat_test_sample.py --verify`.
+
+Two things about that prompt that are easy to get wrong:
+
+- **Composition alone is off-distribution.** Training drew `k = randint(0, 3)` conditions:
+  `k == 0` gave the empty dict (fully unconditional) and `k >= 1` gave formula + elements
+  plus at least one of `OPTIONAL_CONDITIONS`. Formula + elements ALONE never appeared, so
+  there is no clean `nosg` counterpart to crystallm's two prompt sets. Of the three
+  optional conditions, `spacegroup.number` is the only one that is not also a steering
+  target -- conditioning on `formation_energy_per_atom` or `e_above_hull` while steering
+  toward it hands the model the answer. `band_gap` has a phrase in `CONDITION_PHRASES`
+  but is NOT in `OPTIONAL_CONDITIONS`, so it was never a training condition and cannot
+  leak.
+- **The element list comes from the CIF's `_chemical_formula_sum`**, via
+  `elements_from_formula_sum`, because that is what training used. test.csv's `elements`
+  column is alphabetised and disagrees on 63.7% of structures.
+
+Use `--paired-seed` on top, which gives draw k of every arm the same random stream
+(common random numbers). It is OFF by default because turning it on changes the sampling
+stream, so existing crystallm results would not reproduce byte-for-byte.
+
+**Steering strength is `--alpha-rel`, not `--alpha`, once more than one model is in play.**
+The stored vector is unit-norm, so `alpha` is the ABSOLUTE norm added to the hidden
+state -- and hidden states are not the same size. Measured per-token on answer tokens:
+crystallm layer 14 has |h| = 165.8, llamat layer 24 has |h| = 22.2. So crystallm's routine
+alpha 40 is 24% of its residual stream but **180%** of llamat's, which overwrites rather
+than steers: llamat degenerates into repetition and decodes to nothing. `raw_norm` -- the
+class-mean difference before normalising -- is ~10% of |h| in BOTH models at every layer
+measured (crystallm L14 10.5%, llamat L24 10.9%), so it is the portable unit.
+`--alpha-rel 1` means one class separation.
 
 `metadata_mp.parquet` **mixes DFT thermo types**, and this silently corrupts any
 comparison. Most rows are GGA/GGA+U, but some are pure `r2SCAN`, whose energies sit on a
