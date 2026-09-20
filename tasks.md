@@ -77,6 +77,32 @@ condition that is not also a steering target; and the element list must come fro
 CIF's `_chemical_formula_sum`, not test.csv's alphabetised `elements` column, which
 disagrees 63.7% of the time.
 
+**OPEN DECISION: the decoded cell is not the generated cell.** The authors' own decoder
+preserves it exactly -- `parse_fn` returns the lengths verbatim, and their CIF path
+(`condtional_generation.py:53`) calls `structure.to(fmt="cif")` with NO symprec, so no
+SpacegroupAnalyzer runs, nothing is refined, and every CIF states `P 1`. Our `symprec=0.1`
+is what re-expresses a generated 6.2/6.2/6.2 four-atom cell as a 7.112/7.429/10.157
+sixteen-atom conventional one.
+
+It was added for a reason: the faithful P1 output fails `is_space_group_consistent` on
+every structure with real symmetry, so is_valid is 0. Measured over 200 round-tripped
+structures:
+
+| mode | cell kept | atoms kept | is_valid |
+|---|---|---|---|
+| `symprec=None` (authors) | 100% | 100% | 0.0% |
+| `symprec=0.1, refine` (current) | 96.0% | 96.5% | 97.5% |
+| `symprec=0.1, no refine` | 100% | 90.5% | 82.5% |
+
+The two losses differ in kind. refine's 3.5% is a legitimate RE-EXPRESSION -- same crystal,
+conventional setting, composition and volume/atom intact (0.05%). no-refine's 9.5% is
+CORRUPTION: ops written for the detected group against a non-standard cell, so
+re-expansion yields the wrong atom count. no-refine is strictly worse.
+
+Reversible without the GPU: `raw_output` holds the model's text verbatim, and re-decoding
+reproduces `cif_steered` byte-for-byte, so the policy can be changed with a CPU pass over
+the existing parquets.
+
 **Sweep submitted 2026-09-20, jobs 487082-487094.** Twelve arms against one control:
 band gap L8/L24, formation energy L8/L24, density L12/L24, each at `--alpha-rel` 2 and 4.
 
