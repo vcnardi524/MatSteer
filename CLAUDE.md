@@ -142,9 +142,19 @@ sweeps line up, but do not read the two numbers as the same bar.
 For crystallm the model states its own `_symmetry_space_group_name_H-M`, so
 `is_space_group_consistent` -- stated against `SpacegroupAnalyzer` detected -- is a real
 test it can fail. llamat2-cif never writes a space group, so the decoder derives one WITH
-`SpacegroupAnalyzer` and writes it; the check then compares that answer against itself and
-passes ~100% of the time. **For llamat, validity is effectively a three-check bar.** Say so
-next to any number that compares the two.
+`SpacegroupAnalyzer` and writes it, which makes the check LOOK tautological. It is not,
+and the difference matters when comparing the two models' numbers.
+
+It is near-tautological on round-tripped REAL structures: 120/120 pass. On GENERATED ones
+it can fail, because the crystal-string format rounds cell lengths to 1 decimal. `6.2 6.2
+6.2` is a cubic metric by rounding whether or not the material is cubic, and the symbol
+written from the P1 coordinates then need not survive refinement and re-expansion --
+`Fmmm` written, `I4/mmm` detected, on the raw decoded CIF before any operator restoration.
+Measured on 4 generated structures, 3/4 passed; n is far too small to put a rate on, so
+read the real number off the first full arm rather than assuming ~100%.
+
+So for llamat the space-group term is WEAK, not absent, and validity is closer to a
+three-and-a-bit-check bar. Say so next to any number that compares the two.
 
 Two decode-side details that are easy to misread as results:
 
