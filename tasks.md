@@ -58,10 +58,29 @@ structure. Any distributional comparison between arms needs a temperature that a
 samples; pick it by measuring distinct compositions per 100 draws before committing to a
 sweep.
 
-**Open, and it decides how the sweep is analysed:** unconditional generation has no
-per-structure id, so the paired t-test every crystallm result rests on does not apply.
-`--paired-seed` (common random numbers per draw index) is implemented and off by default.
-Decide between that and an unpaired comparison before running a full sweep.
+**Resolved: llamat gets a pairable prompt set.** `data/llamat_test_sample1000.csv` --
+1,000 structures from llamat's own test split, `random.Random(42).sample`, fingerprint
+`11da7395271991ca`, 94.5% carrying MP labels. Each becomes a CONDITIONAL prompt naming
+its formula, elements and space group, giving 1,000 distinct prompts, so arms pair on
+`id` exactly as crystallm's do. Generate with `--prompt-csv`; `--paired-seed` on top.
+
+Conditioning works: on the first 4 prompts the generated composition matched the one
+asked for 4/4. The space group is honoured only loosely (166 -> 164, 221 -> 139,
+221 -> 65, 123 -> 123), which does not matter here -- the prompt is a pairing key, not a
+constraint we need obeyed -- but it means the space group cannot be treated as a control
+variable. Confirm on a larger sample when the first real run lands.
+
+Two constraints found while building it, both recorded in CLAUDE.md: composition ALONE is
+off-distribution (training never emitted formula + elements without at least one optional
+condition), so there is no `nosg` counterpart and spacegroup.number is the only optional
+condition that is not also a steering target; and the element list must come from the
+CIF's `_chemical_formula_sum`, not test.csv's alphabetised `elements` column, which
+disagrees 63.7% of the time.
+
+**Still to settle:** the steering vectors were fitted on UNCONDITIONAL-generation
+activations, and the sweep will run on conditional prompts. Whether the direction
+transfers is an empirical question -- the first arm against `baseline_llamat2_cif` answers
+it. If it does not, re-extract under the conditional prompt and refit (~12 GPU-h).
 
 
 ## Experiment settings live in `experiments/*.conf`, run via `./run.sh` (2026-08-28)
