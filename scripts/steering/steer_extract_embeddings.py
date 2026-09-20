@@ -158,7 +158,7 @@ def main():
     assert all(0 <= l < config.n_layer for l in layers), f"layers outside 0..{config.n_layer-1}"
 
     if args.method == "linear":
-        hook, run_tag = _sg.build_linear(args, device)
+        hook, run_tag = _sg.build_linear(args, device, backend)
     else:
         hook, run_tag = _sg.build_manifold(args, device)
     print(f"KV cache=on  dropout={config.dropout}  capturing layers {layers}")

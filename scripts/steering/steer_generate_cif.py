@@ -282,7 +282,10 @@ class ConditionalPrompts:
     """
 
     decodes = True
-    tag = "_sg"              # composition + space group; there is no nosg counterpart
+    # NOT "_sg": crystallm already uses "" for its sg prompt set and "_nosg" for the
+    # other, and this is a THIRD prompt set, not a member of that pair. It also keeps the
+    # stem distinct from crystallm's control in the shared baseline/ tree.
+    tag = "_cond"
 
     def __init__(self, csv_path, n_prompts, system_index=0, wrapper="notebook"):
         stem = Path(csv_path).stem
@@ -319,10 +322,23 @@ def build_prompts(args):
     return UnconditionalPrompts(args.n_prompts, args.system_index, args.wrapper)
 
 
-def build_linear(args, device):
+def build_linear(args, device, backend=None):
     """(hook, filename stem suffix) for the mean-difference method."""
     sv_path = (steering_vectors_dir(args.model, args.steering_property)
                / f"layer{args.layer}.parquet")
+    if args.alpha == 0 and args.alpha_rel is None:
+        # The vector is multiplied by zero, so its contents cannot matter and requiring
+        # the file to exist is an artificial constraint -- it would force a vector to be
+        # fitted at the control's layer for no reason. The hook is still registered and
+        # still runs, it just adds exactly zero, which is what makes this a true control.
+        # One such run per PROMPT SET serves every property and every layer (CLAUDE.md).
+        if backend is None:
+            raise SystemExit("alpha 0 needs the backend to size the zero vector")
+        print(f"Steering vector: none loaded -- alpha is 0, so the hook adds exactly "
+              f"zero at layer {args.layer} ({backend.n_embd} dims)")
+        print(f"Method=linear  alpha=0.0  layer={args.layer}")
+        zero = np.zeros(backend.n_embd, dtype=np.float32)
+        return linear_hook(zero, 0.0, device), "alpha0.0"
     if not sv_path.exists():
         # legacy flat location (pre per-property dirs)
         legacy = (steering_vectors_dir(args.model)
@@ -349,9 +365,14 @@ def build_linear(args, device):
         # degenerates into repetition. raw_norm (the class-mean difference before
         # normalising) sits at ~10% of |h| in BOTH models at every layer measured, so it
         # is the portable unit: --alpha-rel 1 means "one class separation".
-        alpha = args.alpha_rel * raw_norm
-        print(f"  --alpha-rel {args.alpha_rel:g} x raw_norm {raw_norm:.2f} "
-              f"-> alpha {alpha:.3f}")
+        # Rounded, and the ROUNDED value is what gets injected, so the stem and the
+        # actual perturbation agree exactly. raw_norm is a float32 estimate, so
+        # 2 x 0.5770869255065918 would otherwise put "alpha1.1541738510131836" in a
+        # filename that four stores join on. 3 decimals shifts the injection by at most
+        # 0.0005 -- far below the uncertainty in raw_norm itself.
+        alpha = round(args.alpha_rel * raw_norm, 3)
+        print(f"  --alpha-rel {args.alpha_rel:g} x raw_norm {raw_norm:.4f} "
+              f"-> alpha {alpha}")
     print(f"Method=linear  alpha={alpha}  layer={args.layer}")
     # NOT :g -- that renders 8.0 as "8" and the stem is a join key across four stores
     # (CLAUDE.md: "Renaming one breaks the joins"). Existing runs are alpha8.0.
@@ -546,7 +567,7 @@ def main():
 
     local = None
     if args.method == "linear":
-        hook, run_tag = build_linear(args, device)
+        hook, run_tag = build_linear(args, device, backend)
     elif args.method == "pca_centroid":
         hook, run_tag = build_pca_centroid(args, device)
     elif args.method == "manifold":
