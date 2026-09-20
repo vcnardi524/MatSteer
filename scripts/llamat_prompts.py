@@ -253,6 +253,28 @@ def parse_fn(gen_str, defaulted=None):
 DEFAULT_SYMPREC = 0.1        # matches crystallm _metrics.is_space_group_consistent
 
 
+def _rename_data_block(cif):
+    """Rewrite pymatgen's `data_` header into CrystaLLM's alphanumeric convention.
+
+    pymatgen names the block with Composition.reduced_formula, which parenthesises
+    grouped units -- data_LiFe(PO3)4, data_Ho(AlFe)6. CrystaLLM's extract_data_formula
+    (_utils.py:132) matches `data_([A-Za-z0-9]+)\n`, finds nothing, and RAISES, so
+    is_formula_consistent throws and is_valid reports False for a perfectly good
+    structure. It hits 25% of MP compositions, which was the whole of the observed
+    is_valid shortfall.
+
+    Taking the name from the CIF's own _chemical_formula_sum keeps the file internally
+    consistent, and costs the check nothing: is_formula_consistent compares the three
+    formulas by .reduced_formula, so Ho2Al12Fe12 and Ho(AlFe)6 compare equal. The check
+    still does its job -- it just stops throwing on a naming convention.
+    """
+    m = re.search(r"_chemical_formula_sum\s+'([^']+)'", cif)
+    if not m:
+        return cif
+    name = re.sub(r"[^A-Za-z0-9]", "", m.group(1))
+    return re.sub(r"^data_.*$", f"data_{name}", cif, count=1, flags=re.M)
+
+
 def crystal_string_to_cif(text, symprec=DEFAULT_SYMPREC):
     """(cif_text, reason) for one generated crystal string; (None, reason) on failure.
 
@@ -299,7 +321,7 @@ def crystal_string_to_cif(text, symprec=DEFAULT_SYMPREC):
     try:
         struct = Structure(Lattice.from_parameters(*lengths, *angles), species, coords,
                            coords_are_cartesian=False)
-        cif = struct.to(fmt="cif", symprec=symprec)
+        cif = _rename_data_block(struct.to(fmt="cif", symprec=symprec))
     except Exception as e:
         return None, f"{type(e).__name__}: {e}"
     reason = f"{n_origin} coordinate line(s) defaulted to the origin" if n_origin else ""

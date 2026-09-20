@@ -87,6 +87,11 @@ parquet keyed on `(id, sample)`. Downstream stages **join**, they do not carry d
 forward:
 
 - `steering_results/generated_cifs/` — `cif_steered`. The only home for raw CIFs.
+  Models that do not emit a CIF add two more columns: `raw_output`, what the model
+  actually wrote, and `decode_reason`, why decoding failed or what it had to patch up.
+  An empty `cif_steered` means decoding failed, and `raw_output` is kept so the failure
+  can be diagnosed without regenerating. crystallm writes neither column — its output
+  already is a CIF, so the decode step is the identity.
 - `steering_results/relaxed/` — `cif_relaxed`. The only home for relaxed CIFs.
 - `steering_results/validation/` — **flags only, no CIF strings**.
 - `steering_results/<property>/property_predictions/` — one file per source stem,
@@ -127,6 +132,33 @@ that shape rather than widening an existing file.
 Files are matched across stores by **stem**, so a filename like
 `steered_test_clean_alpha16.0_layer14.parquet` is a key, not a label. Renaming one
 breaks the joins.
+
+### Validity means different things for the two models
+
+`is_valid` (CrystaLLM `_metrics.py:146`) is four checks ANDed: formula consistency, atom
+site multiplicity, bond length, and space group. Keep the column name so the two models'
+sweeps line up, but do not read the two numbers as the same bar.
+
+For crystallm the model states its own `_symmetry_space_group_name_H-M`, so
+`is_space_group_consistent` -- stated against `SpacegroupAnalyzer` detected -- is a real
+test it can fail. llamat2-cif never writes a space group, so the decoder derives one WITH
+`SpacegroupAnalyzer` and writes it; the check then compares that answer against itself and
+passes ~100% of the time. **For llamat, validity is effectively a three-check bar.** Say so
+next to any number that compares the two.
+
+Two decode-side details that are easy to misread as results:
+
+- `CifWriter(symprec=…)` refines to the CONVENTIONAL cell, so ~3.5% of structures come
+  back with twice the atoms in twice the volume. Same crystal, re-expressed; composition
+  and every intensive property are untouched. `refine_struct=False` is worse, not better
+  (atom count survives 90.5% against 96.5%), because the symmetry operators are only
+  valid in the standard setting.
+- pymatgen names the data block with `Composition.reduced_formula`, which parenthesises
+  grouped units (`data_LiFe(PO3)4`). CrystaLLM's `extract_data_formula` matches
+  `data_([A-Za-z0-9]+)` and RAISES on those, so `is_formula_consistent` threw and
+  `is_valid` read False for 25% of perfectly good structures. `llamat_prompts.py`
+  rewrites the header to the alphanumeric form; the check is unchanged, since it compares
+  all three formulas by `.reduced_formula`. Measured effect: is_valid 73.3% -> 98.3%.
 
 ### Adding a property
 
@@ -174,8 +206,12 @@ rows done and re-extracts everything into it.
 
 A layer index is NOT comparable across models — crystallm has 16 blocks at 1024 dim,
 llamat2 has 32 at 4096 — and no steering vector, PCA basis or manifold transfers between
-them. `extract_cif_embeddings.py` holds the only architecture-specific code, in two
-backends; both are fed identical CIF text so the comparison is between models rather
+them. `scripts/backends.py` holds the only architecture-specific code, in two backends.
+Extraction and steered generation BOTH import them, because both hook the same `blocks`
+attribute -- `model.transformer.h` against `model.model.layers` -- one to capture a
+hidden state and one to modify it, and two copies of that line would drift.
+`extract_cif_embeddings.py` re-exports `load_model` because seven scripts import it from
+there. Both models are fed identical CIF text so the comparison is between models rather
 than between inputs. Its heavy imports are deliberately inside the loaders, since
 crystallm (omegaconf, pinned pymatgen) and llamat2 (transformers) will not share a venv.
 
@@ -210,6 +246,16 @@ submodule, so `scripts/data/make_test_sample.py` reproduces it
 (`random.Random(42).sample`, verified exact) and `data/test_sample1000_ids.csv` tracks the
 ids. Run it with `--verify` before trusting a comparison against older results; it refuses
 to overwrite a subset that differs from what it would draw.
+
+**That pairing does not exist for llamat2-cif.** Its prompt is UNCONDITIONAL -- one
+constant 203-token instruction -- so there is no per-structure `id` to pair an arm
+against its control on, and each sample is an independent draw. The ids in those runs
+(`draw00000`, …) are draw indices, not materials. Generate with `--paired-seed`, which
+gives draw k of every arm the same random stream (common random numbers) and recovers
+most of the variance reduction; without it the arms must be compared as unpaired
+distributions, with the loss of power stated. `--paired-seed` is OFF by default because
+turning it on changes the sampling stream, so existing crystallm results would not
+reproduce byte-for-byte.
 
 `metadata_mp.parquet` **mixes DFT thermo types**, and this silently corrupts any
 comparison. Most rows are GGA/GGA+U, but some are pure `r2SCAN`, whose energies sit on a

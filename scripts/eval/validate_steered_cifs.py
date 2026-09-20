@@ -44,6 +44,7 @@ from crystallm import (
     bond_length_reasonableness_score,
     extract_space_group_symbol,
     is_atom_site_multiplicity_consistent,
+    is_formula_consistent,
     is_sensible,
     is_space_group_consistent,
     is_valid,
@@ -63,6 +64,7 @@ def eval_one(args):
         "bond_length_score": None,
         "space_group_consistent": None,
         "atom_site_consistent": None,
+        "formula_consistent": None,
         "gen_len": None,
         "error": None,
     }
@@ -91,6 +93,10 @@ def eval_one(args):
         cif = restore_symmetry_operators(cif, extract_space_group_symbol(cif))
 
         result["atom_site_consistent"] = is_atom_site_multiplicity_consistent(cif)
+        # The fourth is_valid term, and the only one that was never recorded. It is the
+        # one that bites hardest on decoded CIFs, so a run where is_valid is low and the
+        # other three are ~100% is answered by this column instead of by re-deriving it.
+        result["formula_consistent"] = is_formula_consistent(cif)
         result["space_group_consistent"] = is_space_group_consistent(cif)
         result["bond_length_score"] = bond_length_reasonableness_score(cif)
         result["is_valid"] = is_valid(cif, bond_length_acceptability_cutoff=1.0)
@@ -134,6 +140,7 @@ def main():
     out_df["bond_length_score"]      = results_df["bond_length_score"].values
     out_df["space_group_consistent"] = results_df["space_group_consistent"].values
     out_df["atom_site_consistent"]   = results_df["atom_site_consistent"].values
+    out_df["formula_consistent"]     = results_df["formula_consistent"].values
     out_df["gen_len"]                = results_df["gen_len"].values
     out_df["error"]                  = results_df["error"].values
     # Carried through from generation, so decode failures are countable here without
@@ -156,6 +163,7 @@ def main():
 
     sg  = out_df["space_group_consistent"].sum()
     ams = out_df["atom_site_consistent"].sum()
+    fc  = out_df["formula_consistent"].sum()
     bl  = out_df["bond_length_score"].dropna()
     gl  = out_df["gen_len"].dropna()
 
@@ -176,6 +184,7 @@ def main():
     print(f"Valid:                    {n_valid:>8,}  ({n_valid/n:.1%})")
     print(f"Space group consistent:   {sg:>8,}  ({sg/n:.1%})")
     print(f"Atom site consistent:     {ams:>8,}  ({ams/n:.1%})")
+    print(f"Formula consistent:       {fc:>8,}  ({fc/n:.1%})")
     print(f"Avg bond length score:    {bl.mean():.4f} ± {bl.std():.4f}")
     print(f"Avg token length:         {gl.mean():.1f} ± {gl.std():.1f}")
     print(f"Errors (pymatgen):        {n_errors:>8,}  ({n_errors/n:.1%})")
