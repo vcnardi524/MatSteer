@@ -151,52 +151,60 @@ breaks the joins.
 
 ### Validity means different things for the two models
 
-`is_valid` (CrystaLLM `_metrics.py:146`) is four checks ANDed: formula consistency, atom
-site multiplicity, bond length, and space group. Keep the column name so the two models'
-sweeps line up, but do not read the two numbers as the same bar.
+`is_valid` (CrystaLLM `_metrics.py:146`) ANDs four checks: formula consistency, atom site
+multiplicity, bond length, and space group. **llamat2-cif is scored on the first three
+only**, via `validate_steered_cifs.py --no-space-group-check`. Keep the column name so the
+two models' sweeps line up, but never quote the two numbers side by side without saying
+which bar each used.
 
-For crystallm the model states its own `_symmetry_space_group_name_H-M`, so
-`is_space_group_consistent` -- stated against `SpacegroupAnalyzer` detected -- is a real
-test it can fail. llamat2-cif never writes a space group, so the decoder derives one WITH
-`SpacegroupAnalyzer` and writes it, which makes the check LOOK tautological. It is not,
-and the difference matters when comparing the two models' numbers.
+The space-group term is dropped because llamat2-cif never states a space group.
+`is_space_group_consistent` compares a CIF's STATED symbol against `SpacegroupAnalyzer`
+detection, so for a model that writes `P 1` it fails on every structure with real symmetry
+-- 91.5% of them -- and measures the decoder rather than the model.
+`space_group_detected` is recorded instead: the symbol the coordinates actually carry, at
+the same symprec 0.1, as a diagnostic that does not gate validity.
 
-It is near-tautological on round-tripped REAL structures: 120/120 pass. It can still fail,
-and the reason is a TOLERANCE artifact of changing the cell setting, not anything the
-model did wrong.
+**The decoded CIF is the cell the model generated.** `crystal_string_to_cif` writes with
+no symprec, matching the authors' own decoder
+(`llamat/src/cifs/crystal-text-llm/condtional_generation.py:53`), so lengths, angles and
+atom count survive exactly.
 
-`CifWriter(symprec=…)` captures the space-group symbol from the structure it is handed
-(`pymatgen/io/cif.py:1570`) and only then replaces that structure with
-`get_refined_structure()` (:1578) -- the conventional setting. So the symbol describes the
-cell that went in, and the coordinates written are the cell that came out. When the check
-re-parses the file it re-detects on the latter, and the two can disagree.
+That was not always true, and the reason is worth keeping. Passing `symprec` makes
+`CifWriter` capture the detected symbol from the structure it is handed
+(`pymatgen/io/cif.py:1570`) and only THEN replace that structure with
+`get_refined_structure()` (:1578) -- the conventional setting. The symbol describes the
+cell that went in; the coordinates written are the cell that came out. A generated
+6.2/6.2/6.2 four-atom cell was stored as 7.112/7.429/10.157 with sixteen atoms, on 3.5% of
+structures. The same asymmetry also makes the check fail on pure tolerance artifacts:
+`MP_mp-1006246` is exactly `Fmmm` at symprec 1e-5 both before and after refinement, but
+its conventional cell has a and b within 0.316 A, so at symprec 0.1 it re-reads as
+`I4/mmm`. Stated `Fmmm`, detected `I4/mmm`, scored invalid.
 
-Worked example, `MP_mp-1006246`: generated cell 6.2/6.2/6.2 with angles 131/131/70,
-exactly `Fmmm` even at symprec 1e-5. The conventional cell is 7.112/7.429/10.157 -- still
-exactly `Fmmm` at 1e-5, but a and b now differ by only 0.316 A, which at symprec 0.1 reads
-as tetragonal, so spglib returns `I4/mmm`. Stated `Fmmm`, detected `I4/mmm`, is_valid
-False. The atoms never needed to move; the primitive cell simply had no near-degeneracy
-for the tolerance to swallow and the conventional one does.
+Measured over 200 round-tripped structures:
 
-Measured on 4 generated structures, 3/4 passed; n is far too small to put a rate on, so
-read the real number off the first full arm rather than assuming ~100%.
+| | cell kept | atoms kept | is_valid |
+|---|---|---|---|
+| `symprec=None`, four-check | 100% | 100% | 0% |
+| `symprec=0.1` refine, four-check | 96% | 96.5% | 97.5% |
+| `symprec=0.1` no-refine, four-check | 100% | 90.5% | 82.5% |
+| **faithful P1, three-check** (current) | **100%** | **100%** | **97.5%** |
 
-So for llamat the space-group term is WEAK, not absent, and validity is closer to a
-three-and-a-bit-check bar. Say so next to any number that compares the two.
+`no-refine` looks tempting and is not: it writes operators for the detected group against
+a non-standard cell, so re-expansion yields the wrong atom count. Its 9.5% is corruption,
+where `refine`'s 3.5% was a faithful re-expression.
 
-Two decode-side details that are easy to misread as results:
+One more decode-side detail that is easy to misread as a result: pymatgen names the data
+block with `Composition.reduced_formula`, which parenthesises grouped units
+(`data_LiFe(PO3)4`). CrystaLLM's `extract_data_formula` matches `data_([A-Za-z0-9]+)` and
+RAISES on those, so `is_formula_consistent` threw and `is_valid` read False for 25% of
+perfectly good structures. `llamat_prompts.py` rewrites the header to the alphanumeric
+form; the check is unchanged, since it compares all three formulas by `.reduced_formula`.
 
-- `CifWriter(symprec=…)` refines to the CONVENTIONAL cell, so ~3.5% of structures come
-  back with twice the atoms in twice the volume. Same crystal, re-expressed; composition
-  and every intensive property are untouched. `refine_struct=False` is worse, not better
-  (atom count survives 90.5% against 96.5%), because the symmetry operators are only
-  valid in the standard setting.
-- pymatgen names the data block with `Composition.reduced_formula`, which parenthesises
-  grouped units (`data_LiFe(PO3)4`). CrystaLLM's `extract_data_formula` matches
-  `data_([A-Za-z0-9]+)` and RAISES on those, so `is_formula_consistent` threw and
-  `is_valid` read False for 25% of perfectly good structures. `llamat_prompts.py`
-  rewrites the header to the alphanumeric form; the check is unchanged, since it compares
-  all three formulas by `.reduced_formula`. Measured effect: is_valid 73.3% -> 98.3%.
+**The decode policy is revisable without the GPU.** `raw_output` holds the model's text
+verbatim and `crystal_string_to_cif` is deterministic, so
+`scripts/data/redecode_llamat_cifs.py` reapplies a changed policy to existing parquets.
+It refuses to rewrite a file whose validation flags already exist, since those and
+everything downstream of them go stale.
 
 ### Adding a property
 
