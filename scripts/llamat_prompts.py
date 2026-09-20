@@ -326,32 +326,39 @@ def _rename_data_block(cif):
     return re.sub(r"^data_.*$", f"data_{name}", cif, count=1, flags=re.M)
 
 
-def crystal_string_to_cif(text, symprec=DEFAULT_SYMPREC):
+def crystal_string_to_cif(text, symprec=None):
     """(cif_text, reason) for one generated crystal string; (None, reason) on failure.
 
-    WHY symprec IS NOT OPTIONAL HERE. The decoded Structure carries no symmetry -- every
-    atom is listed and pymatgen writes `P 1`. CrystaLLM's is_space_group_consistent
-    (_metrics.py:70) compares a CIF's STATED space group against what SpacegroupAnalyzer
-    detects from its coordinates, and 87% of these structures do have real symmetry, so a
-    P1-written CIF fails by construction: measured 0/40 valid. Passing symprec makes
-    Structure.to() hand it to pymatgen.io.cif.CifWriter, which runs SpacegroupAnalyzer and
-    writes the DETECTED symbol -- 27/40.
+    THE CELL IS PRESERVED EXACTLY, which means symprec=None by default. This matches the
+    authors' own decoder: llamat/src/cifs/crystal-text-llm/condtional_generation.py:53
+    builds the Structure and calls `structure.to(fmt="cif")` with no symprec, so no
+    SpacegroupAnalyzer runs, nothing is refined, and the CIF states `P 1`. What the model
+    generated is what gets stored -- same lengths, same angles, same atom count.
 
-    That is the right source of truth rather than a workaround: llamat2-cif never emits a
-    space group, so the only meaningful one is whatever its coordinates imply.
+    WHY NOT symprec=0.1, WHICH THIS USED TO DO. Passing it makes CifWriter detect the
+    space group and write the DETECTED symbol, which is what CrystaLLM's
+    is_space_group_consistent wants -- a P1 CIF fails that check for every structure with
+    real symmetry. But CifWriter captures the symbol from the structure handed in
+    (pymatgen/io/cif.py:1570) and only THEN replaces it with get_refined_structure()
+    (:1578), the conventional setting. So a generated 6.2/6.2/6.2 four-atom cell is stored
+    as 7.112/7.429/10.157 with sixteen atoms -- the same crystal, but no longer the cell
+    the model wrote. Measured over 200 structures, that re-expression hits 3.5%.
 
-    LEAVE CifWriter's refine_struct AT ITS DEFAULT (True). It rewrites the cell in the
-    conventional setting, which on 3.5% of structures returns twice the atoms in twice the
-    volume -- the same crystal, re-expressed, so composition and every intensive property
-    (density per atom, energy per atom) are untouched. Setting refine_struct=False to
-    "preserve" the cell is worse, not better: the symmetry operators are only valid in the
-    standard setting, so writing them against an unrefined cell breaks the round trip.
-    Measured over 200 structures: atom count survives 96.5% with the default against 90.5%
-    without, and is_valid 29/40 against 25/40.
+    The check it bought was not worth it. llamat2-cif never emits a space group, so
+    is_space_group_consistent only ever compared pymatgen's detection against pymatgen's
+    detection after refinement -- a decoder-stability test, not a model test, and one that
+    fails on tolerance artifacts (MP_mp-1006246 is exactly Fmmm at symprec 1e-5, but its
+    conventional cell has a and b within 0.316 A, so at symprec 0.1 it re-reads as
+    I4/mmm). Validation drops that term for llamat instead; see validate_steered_cifs.py
+    --no-space-group-check. Measured over the same 200 structures:
 
-    Round-tripping is lossy on lengths regardless, because the ENCODER rounds lengths to 1
-    decimal and truncates angles with int(). Volume per atom moves by a median 0.64%
-    (p95 2.3%, max 3.9%). That is the format's precision, not a decode error.
+        symprec=None, three-check   cell 100%  atoms 100%  valid 97.5%
+        symprec=0.1,  four-check    cell  96%  atoms  96%  valid 97.5%
+
+    Same validity, exact fidelity. Pass symprec explicitly to get the old behaviour.
+
+    Round-tripping is still lossy on lengths, because the ENCODER rounds them to 1 decimal
+    and truncates angles with int(). That is the format's precision, not a decode error.
     """
     from pymatgen.core.lattice import Lattice
     from pymatgen.core.structure import Structure
@@ -372,7 +379,8 @@ def crystal_string_to_cif(text, symprec=DEFAULT_SYMPREC):
     try:
         struct = Structure(Lattice.from_parameters(*lengths, *angles), species, coords,
                            coords_are_cartesian=False)
-        cif = _rename_data_block(struct.to(fmt="cif", symprec=symprec))
+        kw = {"symprec": symprec} if symprec is not None else {}
+        cif = _rename_data_block(struct.to(fmt="cif", **kw))
     except Exception as e:
         return None, f"{type(e).__name__}: {e}"
     reason = f"{n_origin} coordinate line(s) defaulted to the origin" if n_origin else ""

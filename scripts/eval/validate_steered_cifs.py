@@ -55,14 +55,45 @@ sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))
 from utils import restore_symmetry_operators
 
 
+def detected_space_group(cif_str, symprec=0.1):
+    """The space group SpacegroupAnalyzer finds in the coordinates, or None.
+
+    symprec 0.1 matches what is_space_group_consistent uses internally, so the two
+    columns describe the same detection. Returns None rather than raising: this is a
+    diagnostic, and a structure too broken to analyse has already failed elsewhere.
+    """
+    try:
+        from pymatgen.core.structure import Structure
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return Structure.from_str(cif_str, fmt="cif").get_space_group_info(
+                symprec=symprec)[0]
+    except Exception:
+        return None
+
+
 def eval_one(args):
-    idx, cif = args
+    """(idx, cif) or (idx, cif, check_space_group) -> one row of flags.
+
+    check_space_group=False drops the space-group term from is_valid, leaving a
+    THREE-check bar: formula, atom site multiplicity, bond length. That is the right bar
+    for a model that does not state a space group. llamat2-cif never does, so its CIFs
+    are written in P 1 and is_space_group_consistent -- stated against detected -- fails
+    for every structure that has real symmetry, measuring the decoder rather than the
+    model. `space_group_detected` is still recorded, because what symmetry the generated
+    coordinates actually carry is worth knowing; it just does not gate validity.
+
+    Keep it True for crystallm, which states its own symbol and can genuinely fail.
+    """
+    idx, cif = args[0], args[1]
+    check_space_group = args[2] if len(args) > 2 else True
     result = {
         "idx": idx,
         "is_sensible": False,
         "is_valid": False,
         "bond_length_score": None,
         "space_group_consistent": None,
+        "space_group_detected": None,
         "atom_site_consistent": None,
         "formula_consistent": None,
         "gen_len": None,
@@ -97,9 +128,22 @@ def eval_one(args):
         # one that bites hardest on decoded CIFs, so a run where is_valid is low and the
         # other three are ~100% is answered by this column instead of by re-deriving it.
         result["formula_consistent"] = is_formula_consistent(cif)
-        result["space_group_consistent"] = is_space_group_consistent(cif)
         result["bond_length_score"] = bond_length_reasonableness_score(cif)
-        result["is_valid"] = is_valid(cif, bond_length_acceptability_cutoff=1.0)
+
+        # What symmetry the coordinates actually carry, recorded either way. For a model
+        # that writes P 1 this is the only informative symmetry number there is.
+        result["space_group_detected"] = detected_space_group(cif)
+
+        if check_space_group:
+            result["space_group_consistent"] = is_space_group_consistent(cif)
+            result["is_valid"] = is_valid(cif, bond_length_acceptability_cutoff=1.0)
+        else:
+            # The same three terms crystallm's is_valid ANDs, minus the space-group one.
+            # Recomputed here rather than calling is_valid, which cannot be told to skip
+            # a check. Left as None above so it is absent, not False, in the flags table.
+            result["is_valid"] = bool(result["formula_consistent"]
+                                      and result["atom_site_consistent"]
+                                      and result["bond_length_score"] >= 1.0)
 
     except Exception as e:
         result["error"] = str(e)
@@ -111,6 +155,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, help="Path to steered parquet file")
     parser.add_argument("--out", default=None, help="Output parquet path (default: validation_<input_stem>.parquet)")
+    parser.add_argument("--space-group-check", action=argparse.BooleanOptionalAction,
+                        default=True,
+                        help="Include is_space_group_consistent in is_valid. ON for "
+                             "crystallm, which states its own symbol and can genuinely "
+                             "fail it. Pass --no-space-group-check for a model that does "
+                             "not state one (llamat2-cif): its CIFs are P 1, so the term "
+                             "fails for every structure with real symmetry and measures "
+                             "the decoder, not the model. space_group_detected is "
+                             "recorded either way.")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--results-dir", default="steering_results",
                         help="Base results dir; output goes to <results-dir>/validation")
@@ -125,7 +178,8 @@ def main():
     df = pd.read_parquet(in_path)
     print(f"  {len(df):,} CIFs ({df['id'].nunique():,} unique prompts)")
 
-    tasks = list(enumerate(df["cif_steered"].tolist()))
+    tasks = [(i, c, args.space_group_check)
+             for i, c in enumerate(df["cif_steered"].tolist())]
 
     print(f"Running validation with {args.workers} workers ...")
     with mp.Pool(args.workers) as pool:
@@ -141,6 +195,7 @@ def main():
     out_df["space_group_consistent"] = results_df["space_group_consistent"].values
     out_df["atom_site_consistent"]   = results_df["atom_site_consistent"].values
     out_df["formula_consistent"]     = results_df["formula_consistent"].values
+    out_df["space_group_detected"]   = results_df["space_group_detected"].values
     out_df["gen_len"]                = results_df["gen_len"].values
     out_df["error"]                  = results_df["error"].values
     # Carried through from generation, so decode failures are countable here without
@@ -185,6 +240,11 @@ def main():
     print(f"Space group consistent:   {sg:>8,}  ({sg/n:.1%})")
     print(f"Atom site consistent:     {ams:>8,}  ({ams/n:.1%})")
     print(f"Formula consistent:       {fc:>8,}  ({fc/n:.1%})")
+    det = out_df["space_group_detected"].dropna()
+    if len(det):
+        p1 = (det == "P1").sum()
+        print(f"Space groups detected:    {det.nunique():>8,} distinct, "
+              f"{(len(det)-p1)/len(det):.1%} above P1")
     print(f"Avg bond length score:    {bl.mean():.4f} ± {bl.std():.4f}")
     print(f"Avg token length:         {gl.mean():.1f} ± {gl.std():.1f}")
     print(f"Errors (pymatgen):        {n_errors:>8,}  ({n_errors/n:.1%})")
