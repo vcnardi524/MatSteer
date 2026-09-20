@@ -22,6 +22,8 @@ crystallm generation is byte-identical cached and uncached, same three output co
 - pymatgen's parenthesised data-block names (`data_LiFe(PO3)4`) made
   `is_formula_consistent` RAISE on 25% of compositions, which `eval_one` swallowed as an
   error and scored invalid. Renaming the block to the alphanumeric form: 73.3% -> 98.3%.
+  Round trip over 300 MP structures now decodes 300/300, keeps composition 100%, and
+  scores is_valid 96.7% -- against 67.5% before the header fix.
 - `CifWriter(symprec=…)` refines to the conventional cell, so ~3.5% come back with twice
   the atoms in twice the volume. Harmless -- same crystal, intensive properties
   unchanged -- and `refine_struct=False` is worse, not better.
