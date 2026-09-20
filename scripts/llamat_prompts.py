@@ -25,7 +25,7 @@ drawing k = 0 conditions, which is the same builder with an empty dict.
 
 See README.md, "LLaMat-2 was trained on a different CIF layout than the one we feed it".
 """
-import random
+import re
 
 # ---------------------------------------------------------------------------
 # Crystal string: what the model is trained to output.
@@ -148,6 +148,147 @@ def unconditional_prompt(system_index: int = 0, wrapper: str = "notebook") -> st
         raise ValueError(f"wrapper must be one of {sorted(WRAPPERS)}, got {wrapper!r}")
     return WRAPPERS[wrapper](GENERATION_SYSTEMS[system_index],
                              conditional_generation_input({}))
+
+
+# ---------------------------------------------------------------------------
+# Decoding: crystal string -> CIF. The inverse of crystal_string() above, kept
+# beside it so the format is defined in one place.
+#
+# clean_first_line and parse_fn are VERBATIM from
+#   llamat/src/cifs/crystal-text-llm/parsing_fn.py:4 and :61
+# the ROBUST parser, not the strict one at cif_prompts.py:53. llamat-2 commonly emits
+# a leading fragment -- ' is 4.2 4.2 6.7' -- and the strict parser dies on it.
+# Vendored because that clone is untracked and would vanish on a fresh checkout.
+# ---------------------------------------------------------------------------
+
+def clean_first_line(line):
+    """Pull three numbers out of a line that may carry leading text. Theirs, verbatim."""
+    decimal_pattern = r"(\d*\.\d+|\d+)"
+    numbers = re.findall(decimal_pattern, line)
+    if len(numbers) >= 3:
+        try:
+            return [float(num) for num in numbers[:3]]
+        except ValueError:
+            pass
+    text_decimal_pattern = r"[a-zA-Z]+\.(\d+)"
+    matches = re.findall(text_decimal_pattern, line)
+    if matches:
+        fixed_line = line
+        for match in matches:
+            fixed_line = re.sub(r"[a-zA-Z]+\." + re.escape(match), "0." + match, fixed_line)
+        numbers = re.findall(decimal_pattern, fixed_line)
+        if len(numbers) >= 3:
+            try:
+                return [float(num) for num in numbers[:3]]
+            except ValueError:
+                pass
+    parts = line.split()
+    numeric_parts = []
+    for part in parts:
+        try:
+            numeric_parts.append(float(part))
+            if len(numeric_parts) == 3:
+                break
+        except ValueError:
+            continue
+    return numeric_parts if len(numeric_parts) >= 3 else []
+
+
+def parse_fn(gen_str):
+    """(lengths, angles, species, coords) from a generated crystal string. Theirs, verbatim.
+
+    Two behaviours the caller must handle rather than trust:
+      * total failure returns ([], [], [], []) instead of raising
+      * a malformed coordinate line becomes [0.0, 0.0, 0.0], silently placing an atom at
+        the origin. A structure that parses but is wrong is worse than one that fails, so
+        crystal_string_to_cif counts these and reports them.
+    """
+    gen_str = gen_str.strip().strip('"')
+    lines = [x.strip() for x in gen_str.split("\n") if len(x.strip()) > 0]
+    start_idx = -1
+    for i, line in enumerate(lines):
+        numeric_parts = clean_first_line(line)
+        if len(numeric_parts) == 3 and all(x > 0 for x in numeric_parts):
+            start_idx = i
+            break
+    if start_idx == -1 or start_idx >= len(lines) - 1:
+        return [], [], [], []
+    try:
+        lengths = clean_first_line(lines[start_idx])
+        angles = clean_first_line(lines[start_idx + 1]) if start_idx + 1 < len(lines) else []
+        species, coords = [], []
+        for i in range(start_idx + 2, len(lines), 2):
+            element = re.sub(r"[^A-Za-z]", "", lines[i].strip())
+            if not element:
+                continue
+            species.append(element)
+            if i + 1 < len(lines):
+                parts = lines[i + 1].strip().split()
+                try:
+                    coords.append([float(x) for x in parts[:3]] if len(parts) >= 3
+                                  else [0.0, 0.0, 0.0])
+                except ValueError:
+                    coords.append([0.0, 0.0, 0.0])
+            else:
+                coords.append([0.0, 0.0, 0.0])
+        return lengths, angles, species, coords
+    except (ValueError, IndexError):
+        return [], [], [], []
+
+
+DEFAULT_SYMPREC = 0.1        # matches crystallm _metrics.is_space_group_consistent
+
+
+def crystal_string_to_cif(text, symprec=DEFAULT_SYMPREC):
+    """(cif_text, reason) for one generated crystal string; (None, reason) on failure.
+
+    WHY symprec IS NOT OPTIONAL HERE. The decoded Structure carries no symmetry -- every
+    atom is listed and pymatgen writes `P 1`. CrystaLLM's is_space_group_consistent
+    (_metrics.py:70) compares a CIF's STATED space group against what SpacegroupAnalyzer
+    detects from its coordinates, and 87% of these structures do have real symmetry, so a
+    P1-written CIF fails by construction: measured 0/40 valid. Passing symprec makes
+    Structure.to() hand it to pymatgen.io.cif.CifWriter, which runs SpacegroupAnalyzer and
+    writes the DETECTED symbol -- 27/40.
+
+    That is the right source of truth rather than a workaround: llamat2-cif never emits a
+    space group, so the only meaningful one is whatever its coordinates imply.
+
+    LEAVE CifWriter's refine_struct AT ITS DEFAULT (True). It rewrites the cell in the
+    conventional setting, which on 3.5% of structures returns twice the atoms in twice the
+    volume -- the same crystal, re-expressed, so composition and every intensive property
+    (density per atom, energy per atom) are untouched. Setting refine_struct=False to
+    "preserve" the cell is worse, not better: the symmetry operators are only valid in the
+    standard setting, so writing them against an unrefined cell breaks the round trip.
+    Measured over 200 structures: atom count survives 96.5% with the default against 90.5%
+    without, and is_valid 29/40 against 25/40.
+
+    Round-tripping is lossy on lengths regardless, because the ENCODER rounds lengths to 1
+    decimal and truncates angles with int(). Volume per atom moves by a median 0.64%
+    (p95 2.3%, max 3.9%). That is the format's precision, not a decode error.
+    """
+    from pymatgen.core.lattice import Lattice
+    from pymatgen.core.structure import Structure
+
+    lengths, angles, species, coords = parse_fn(text or "")
+    if len(lengths) != 3:
+        return None, "no line with three positive numbers (lattice) found"
+    if len(angles) != 3:
+        return None, "no angle line after the lattice line"
+    if not species:
+        return None, "no element lines"
+    if len(species) != len(coords):
+        return None, f"{len(species)} elements against {len(coords)} coordinate lines"
+    # Their parser substitutes [0,0,0] for an unparseable coordinate line, which reads as
+    # a real atom at the origin. Report it; the caller decides whether to keep the row.
+    n_origin = sum(1 for c in coords if c == [0.0, 0.0, 0.0])
+    try:
+        struct = Structure(Lattice.from_parameters(*lengths, *angles), species, coords,
+                           coords_are_cartesian=False)
+        cif = struct.to(fmt="cif", symprec=symprec)
+    except Exception as e:
+        return None, f"{type(e).__name__}: {e}"
+    reason = f"{n_origin} coordinate line(s) defaulted to the origin" if n_origin else ""
+    return cif, reason
 
 
 if __name__ == "__main__":
