@@ -6,8 +6,15 @@ VENDORED, ON PURPOSE. These functions are copied verbatim from
 M3RG-IITD/llamat ("copied verbatim from the repo so they can be reused on a new
 dataset"). `llamat/` is an UNTRACKED clone, so without this file the prompt work is lost
 on a fresh checkout and extraction cannot be reproduced. Provenance is noted per block.
-`scripts/embeddings/extract_cif_embeddings.py` asserts this file still matches the clone
-whenever the clone is present.
+
+HOW FAITHFUL "VERBATIM" IS. The prompt builders are copied character for character. The
+two PARSER functions below are copied for behaviour, not for text: their docstrings are
+replaced with ones that say what the caller must handle, and `parse_fn` takes one added
+optional argument (`defaulted`) that only records which sites hit the [0,0,0] fallback.
+Checked against the clone on 262 inputs -- 250 real crystal strings and 12 adversarial
+ones covering every fallback branch -- the two agree on all of them, and passing
+`defaulted` does not change the return value. There is no automated assertion; rerun
+that comparison if the clone is updated.
 
 WHY THIS TEXT AND NOT A CIF
 ---------------------------

@@ -229,6 +229,11 @@ class LlamatBackend(Backend):
         with torch.no_grad():
             y = self.model.generate(
                 x,
+                # All ones -- one sequence, no padding. Passed explicitly because this
+                # tokenizer's pad token IS its eos token, so transformers cannot infer a
+                # mask and warns. The inferred mask would be all ones anyway; stating it
+                # removes the ambiguity rather than papering over it.
+                attention_mask=torch.ones_like(x),
                 max_new_tokens=max_new_tokens,
                 do_sample=True,
                 temperature=temperature,
