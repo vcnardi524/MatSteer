@@ -1,9 +1,23 @@
 #!/usr/bin/env python3
 """
-Steered CIF generation using CrystaLLM.
+Steered CIF generation, for any registered model.
 
-Two steering methods share the same forward hook on model.transformer.h[layer], applied
-to every token position at every generation step (ChemSteer's inject_timestep='all'):
+Two axes, kept separate. `--model` picks a BACKEND from scripts/backends.py (the weights,
+the tokenizer, and where the transformer blocks live) and, with it, a PROMPT SOURCE --
+what the model is asked and how its answer becomes a CIF:
+
+  crystallm    CifPrefixPrompts. The prompt is the head of a real CIF, which the model
+               continues, so the output already IS a CIF and to_cif is the identity.
+               Every arm draws from the same 1,000 test structures, which is what makes
+               the paired t-test valid.
+  llamat2_cif  UnconditionalPrompts. One constant instruction; the model writes a crystal
+               string, which is decoded into a CIF with pymatgen deriving the space group
+               (llamat_prompts.crystal_string_to_cif). Raw output is kept beside the CIF.
+               NOT pairable on id -- see --paired-seed and CLAUDE.md.
+
+The steering methods themselves are architecture-agnostic: they take a bare hidden-state
+tensor, and the hook goes on backend.blocks[layer]. It is applied to every token position
+at every generation step (ChemSteer's inject_timestep='all'):
 
   linear        h <- h + alpha * v
                 v is the normalized high-class minus low-class mean difference from
@@ -20,18 +34,18 @@ to every token position at every generation step (ChemSteer's inject_timestep='a
                 subspace coordinates onto the centroid.
                 Needs compute_pca_basis.py and compute_centroid_target.py.
 
-Prompting follows CrystaLLM (composition + space group header from CIF).
-Outputs a single parquet with columns: id, sample, cif_steered. Both methods write into
-the same directory; the filename carries the method so the two never collide.
+Outputs a single parquet with columns id, sample, cif_steered -- plus raw_output and
+decode_reason when the model does not emit a CIF directly. Every method writes into the
+same directory; the filename carries the method so they never collide.
 
 Usage:
-    python steer_generate_cif.py --model CrystaLLM/crystallm_v1_large \
+    python steer_generate_cif.py --model crystallm --ckpt-dir CrystaLLM/crystallm_v1_large \
         --pkl CrystaLLM/cifs_v1_test.pkl.gz --alpha 40 --layer 14 --n-samples 3 \
         --with-spacegroup --steering-property density_atomic
 
-    python steer_generate_cif.py --model CrystaLLM/crystallm_v1_large \
-        --pkl CrystaLLM/cifs_v1_test.pkl.gz --method pca_centroid \
-        --target 30 --t 0.5 --k 64 --layer 14 --n-samples 3 --with-spacegroup
+    python steer_generate_cif.py --model llamat2_cif --ckpt-dir models/llamat2_cif \
+        --method linear --steering-property band_gap --layer 24 --alpha 16 \
+        --n-prompts 1000 --n-samples 1 --temperature 0.01 --top-p 0.95 --paired-seed
 """
 import argparse
 import zlib
