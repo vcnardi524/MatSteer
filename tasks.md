@@ -40,6 +40,24 @@ scale. Note the vectors are unit-normalised, so alpha IS the injected norm, and 
 hidden states at layer 24 are 4096-dim against crystallm's 1024 -- the norms are not
 comparable between models.
 
+**Why alpha 40 is that far off, in numbers.** The vectors are unit-normalised, so alpha
+IS the injected norm, and the natural scale is the raw class-mean-difference norm. For
+llamat band_gap at layer 24 that is **2.41**; for crystallm band_gap at layer 14 it is
+**17.49**. So crystallm's alpha 16 is ~1x its class separation while alpha 40 is ~16.6x
+llamat's -- the same number means two completely different interventions. A llamat sweep
+should be scaled to its own raw_norm: ~2.4 for 1x, ~5 for 2x. (The llamat classes are also
+far better anchored: 64,165 low against 11,981 high, versus crystallm's 575,593 against
+1,905.)
+
+**Temperature 0.01 does not give a population.** Two unconditional draws at the authors'
+notebook settings (temperature 0.01, top_p 0.95) returned the SAME composition and cell --
+TbGa, 7.5 7.5 7.5, 109 109 109 -- differing only in a few coordinate digits. Those settings
+were meant for producing one CIF from a conditional prompt, not for sampling a diverse
+unconditional population, and a 1,000-draw sweep at 0.01 would be 1,000 near-copies of one
+structure. Any distributional comparison between arms needs a temperature that actually
+samples; pick it by measuring distinct compositions per 100 draws before committing to a
+sweep.
+
 **Open, and it decides how the sweep is analysed:** unconditional generation has no
 per-structure id, so the paired t-test every crystallm result rests on does not apply.
 `--paired-seed` (common random numbers per draw index) is implemented and off by default.
