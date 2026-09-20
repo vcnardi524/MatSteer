@@ -343,10 +343,10 @@ injection arrives, not that it directs anything.
 
 | Path | Contents |
 |------|----------|
-| `scripts/` | All Python, grouped by pipeline stage: `data/` (metadata fetch/parse, CIF building, column adds), `embeddings/` (residual-stream extraction), `steering/` (vector computation, steered generation, probes), `eval/` (validate, relax, predict, novelty, summarize), `analysis/` (co-clustering, symmetry separability), `plots/`, `oneoff/` (retired). `utils.py` and `predictors.py` sit at the top level and are imported by the rest. |
+| `scripts/` | All Python, grouped by pipeline stage: `data/` (metadata fetch/parse, CIF building, column adds), `embeddings/` (residual-stream extraction), `steering/` (vector computation, steered generation, probes), `eval/` (validate, relax, predict, novelty, summarize), `analysis/` (co-clustering, symmetry separability), `plots/`, `oneoff/` (retired). `utils.py`, `predictors.py`, `manifold.py`, `backends.py` and `llamat_prompts.py` sit at the top level and are imported by the rest — `backends.py` holds the one backend per model that extraction and steered generation share. |
 | `slurms/` | SLURM submit scripts (env-var driven: `INPUT`, `ALPHA`, `N_PROMPTS`, ...). |
 | `steering_vectors/` | `bandgap_layer{1..15}.parquet` — per-layer clean steering vectors. |
-| `steering_results/generated_cifs/` | Raw steered generations — `id, sample, cif_steered`. The source of truth for raw CIFs. |
+| `steering_results/generated_cifs/` | Raw steered generations — `id, sample, cif_steered`. The source of truth for raw CIFs. Models that do not emit a CIF (llamat2-cif writes a crystal string) add `raw_output` and `decode_reason`: an empty `cif_steered` means decoding failed, and the raw text is kept so the failure can be diagnosed without regenerating. |
 | `steering_results/relaxed/` | M3GNet-relaxed CIF store — `id, sample, cif_relaxed` (valid structures only). |
 | `steering_results/validation/` | **Flags only** (no CIF strings): `id, sample` + validity flags; `novelty_<stem>.parquet` adds `is_unique, is_novel`. |
 | `steering_results/<property>/property_predictions/` | Per-run predictions — `id, sample, <base>_raw, <base>`, one file per source stem. For `band_gap` the base is `predicted_bandgap_ev`. |
@@ -462,7 +462,7 @@ analysis/corpus/v1_mp/all/metadata_mp_*.png
 | `steering/compute_steering_vector.py` | Build a steering vector for any scalar property (`--property`, `--low/--high` or `--pct`) → `steering_vectors/<name>/layer{N}.parquet`. |
 | `steering/compute_pca_basis.py` | Top-K PCA basis of a layer's activations, IncrementalPCA streamed over the 2.05M train embeddings. Once per layer → `steering_vectors/pca_centroid/pca_layer{N}_k{K}.parquet`. |
 | `steering/compute_centroid_target.py` | Target centroid in subspace coordinates: the `--class-size` structures nearest `--target`. `--save-bank` also writes every member's coordinate (for `pca_local`); `--name` sets the output subdir → `steering_vectors/pca_centroid/<name>/`. |
-| `steering/steer_generate_cif.py` | Steered CIF generation (hook @ layer, `--method linear\|pca_centroid\|pca_local`, `--alpha` or `--target`/`--t`/`--k`/`--neighbours`, `--steering-property`, `--with-spacegroup`, `--n-prompts`) → `generated_cifs/`. |
+| `steering/steer_generate_cif.py` | Steered generation for any model (`--model` picks the backend and prompt source; hook @ layer, `--method linear\|pca_centroid\|pca_local\|manifold`, `--alpha` or `--target`/`--t`/`--k`/`--neighbours`, `--steering-property`, `--with-spacegroup`, `--n-prompts`, `--paired-seed`) → `generated_cifs/`. |
 | `analysis/steering_ttest.py` | **The only thing that writes the results CSVs.** `--all` scores every run into `analysis/<…>/steering_runs.csv`; `--property`/`--method`/`--target`/`--layer` writes one sweep's own file. `analyse()` is the single place a run is scored, so the two cannot disagree. |
 | `data/build_density_atomic_table.py` | Volume per atom for all 2.29M v1 structures, read off the CIF text → `density_atomic_v1.parquet`. |
 | `eval/validate_steered_cifs.py` | Validity checks on raw CIFs → `validation/` (flags only, no CIF strings). |
