@@ -84,7 +84,23 @@ has been seen with under 5G free, which OOM-killed a job. Keep the exclusions.
 
 The pipeline is `generate → validate → relax → predict`, and each stage writes its own
 parquet keyed on `(id, sample)`. Downstream stages **join**, they do not carry data
-forward:
+forward.
+
+**`steering_results/` leads with the MODEL**: `steering_results/<model>/<property>/<subdir>`.
+Added 2026-09-20, when llamat2-cif's first sweep was about to write into the same
+property trees crystallm already occupied. The properties really do collide -- both
+models steer `formation_energy_per_atom`, and both have layer-8 arms -- so without the
+model level two models' runs land in one directory and `steering_ttest` builds one table
+out of both. `steering_path()` resolves the baseline against the model too
+(`<model>/baseline`), because alpha=0 is property-independent but emphatically NOT
+model-independent; it now raises on a bare property name rather than guessing. The
+analysis scripts take `--model` to pick the tree.
+
+The band-gap results tree is `<model>/bandgap` for BOTH models, not `band_gap`, so one
+`PROPS` entry serves both. That dir name predates the MP label column it is named after;
+the steering-vector tree and the `--steering-property` flag still use `band_gap`.
+
+The per-stage stores:
 
 - `steering_results/generated_cifs/` — `cif_steered`. The only home for raw CIFs.
   Models that do not emit a CIF add two more columns: `raw_output`, what the model
@@ -97,7 +113,7 @@ forward:
 - `steering_results/<property>/property_predictions/` — one file per source stem,
   accumulating `<base>_raw` (from the raw CIF) and `<base>` (from the relaxed one).
 
-**alpha=0 controls live in `steering_results/baseline/` ONLY, never under a property.** At
+**alpha=0 controls live in `steering_results/<model>/baseline/` ONLY, never under a property.** At
 alpha=0 the hook adds exactly zero, so the CIFs, their validity flags and their M3GNet
 relaxation are all property-independent — `steered_test_alpha0.0_layer14.parquet` was
 previously stored five times over, byte-identical. All four subdirs are shared,

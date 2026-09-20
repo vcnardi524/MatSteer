@@ -270,11 +270,16 @@ SHARED_SUBDIRS = ("generated_cifs", "validation", "relaxed", "property_predictio
 
 
 def steering_path(results_dir: str, sub: str, stem: str) -> str:
-    """Path to one run's file, falling back to the shared baseline tree.
+    """Path to one run's file, falling back to that MODEL's baseline tree.
 
-    Looks in the property's own tree first, then baseline/ -- but only for subdirs that
-    are actually shared. Asking for property_predictions here raises rather than silently
-    resolving to a file that belongs to another property.
+    `results_dir` is <model>/<property> -- crystallm/density_atomic,
+    llamat2_cif/band_gap. The model level exists because the property trees are otherwise
+    shared: crystallm and llamat2-cif both steer formation_energy_per_atom, and both have
+    layer-8 arms, so their runs landed in one directory and one results table.
+
+    Looks in the property's own tree first, then <model>/baseline/ -- but only for subdirs
+    that are actually shared. Asking for property_predictions here raises rather than
+    silently resolving to a file that belongs to another property.
     """
     own = os.path.join(STEERING_ROOT, results_dir, sub, stem)
     if os.path.exists(own) or sub not in SHARED_SUBDIRS:
@@ -283,7 +288,15 @@ def steering_path(results_dir: str, sub: str, stem: str) -> str:
                 f"{own} not found, and {sub!r} is not shared so there is no baseline "
                 f"fallback (shared: {', '.join(SHARED_SUBDIRS)})")
         return own
-    shared = os.path.join(STEERING_ROOT, BASELINE_DIR, sub, stem)
+    # The baseline belongs to the model, not to the repo: alpha=0 is property-independent
+    # but emphatically NOT model-independent. Falling back to a bare baseline/ would hand
+    # llamat arms crystallm's control.
+    model = os.path.dirname(results_dir)
+    if not model:
+        raise ValueError(
+            f"results_dir must be <model>/<property>, got {results_dir!r} -- without the "
+            f"model level the baseline fallback cannot tell whose control to return")
+    shared = os.path.join(STEERING_ROOT, model, BASELINE_DIR, sub, stem)
     return shared if os.path.exists(shared) else own
 
 

@@ -79,7 +79,8 @@ import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-from utils import analysis_dir, postprocess, steering_path, BASELINE_DIR
+from utils import (analysis_dir, postprocess, steering_path, BASELINE_DIR,
+                   MODELS, DEFAULT_MODEL)
 from pymatgen.core import Structure
 
 RANDOM_SEED = 42
@@ -258,16 +259,20 @@ def prompt_ids(path: str) -> frozenset:
 
 
 def prediction_files(results_dir: str) -> list:
-    """Predictions for one property, from its own tree AND the shared baseline tree.
+    """Predictions for one property, from its own tree AND that MODEL's baseline tree.
 
-    Controls live only in baseline/property_predictions so there is exactly one copy of
-    each. Keyed by stem; the property tree wins if a stem somehow appears in both.
+    `results_dir` is <model>/<property>. Controls live only in <model>/baseline/
+    property_predictions so there is exactly one copy of each. Keyed by stem; the
+    property tree wins if a stem somehow appears in both.
     """
+    model = _os.path.dirname(results_dir)
+    if not model:
+        raise ValueError(f"results_dir must be <model>/<property>, got {results_dir!r}")
     own = {_os.path.basename(f): f
            for f in glob.glob(
                f"steering_results/{results_dir}/property_predictions/*.parquet")}
     for f in glob.glob(
-            f"steering_results/{BASELINE_DIR}/property_predictions/*.parquet"):
+            f"steering_results/{model}/{BASELINE_DIR}/property_predictions/*.parquet"):
         own.setdefault(_os.path.basename(f), f)
     return sorted(own.values())
 
@@ -513,6 +518,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--property", default="band_gap", choices=sorted(PROPS))
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="Which model's runs to read: steering_results/<model>/<property>. "
+                         "Required because the property trees are shared between models.")
     ap.add_argument("--method", choices=["linear", "pca_centroid"], default="linear",
                     help="Which steering family to draw. linear reads alpha runs, "
                          "pca_centroid reads steered_pca_* runs keyed by t (plus the "
@@ -547,12 +555,16 @@ def main():
     np.random.seed(RANDOM_SEED)
 
     spec = PROPS[args.property]
+    # <model>/<property>. The property trees are shared between models -- both steer
+    # formation_energy_per_atom, both have layer-8 arms -- so the model level is what
+    # keeps two models' runs out of one results table.
+    results_dir = f"{args.model}/{spec['results_dir']}"
     family = args.family or spec["default_family"]
     print(f"Property: {args.property}  ({spec['label']})")
     print(f"Value source: {'relaxed' if args.relaxed else 'raw generated CIF'}   "
           f"aggregation: {args.agg}   family: {family}")
 
-    runs = discover_runs(spec["results_dir"], family, args.method)
+    runs = discover_runs(results_dir, family, args.method)
     if not runs:
         raise SystemExit(f"No runs found for {args.property} "
                          f"(family={family}, method={args.method}).")
@@ -571,7 +583,7 @@ def main():
     per_alpha = {}
     for a in alphas:
         print(f"  {strength_label(args.method)} {a:g}  [{runs[a]}]")
-        per_alpha[a] = load_alpha(spec["results_dir"], runs[a], spec["col"],
+        per_alpha[a] = load_alpha(results_dir, runs[a], spec["col"],
                                   args.relaxed, args.agg, spec["measure"])
 
     # A strength that broke the model entirely has nothing to draw. Drop it loudly

@@ -129,7 +129,8 @@ def holm(p: np.ndarray) -> np.ndarray:
 
 def analyse(prop: str, method: str, relaxed: bool, family: str = None,
             x_scale: str = "auto", verbose: bool = True,
-            target: float = None, layer: int = None, agg: str = "mean") -> pd.DataFrame:
+            target: float = None, layer: int = None, agg: str = "mean",
+            model: str = DEFAULT_MODEL) -> pd.DataFrame:
     """Paired stats for every run of one (property, method, source), in the canonical
     schema. Returns an empty frame when the family has no alpha=0 control to pair on.
 
@@ -138,15 +139,16 @@ def analyse(prop: str, method: str, relaxed: bool, family: str = None,
     run is scored cannot land in one table and not the other.
     """
     spec = _ds.PROPS[prop]
+    results_dir = f"{model}/{spec['results_dir']}"
     family = family or spec["default_family"]
-    runs = _ds.discover_runs(spec["results_dir"], family, method, target, layer)
+    runs = _ds.discover_runs(results_dir, family, method, target, layer)
     if not runs:
         return pd.DataFrame()
 
     per = {}
     for a, stem in runs.items():
         try:
-            per[a] = _ds.load_alpha(spec["results_dir"], stem, spec["col"],
+            per[a] = _ds.load_alpha(results_dir, stem, spec["col"],
                                     relaxed, agg, spec["measure"])
         except (SystemExit, FileNotFoundError):
             continue                      # not scored on this source yet
@@ -235,13 +237,14 @@ def build_all(out_path=None, model: str = DEFAULT_MODEL) -> pd.DataFrame:
                     fam = family
                     # a run is keyed by (layer, target, strength), so each sweep is
                     # discovered and paired separately
-                    sweeps = _ds.discover_sweeps(_ds.PROPS[prop]["results_dir"], method)
+                    sweeps = _ds.discover_sweeps(
+                        f"{model}/{_ds.PROPS[prop]['results_dir']}", method)
                     for lay, tgt in (sweeps or [(None, None)]):
                         # mean over the 3 samples, and best-of-3. Both are paired the
                         # same way; agg is part of a row's identity, not a variant of it.
                         for agg in ("mean", "max"):
                             f = analyse(prop, method, relaxed, family, verbose=False,
-                                        target=tgt, layer=lay, agg=agg)
+                                        target=tgt, layer=lay, agg=agg, model=model)
                             if not f.empty:
                                 frames.append(f)
     key = ["property", "source", "agg", "family", "method", "layer", "target", "strength"]
@@ -296,7 +299,8 @@ def main():
         return
 
     out = analyse(args.property, args.method, args.relaxed, args.family,
-                  args.x_scale, target=args.target, layer=args.layer, agg=args.agg)
+                  args.x_scale, target=args.target, layer=args.layer, agg=args.agg,
+                  model=args.model)
     if out.empty:
         raise SystemExit(f"No runs found for {args.property} (method={args.method}).")
 

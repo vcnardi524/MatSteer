@@ -346,9 +346,9 @@ injection arrives, not that it directs anything.
 | `scripts/` | All Python, grouped by pipeline stage: `data/` (metadata fetch/parse, CIF building, column adds), `embeddings/` (residual-stream extraction), `steering/` (vector computation, steered generation, probes), `eval/` (validate, relax, predict, novelty, summarize), `analysis/` (co-clustering, symmetry separability), `plots/`, `oneoff/` (retired). `utils.py`, `predictors.py`, `manifold.py`, `backends.py` and `llamat_prompts.py` sit at the top level and are imported by the rest — `backends.py` holds the one backend per model that extraction and steered generation share. |
 | `slurms/` | SLURM submit scripts (env-var driven: `INPUT`, `ALPHA`, `N_PROMPTS`, ...). |
 | `steering_vectors/` | `bandgap_layer{1..15}.parquet` — per-layer clean steering vectors. |
-| `steering_results/generated_cifs/` | Raw steered generations — `id, sample, cif_steered`. The source of truth for raw CIFs. Models that do not emit a CIF (llamat2-cif writes a crystal string) add `raw_output` and `decode_reason`: an empty `cif_steered` means decoding failed, and the raw text is kept so the failure can be diagnosed without regenerating. |
-| `steering_results/relaxed/` | M3GNet-relaxed CIF store — `id, sample, cif_relaxed` (valid structures only). |
-| `steering_results/validation/` | **Flags only** (no CIF strings): `id, sample` + validity flags; `novelty_<stem>.parquet` adds `is_unique, is_novel`. |
+| `steering_results/<model>/<property>/generated_cifs/` | Raw steered generations — `id, sample, cif_steered`. The source of truth for raw CIFs. Models that do not emit a CIF (llamat2-cif writes a crystal string) add `raw_output` and `decode_reason`: an empty `cif_steered` means decoding failed, and the raw text is kept so the failure can be diagnosed without regenerating. |
+| `steering_results/<model>/<property>/relaxed/` | M3GNet-relaxed CIF store — `id, sample, cif_relaxed` (valid structures only). |
+| `steering_results/<model>/<property>/validation/` | **Flags only** (no CIF strings): `id, sample` + validity flags; `novelty_<stem>.parquet` adds `is_unique, is_novel`. |
 | `steering_results/<property>/property_predictions/` | Per-run predictions — `id, sample, <base>_raw, <base>`, one file per source stem. For `band_gap` the base is `predicted_bandgap_ev`. |
 | `cocluster_results/` | Co-clustering outputs per layer/K. |
 | `embeddings/`, `plots/`, `logs/` | Embeddings, figures, SLURM logs. |

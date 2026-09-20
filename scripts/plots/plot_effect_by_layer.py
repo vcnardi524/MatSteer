@@ -38,9 +38,10 @@ import matplotlib.pyplot as plt
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import analysis_dir
+from utils import analysis_dir, MODELS, DEFAULT_MODEL
 
-CSV = str(analysis_dir("v1_all", None, "test") / "steering_runs.csv")
+def default_csv(model):
+    return str(analysis_dir("v1_all", None, "test", model=model) / "steering_runs.csv")
 COLOR = ["#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7", "#56B4E9", "#7A3B2E"]
 MARKER = ["s", "o", "^", "D", "v", "P", "X"]
 # which CSV column each coefficient key lives in, per method
@@ -76,13 +77,19 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--series", action="append", required=True,
                     help="prop:method:coeffs, repeatable -- one line each")
-    ap.add_argument("--csv", default=CSV)
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="Which model's steering_runs.csv to read. Without this the "
+                         "default silently reads crystallm's table.")
+    ap.add_argument("--csv", default=None,
+                    help="default: analysis/<model>/v1_all/test/steering_runs.csv")
     ap.add_argument("--family", default="nosg", choices=("nosg", "sg", "cond", "any"))
     ap.add_argument("--source", default="raw", choices=("raw", "relaxed"))
     ap.add_argument("--agg", default="mean", choices=("mean", "max"))
     ap.add_argument("--out", default=None,
                     help="default: analysis/<model>/v1_all/test/plots/effect_by_layer.png")
     args = ap.parse_args()
+    if args.csv is None:
+        args.csv = default_csv(args.model)
 
     d = pd.read_csv(args.csv)
     d = d[(d["agg"] == args.agg) & (d.source == args.source) & d.cohens_d.notna()]
@@ -121,7 +128,7 @@ def main():
                  "reporting degradation, not steering",
                  fontsize=11, loc="left")
     out = Path(args.out or
-               analysis_dir("v1_all", None, "test", subdir="plots") /
+               analysis_dir("v1_all", None, "test", subdir="plots", model=args.model) /
                "effect_by_layer.png"); out.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
     fig.savefig(out, dpi=150, bbox_inches="tight", facecolor="white")
