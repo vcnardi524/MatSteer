@@ -197,6 +197,10 @@ class CifPrefixPrompts:
     """
 
     def __init__(self, pkl, with_spacegroup, n_prompts):
+        # Part of the filename because it names the PROMPT SET, which is what a baseline
+        # is keyed on (CLAUDE.md). Unchanged from before the refactor -- crystallm stems
+        # are join keys across four stores, so they must not move.
+        self.tag = "" if with_spacegroup else "_nosg"
         pattern = PATTERN_COMP_SG if with_spacegroup else PATTERN_COMP
         self._prompts = []
         for id_, cif in load_cifs(pkl):
@@ -227,6 +231,8 @@ class UnconditionalPrompts:
     same random state (common random numbers), which recovers most of the variance
     reduction; without it the arms must be compared as unpaired distributions.
     """
+
+    tag = ""                 # no sg/nosg choice exists: the prompt names no space group
 
     def __init__(self, n_prompts, system_index=0, wrapper="notebook"):
         if not n_prompts:
@@ -473,7 +479,7 @@ def main():
     # methods' runs distinguishable in a shared directory and by stem downstream.
     out_dir = Path(args.out) if args.out else Path(args.results_dir) / "generated_cifs"
     out_dir.mkdir(parents=True, exist_ok=True)
-    sg_tag = "" if args.with_spacegroup else "_nosg"
+    sg_tag = source.tag
     prefix = {"linear": "steered", "pca_centroid": "steered_pca",
               "pca_local": "steered_pcalocal", "manifold": "steered_manifold"}[args.method]
     out_path = out_dir / f"{prefix}_{split}_{run_tag}_layer{args.layer}{sg_tag}.parquet"
