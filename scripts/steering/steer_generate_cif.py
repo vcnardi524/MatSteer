@@ -69,7 +69,10 @@ _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abs
 from make_prompts import PATTERN_COMP, PATTERN_COMP_SG, extract_prompt
 from extract_cif_embeddings import load_cifs
 # sys.path[0] is this script's own dir, so its neighbour imports directly.
-from compute_centroid_target import load_pca
+# load_pca is imported lazily, inside the three builders that need it. Its module chain
+# reaches compute_pca_basis, which imports sklearn at module level -- and sklearn is not
+# in llamat_venv. At top level that makes `--method linear`, which never touches a PCA
+# basis, unimportable for llamat purely by association.
 from manifold import Manifold
 
 RANDOM_SEED = 42
@@ -285,6 +288,7 @@ def build_pca_centroid(args, device):
     """(hook, filename stem suffix) for the PCA-subspace centroid method."""
     if args.target is None:
         raise SystemExit("--method pca_centroid needs --target")
+    from compute_centroid_target import load_pca
     mean, comps = load_pca(args.layer, args.k)
     pca_dir = steering_vectors_dir(args.model, "pca_centroid")
     cen_path = (pca_dir / args.steering_property /
@@ -307,6 +311,7 @@ def build_pca_local(args, device):
     """(mean, components, bank) for the per-prompt local-centroid method."""
     if args.target is None:
         raise SystemExit("--method pca_local needs --target")
+    from compute_centroid_target import load_pca
     mean, comps = load_pca(args.layer, args.k)
     stem = f"layer{args.layer}_k{args.k}_target{args.target:g}"
     bank_path = (steering_vectors_dir(args.model, "pca_centroid")
@@ -328,6 +333,7 @@ def build_manifold(args, device):
     """(hook, filename stem suffix) for the fitted-curve method."""
     if args.manifold is None:
         raise SystemExit("--method manifold needs --manifold <path to a fitted curve>")
+    from compute_centroid_target import load_pca
     mean, comps = load_pca(args.layer, args.k)
     m = Manifold.load(args.manifold)
     print(f"Manifold {args.manifold}: {m!r}")
