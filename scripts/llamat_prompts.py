@@ -107,14 +107,58 @@ OUTPUT_FORMAT_SPEC = (
 )
 
 
+CONDITION_PHRASES = {
+    "formation_energy_per_atom": "The formation energy per atom is",
+    "band_gap": "The band gap is",  # defined but never used in training
+    "pretty_formula": "The chemical formula is",
+    "e_above_hull": "The energy above the convex hull is",
+    "elements": "The elements are",
+    "spacegroup.number": "The spacegroup number is",
+}
+
+# What sample_training_conditions could draw. band_gap is NOT here: it has a phrase but
+# was never used as a condition, so the model has never been asked for a target gap.
+OPTIONAL_CONDITIONS = ["formation_energy_per_atom", "e_above_hull", "spacegroup.number"]
+
+
 def conditional_generation_input(conditions) -> str:
-    """Cell 10. An EMPTY dict gives the unconditional prompt, which is what we use."""
+    """Cell 10. An EMPTY dict gives the unconditional prompt.
+
+    WHICH CONDITIONS ARE IN DISTRIBUTION. Training drew k = randint(0, 3): k == 0 gave
+    the empty dict -- fully unconditional -- and k >= 1 gave formula + elements plus k of
+    OPTIONAL_CONDITIONS. So formula + elements ALONE never appeared, and a
+    composition-only prompt is off-distribution even though it looks like the natural
+    minimal case. The minimal in-distribution conditional prompt carries one optional
+    condition, and spacegroup.number is the only one that is not a steering target.
+    """
     text = "Below is a description of a bulk material. "
     for key, value in conditions.items():
-        raise NotImplementedError(
-            "only the unconditional form is vendored -- see llamat/cif_prompts for the "
-            "conditioned builders")
+        if key == "elements":
+            text += f"{CONDITION_PHRASES[key]} {', '.join(value)}. "
+        elif key in ["formation_energy_per_atom", "band_gap", "e_above_hull"]:
+            text += f"{CONDITION_PHRASES[key]} {round(float(value), 4)}. "
+        else:
+            text += f"{CONDITION_PHRASES[key]} {value}. "
     return text + GENERATE_INSTRUCTION + ".\n" + OUTPUT_FORMAT_SPEC
+
+
+def formula_sum_from_cif(cif_str):
+    """The _chemical_formula_sum line of a CIF, or None."""
+    for line in cif_str.split("\n"):
+        if line.startswith("_chemical_formula_sum"):
+            return line.split(None, 1)[1].strip()
+    return None
+
+
+def elements_from_formula_sum(formula_sum):
+    """"'Ga4 Te4'" -> ['Ga', 'Te'].
+
+    Use this rather than a dataset's own `elements` column. Training derived the element
+    list from _chemical_formula_sum, which follows CIF order; test.csv stores it
+    alphabetised, and the two disagree on 63.7% of structures. Feeding the alphabetical
+    order would put a phrasing in front of the model that it never saw.
+    """
+    return [re.sub(r"[^A-Za-z]", "", token) for token in formula_sum.split()]
 
 
 # ---------------------------------------------------------------------------

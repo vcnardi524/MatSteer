@@ -256,9 +256,60 @@ class UnconditionalPrompts:
         return (cif or ""), reason
 
 
+class ConditionalPrompts:
+    """llamat2-cif conditioned on composition and space group. PAIRABLE on id.
+
+    The analogue of CifPrefixPrompts, and the reason it exists: llamat's unconditional
+    prompt is one constant string, so there is no per-structure prompt to pair an arm
+    against its control on. Conditioning on the structure's own formula, elements and
+    space group gives 1,000 distinct prompts drawn from llamat's own test split, so the
+    paired t-test applies exactly as it does for crystallm.
+
+    WHY THE SPACE GROUP IS NOT OPTIONAL HERE. Training drew k = randint(0, 3) conditions:
+    k == 0 was fully unconditional, and k >= 1 was formula + elements plus at least one
+    of OPTIONAL_CONDITIONS. Composition ALONE never appeared, so a "nosg" analogue would
+    be off-distribution. Of the three optional conditions, spacegroup.number is the only
+    one that is not also a steering target -- conditioning on formation_energy_per_atom
+    or e_above_hull while steering toward it would hand the model the answer. band_gap
+    has a phrase but was never a training condition, so it cannot leak.
+
+    Prompts come from the tracked CSV, not the llamat clone, so this runs on a fresh
+    checkout. See scripts/data/make_llamat_test_sample.py.
+    """
+
+    decodes = True
+    tag = "_sg"              # composition + space group; there is no nosg counterpart
+
+    def __init__(self, csv_path, n_prompts, system_index=0, wrapper="notebook"):
+        df = pd.read_csv(csv_path)
+        if n_prompts:
+            df = df.iloc[:n_prompts]
+        system = llamat_prompts.GENERATION_SYSTEMS[system_index]
+        wrap = llamat_prompts.WRAPPERS[wrapper]
+        self._prompts = []
+        for r in df.itertuples():
+            conditions = {
+                "pretty_formula":    r.pretty_formula,
+                "elements":          llamat_prompts.elements_from_formula_sum(r.formula_sum),
+                "spacegroup.number": int(r.spacegroup_number),
+            }
+            text = wrap(system, llamat_prompts.conditional_generation_input(conditions))
+            self._prompts.append((r.id, text))
+
+    def prompts(self):
+        return self._prompts
+
+    def to_cif(self, raw):
+        cif, reason = llamat_prompts.crystal_string_to_cif(raw)
+        return (cif or ""), reason
+
+
 def build_prompts(args):
     if args.model == "crystallm":
         return CifPrefixPrompts(args.pkl, args.with_spacegroup, args.n_prompts)
+    if args.prompt_csv:
+        return ConditionalPrompts(args.prompt_csv, args.n_prompts,
+                                  args.system_index, args.wrapper)
     return UnconditionalPrompts(args.n_prompts, args.system_index, args.wrapper)
 
 
@@ -277,11 +328,26 @@ def build_linear(args, device):
     steer_vec = np.array(row["steering_vector"], dtype=np.float32)
     lo = row.get("low_thresh", row.get("low_thresh_ev"))   # new / legacy column names
     hi = row.get("high_thresh", row.get("high_thresh_ev"))
+    raw_norm = float(row["raw_norm"])
     print(f"Steering vector [{args.steering_property}] {sv_path}: low<={lo} "
           f"(n={int(row['n_low']):,}) vs high>={hi} (n={int(row['n_high']):,})  "
-          f"raw_norm={row['raw_norm']:.2f}")
-    print(f"Method=linear  alpha={args.alpha}  layer={args.layer}")
-    return linear_hook(steer_vec, args.alpha, device), f"alpha{args.alpha}"
+          f"raw_norm={raw_norm:.2f}")
+
+    alpha = args.alpha
+    if args.alpha_rel is not None:
+        # The stored vector is unit-norm, so alpha IS the injected norm -- an ABSOLUTE
+        # quantity, and hidden states are not the same size across models or layers.
+        # Measured per-token on answer tokens: crystallm layer 14 has |h| = 165.8 while
+        # llamat layer 24 has |h| = 22.2, so alpha 40 is 24% of the residual stream for
+        # one and 180% for the other -- it overwrites rather than steers, and llamat
+        # degenerates into repetition. raw_norm (the class-mean difference before
+        # normalising) sits at ~10% of |h| in BOTH models at every layer measured, so it
+        # is the portable unit: --alpha-rel 1 means "one class separation".
+        alpha = args.alpha_rel * raw_norm
+        print(f"  --alpha-rel {args.alpha_rel:g} x raw_norm {raw_norm:.2f} "
+              f"-> alpha {alpha:.3f}")
+    print(f"Method=linear  alpha={alpha:g}  layer={args.layer}")
+    return linear_hook(steer_vec, alpha, device), f"alpha{alpha:g}"
 
 
 def build_pca_centroid(args, device):
@@ -400,7 +466,15 @@ def main():
                         help="[pca_local] class members averaged into each prompt's "
                              "local centroid")
     parser.add_argument("--alpha", type=float, default=1.0,
-                        help="[linear] steering strength (positive = towards the high class)")
+                        help="[linear] steering strength (positive = towards the high class). "
+                             "An ABSOLUTE injected norm, so a value tuned on one model or "
+                             "layer does not carry to another -- prefer --alpha-rel.")
+    parser.add_argument("--alpha-rel", type=float, default=None,
+                        help="[linear] steering strength as a multiple of this layer's "
+                             "raw_norm (the class-mean difference before normalising). "
+                             "Portable across models and layers, where --alpha is not: "
+                             "raw_norm is ~10%% of the hidden-state norm everywhere "
+                             "measured. Overrides --alpha.")
     parser.add_argument("--target", type=float, default=None,
                         help="[pca_centroid] target property value; picks the centroid file")
     parser.add_argument("--t", type=float, default=0.5,
@@ -423,6 +497,12 @@ def main():
                              "temperature=0.01, top_p=0.95 in the notebooks that "
                              "produced their published CIFs. Ignored by crystallm, "
                              "which samples with top_k only.")
+    parser.add_argument("--prompt-csv", default=None,
+                        help="[llamat] conditional prompts from this CSV (id, "
+                             "pretty_formula, formula_sum, spacegroup_number), giving "
+                             "one prompt per structure so arms pair on id. Omit for "
+                             "unconditional generation, which cannot be paired. See "
+                             "scripts/data/make_llamat_test_sample.py.")
     parser.add_argument("--system-index", type=int, default=0,
                         help="[llamat] which generation system prompt to use")
     parser.add_argument("--wrapper", choices=("notebook", "chatml"), default="notebook",
