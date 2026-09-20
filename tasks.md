@@ -28,6 +28,18 @@ crystallm generation is byte-identical cached and uncached, same three output co
   the atoms in twice the volume. Harmless -- same crystal, intensive properties
   unchanged -- and `refine_struct=False` is worse, not better.
 
+**The crystallm alpha scale does not transfer.** First live steered generation, band_gap
+linear vector at layer 24, alpha 40 (a routine strength for crystallm): llamat collapses
+into degenerate repetition -- `7.7 7.7 7.7` then `117.2`, then `F.22 / F.72 / F.12 ...`
+for the rest of the window. It decodes to nothing, cleanly: `cif_steered` empty,
+`decode_reason='no angle line after the lattice line'`, `raw_output` holding the evidence.
+Unsteered at the same seed produced a well-formed TbGa crystal string. So the hook fires
+and the plumbing reports failure correctly -- the strength is simply wrong. An alpha sweep
+for llamat has to start well below 40 and find the usable band before any sweep is run at
+scale. Note the vectors are unit-normalised, so alpha IS the injected norm, and llamat's
+hidden states at layer 24 are 4096-dim against crystallm's 1024 -- the norms are not
+comparable between models.
+
 **Open, and it decides how the sweep is analysed:** unconditional generation has no
 per-structure id, so the paired t-test every crystallm result rests on does not apply.
 `--paired-seed` (common random numbers per draw index) is implemented and off by default.
