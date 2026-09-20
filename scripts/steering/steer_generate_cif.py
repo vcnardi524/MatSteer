@@ -166,12 +166,23 @@ def manifold_hook(mean, components, manifold, delta, device, scale=1.0,
 
 
 def generate(backend, prompt_str, args, hook=None):
-    """One sample, with the steering hook attached to the layer for its lifetime only."""
+    """(text, n_new_tokens) for one sample, hook attached for its lifetime only.
+
+    n_new_tokens is what makes truncation detectable. A generation that used the whole
+    --max-new-tokens budget was CUT OFF mid-structure, and nothing in the resulting CIF
+    records that: the file is internally consistent, it just describes a smaller crystal
+    than the model was writing. Counting tokens here is the only exact way to know, and
+    it is free -- generate_ids already has them.
+    """
     handle = backend.blocks[args.layer].register_forward_hook(hook) if hook else None
     try:
-        return backend.generate(prompt_str, args.max_new_tokens,
-                                temperature=args.temperature, top_k=args.top_k,
-                                top_p=args.top_p, use_cache=args.use_cache)
+        y, n_prompt = backend.generate_ids(
+            prompt_str, args.max_new_tokens, temperature=args.temperature,
+            top_k=args.top_k, top_p=args.top_p, use_cache=args.use_cache)
+        n_new = int(y.shape[1]) - n_prompt
+        text = backend.decode(y[0][n_prompt:].tolist()) if backend.strips_prompt \
+            else backend.decode(y[0].tolist())
+        return text, n_new
     finally:
         if handle:
             handle.remove()
@@ -623,7 +634,7 @@ def main():
                 # Common random numbers: the same (id, sample) draws the same random
                 # stream in every arm, so arms differ by the hook and nothing else.
                 torch.manual_seed(zlib.crc32(f"{id_}|{j}".encode()))
-            raw = generate(backend, prompt, args, hook=hook)
+            raw, n_new = generate(backend, prompt, args, hook=hook)
             cif, reason = source.to_cif(raw)
             row = {
                 "id":          id_,
@@ -631,6 +642,11 @@ def main():
                 "cif_steered": cif,
             }
             if source.decodes:
+                # Exact truncation signal. A run that used the whole budget was cut off
+                # mid-structure, and the CIF cannot show that -- it is internally
+                # consistent, just a smaller crystal than the model was writing. Only
+                # recorded for decoding models, so crystallm keeps its three columns.
+                row["n_new_tokens"] = n_new
                 # Keyed on whether a decode step exists, NOT on whether the text changed:
                 # a generation that decoded to nothing has raw == cif == "" and would
                 # otherwise lose its reason. crystallm, where to_cif is the identity,

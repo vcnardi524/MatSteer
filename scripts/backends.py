@@ -91,6 +91,10 @@ class Backend:
 class CrystaLLMBackend(Backend):
     """CrystaLLM v1: nanoGPT blocks at model.transformer.h, CIFTokenizer."""
 
+    # The prompt is the head of the CIF the model continues, so it is PART of the answer.
+    # Cutting it off would leave a CIF with no formula line.
+    strips_prompt = False
+
     def __init__(self, ckpt_dir: str, device: torch.device, torch_dtype: str = None):
         sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "CrystaLLM"))
         from crystallm import CIFTokenizer
@@ -148,6 +152,10 @@ class LlamatBackend(Backend):
     float16, and only the latter leaves room for activations on a 32 GB card. bfloat16
     needs sm_80 (Ampere); the V100s here are sm_70, so float16 is the default.
     """
+
+    # The prompt is a 203-token English instruction, not the head of the answer. Keeping
+    # it would put prose in front of every crystal string and no parser would survive it.
+    strips_prompt = True
 
     def __init__(self, ckpt_dir: str, device: torch.device, torch_dtype: str = "float16"):
         from transformers import AutoModelForCausalLM, AutoTokenizer
