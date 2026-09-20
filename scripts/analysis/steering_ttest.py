@@ -280,8 +280,11 @@ def main():
     ap.add_argument("--property", default="band_gap", choices=sorted(_ds.PROPS))
     ap.add_argument("--alphas", type=float, nargs="+", default=None,
                     help="Steering strengths to test (default: every run on disk)")
-    ap.add_argument("--family", choices=["nosg", "sg"], default=None,
-                    help="band_gap only: prompts without/with a space-group header")
+    ap.add_argument("--family", choices=["nosg", "sg", "cond"], default=None,
+                    help="Which PROMPT SET to read. nosg/sg: crystallm prompts without/"
+                         "with a space-group header. cond: llamat2-cif's conditional "
+                         "prompts. REQUIRED when a property tree holds more than one "
+                         "model's runs.")
     ap.add_argument("--relaxed", action="store_true",
                     help="Read the M3GNet-relaxed value instead of the raw generated one")
     ap.add_argument("--x-scale", choices=["auto", "linear", "log"], default="auto",

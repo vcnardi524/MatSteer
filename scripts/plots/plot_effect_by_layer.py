@@ -77,7 +77,7 @@ def main():
     ap.add_argument("--series", action="append", required=True,
                     help="prop:method:coeffs, repeatable -- one line each")
     ap.add_argument("--csv", default=CSV)
-    ap.add_argument("--family", default="nosg", choices=("nosg", "sg", "any"))
+    ap.add_argument("--family", default="nosg", choices=("nosg", "sg", "cond", "any"))
     ap.add_argument("--source", default="raw", choices=("raw", "relaxed"))
     ap.add_argument("--agg", default="mean", choices=("mean", "max"))
     ap.add_argument("--out", default=None,

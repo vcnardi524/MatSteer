@@ -330,6 +330,24 @@ def discover_targets(results_dir: str, family: str, method: str) -> list:
     return sorted(tg)
 
 
+def family_of(stem: str) -> str:
+    """Which PROMPT SET a run used, from its stem.
+
+    Was a boolean -- `stem.endswith("_nosg.parquet")` -- with everything else counted as
+    "sg". That silently swept in llamat2-cif's conditional runs, which end in `_cond`:
+    they are not `_nosg`, so a `family="sg"` query matched them, and with the default
+    `family=None` there is no filter at all. The trees really are shared -- crystallm and
+    llamat2-cif both write to steering_results/formation_energy_per_atom/, and both have
+    layer-8 arms there -- so a default steering_ttest run would have put two models'
+    arms in one table. Prompt sets are a closed set, so name them.
+    """
+    if stem.endswith("_nosg.parquet"):
+        return "nosg"
+    if stem.endswith("_cond.parquet"):
+        return "cond"
+    return "sg"
+
+
 def discover_runs(results_dir: str, family: str, method: str = "linear",
                   target: float = None, layer: int = None) -> dict:
     """{strength: stem} for the runs that have BOTH predictions and validation.
@@ -369,10 +387,7 @@ def discover_runs(results_dir: str, family: str, method: str = "linear",
                 tgt = sweep_target(stem, kind)
                 if tgt is None or tgt != target:
                     continue
-        is_nosg = stem.endswith("_nosg.parquet")
-        if family == "nosg" and not is_nosg:
-            continue
-        if family == "sg" and is_nosg:
+        if family not in (None, "any") and family_of(stem) != family:
             continue
         if not _os.path.exists(steering_path(results_dir, "validation", stem)):
             print(f"  ! {stem}: predictions but no validation -- skipped")
@@ -510,8 +525,12 @@ def main():
                          "every other curve to that run's few survivors.")
     ap.add_argument("--alphas", type=float, nargs="+", default=None,
                     help="Steering strengths to draw (default: every run on disk)")
-    ap.add_argument("--family", choices=["nosg", "sg"], default=None,
-                    help="band_gap only: prompts without/with a space-group header")
+    ap.add_argument("--family", choices=["nosg", "sg", "cond"], default=None,
+                    help="Which PROMPT SET to read. nosg/sg: crystallm prompts without/"
+                         "with a space-group header. cond: llamat2-cif's conditional "
+                         "prompts. REQUIRED when a property tree holds more than one "
+                         "model's runs, which formation_energy_per_atom and "
+                         "density_atomic now do.")
     ap.add_argument("--relaxed", action="store_true",
                     help="Read the M3GNet-relaxed value instead of the raw generated one")
     ap.add_argument("--agg", choices=["mean", "max", "all"], default="mean",
