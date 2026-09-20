@@ -77,7 +77,7 @@ condition that is not also a steering target; and the element list must come fro
 CIF's `_chemical_formula_sum`, not test.csv's alphabetised `elements` column, which
 disagrees 63.7% of the time.
 
-**OPEN DECISION: the decoded cell is not the generated cell.** The authors' own decoder
+**RESOLVED 2026-09-20 -- the decoded cell is now the generated cell.** The authors' own decoder
 preserves it exactly -- `parse_fn` returns the lengths verbatim, and their CIF path
 (`condtional_generation.py:53`) calls `structure.to(fmt="cif")` with NO symprec, so no
 SpacegroupAnalyzer runs, nothing is refined, and every CIF states `P 1`. Our `symprec=0.1`
@@ -99,9 +99,21 @@ conventional setting, composition and volume/atom intact (0.05%). no-refine's 9.
 CORRUPTION: ops written for the detected group against a non-standard cell, so
 re-expansion yields the wrong atom count. no-refine is strictly worse.
 
-Reversible without the GPU: `raw_output` holds the model's text verbatim, and re-decoding
-reproduces `cif_steered` byte-for-byte, so the policy can be changed with a CPU pass over
-the existing parquets.
+A fourth option settled it: keep the authors' faithful P1 cell AND drop the space-group
+term, which for llamat only ever tested the decoder. Measured over the same 200:
+
+| faithful P1, three-check | cell 100% | atoms 100% | is_valid 97.5% |
+
+Same validity as symprec=0.1, exact fidelity. `crystal_string_to_cif` now writes with no
+symprec; `validate_steered_cifs.py --no-space-group-check` gives the three-check bar, and
+`space_group_detected` records the symmetry the coordinates carry (91.5% above P1) without
+gating anything. crystallm is untouched -- the flag defaults to True and 25 stored arms
+reproduce 25/25.
+
+Reversible without the GPU: `raw_output` holds the model's text verbatim and re-decoding
+is deterministic, so `scripts/data/redecode_llamat_cifs.py` reapplies the policy to
+existing parquets. **The sweep ran while the policy changed, so every generated file needs
+that pass before validation.**
 
 **Sweep submitted 2026-09-20, jobs 487082-487094.** Twelve arms against one control:
 band gap L8/L24, formation energy L8/L24, density L12/L24, each at `--alpha-rel` 2 and 4.
