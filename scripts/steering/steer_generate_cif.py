@@ -395,7 +395,10 @@ def build_pca_centroid(args, device):
     if args.target is None:
         raise SystemExit("--method pca_centroid needs --target")
     from compute_centroid_target import load_pca
-    mean, comps = load_pca(args.layer, args.k)
+    # args.model, NOT the default: the PCA basis lives under
+    # steering_vectors/<model>/pca_centroid/, and a basis fitted on crystallm's 1024-dim
+    # activations is not merely wrong for llamat2-cif, it is the wrong shape.
+    mean, comps = load_pca(args.layer, args.k, args.model)
     pca_dir = steering_vectors_dir(args.model, "pca_centroid")
     cen_path = (pca_dir / args.steering_property /
                 f"layer{args.layer}_k{args.k}_target{args.target:g}.parquet")
@@ -418,7 +421,10 @@ def build_pca_local(args, device):
     if args.target is None:
         raise SystemExit("--method pca_local needs --target")
     from compute_centroid_target import load_pca
-    mean, comps = load_pca(args.layer, args.k)
+    # args.model, NOT the default: the PCA basis lives under
+    # steering_vectors/<model>/pca_centroid/, and a basis fitted on crystallm's 1024-dim
+    # activations is not merely wrong for llamat2-cif, it is the wrong shape.
+    mean, comps = load_pca(args.layer, args.k, args.model)
     stem = f"layer{args.layer}_k{args.k}_target{args.target:g}"
     bank_path = (steering_vectors_dir(args.model, "pca_centroid")
                  / args.steering_property / f"{stem}_bank.parquet")
@@ -440,7 +446,10 @@ def build_manifold(args, device):
     if args.manifold is None:
         raise SystemExit("--method manifold needs --manifold <path to a fitted curve>")
     from compute_centroid_target import load_pca
-    mean, comps = load_pca(args.layer, args.k)
+    # args.model, NOT the default: the PCA basis lives under
+    # steering_vectors/<model>/pca_centroid/, and a basis fitted on crystallm's 1024-dim
+    # activations is not merely wrong for llamat2-cif, it is the wrong shape.
+    mean, comps = load_pca(args.layer, args.k, args.model)
     m = Manifold.load(args.manifold)
     print(f"Manifold {args.manifold}: {m!r}")
     delta = args.delta

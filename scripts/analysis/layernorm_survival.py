@@ -119,7 +119,7 @@ def main():
                            device=device).view(1, 1, -1)
         label = f"linear alpha={args.alpha:g}"
     else:
-        mean, comps = load_pca(args.layer, args.k)
+        mean, comps = load_pca(args.layer, args.k, args.model)
         cen = pd.read_parquet(
             f"{steering_vectors_dir(args.model, 'pca_centroid')}/{args.steering_property}/"
             f"layer{args.layer}_k{args.k}_target{args.target:g}.parquet").iloc[0]

@@ -73,7 +73,7 @@ def main():
     model, _ = load_model(args.ckpt_dir, device)
     tokenizer = CIFTokenizer()
 
-    mean, comps = load_pca(args.layer, args.k)
+    mean, comps = load_pca(args.layer, args.k, args.model)
     stem = f"layer{args.layer}_k{args.k}_target{args.target:g}"
     bank_path = str(steering_vectors_dir(args.model, "pca_centroid")
                     / args.property / f"{stem}_bank.parquet")
