@@ -26,7 +26,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
-from sklearn.decomposition import IncrementalPCA
+# sklearn is imported lazily, inside the fitting routine below. This module also
+# exports embedding_files/stream_batches, which compute_centroid_target imports for
+# load_pca -- and load_pca only READS a fitted basis out of a parquet, so it has no
+# business requiring sklearn. At module level it did: every manifold and pca_centroid
+# run in llamat_venv (which has no sklearn) died on import before loading the model.
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py
@@ -87,6 +91,7 @@ def main():
     print(f"Fitting IncrementalPCA(k={args.k}) over layer {args.layer} "
           f"[{args.dataset}/{args.variant}/{args.partition}] from {len(files)} file(s) ...")
 
+    from sklearn.decomposition import IncrementalPCA
     pca = IncrementalPCA(n_components=args.k)
     n_seen = 0
     for i, batch in enumerate(stream_batches(files, keep_ids, args.batch_size,
