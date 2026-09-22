@@ -4,6 +4,42 @@ Active experiments. See `README.md` for everything completed so far and the
 overall pipeline.
 ## consider probing at the layers to see if they are actually encoding information
 
+## Formation-energy steering is DAMAGE, not steering (2026-09-21)
+
+The negative-direction arms settle it, and the answer is negative. Linear steering of
+formation energy in llamat2-cif does not steer -- it degrades structures, and degrading a
+crystal raises its formation energy.
+
+Three lines of evidence, all from the same 8 arms (+/-1.244, +/-2.488 at layer 8;
++/-4.918, +/-9.836 at layer 24), each paired on id against the shared control:
+
+1. **The effect is not antisymmetric.** Mean Cohen's d is +0.352 on the positive arms and
+   +0.027 on the negative ones. Real steering flips sign with alpha. This does not:
+   formation energy goes UP or nowhere, never down.
+
+2. **Nothing moves down.** Of the four negative arms, three are indistinguishable from
+   control (d = -0.053, -0.064, -0.010) and the one that IS significant moves the WRONG
+   WAY (-2.488 gives d = +0.235). That arm is also the most damaged negative arm at 58.7%
+   validity, which is the point.
+
+3. **Effect size is almost entirely explained by how many structures were destroyed.**
+   Across all 8 arms, Cohen's d against validity gives pearson r = -0.959 (p = 0.0002),
+   spearman -0.929. The strongest "effect" (d = +0.627) is the arm with the worst
+   validity (41.2%); the weakest is the arm at 69.4%, which matches the 69.3% control.
+
+**Do NOT report d = +0.627 as a steering result.** It is the signature of an intervention
+that breaks crystals, measured on the 41% that survived.
+
+DENSITY IS NOT THE SAME and should not be tarred with this. Its layer-24 arms dose-respond
+in the correct direction (+0.109 at 66.4% validity, +0.245 at 58.4%), and pooled effect vs
+validity gives r = +0.552 (p = 0.45, n = 4) -- the opposite sign to formation energy and
+not significant. The layer-12 arms run negative, which is a layer difference rather than a
+damage gradient. Density at layer 24 remains the one credible linear steering result here.
+
+Still open: whether the manifold method avoids this. The 12 negative-direction manifold
+arms are queued and are the right test -- same property, same control, same injection
+magnitudes, different geometry.
+
 ## llamat2-cif steered generation (2026-09-19)
 
 The generation path now works for both models. `scripts/backends.py` holds one backend
