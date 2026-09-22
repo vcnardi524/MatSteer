@@ -479,9 +479,10 @@ analysis/corpus/v1_mp/all/metadata_mp_*.png
   non-null), from NOMAD `results.properties.electronic.dos_electronic.band_gap[0].value`.
   `electronic.band_gap` is the same numbers (identical non-null set, correlation 1.0).
   **Not** `energy_lowest_unoccupied - energy_highest_occupied` — those are raw Joules and
-  their difference is the corrupt LUMO-HOMO gap still used by the legacy
-  `steering/compute_bandgap_steering.py`, `steering/analyze_steering_norms.py` and
-  `analysis/bandgap_percentile_stats.py`. Note `utils.py:DEFAULT_LABEL_COLS` asks for
+  their difference is the corrupt LUMO-HOMO gap. The three scripts that used it have been
+  quarantined in `scripts/legacy/` (`compute_bandgap_steering.py`,
+  `analyze_steering_norms.py`, `bandgap_percentile_stats.py`) — kept because published
+  numbers came from them, but nothing imports or runs them; see `scripts/legacy/README.md`. Note `utils.py:DEFAULT_LABEL_COLS` asks for
   `band_gap_ev`, which does not exist in `metadata.parquet` and is silently dropped, so
   `load_labeled_embeddings` never returns a gap — join it yourself.
 - **Symmetry must be restored before parsing.** A CIF lists the asymmetric unit plus

@@ -303,8 +303,10 @@ on already-indented reference CIFs — that difference has bitten this repo befo
 
 Ground-truth band gap is `metadata.parquet:dos_electronic.band_gap` (eV). **Not**
 `energy_lowest_unoccupied - energy_highest_occupied` — those are raw Joules and their
-difference is a corrupt LUMO-HOMO gap. Three legacy scripts still use it and are named
-in the README; do not copy their approach.
+difference is a corrupt LUMO-HOMO gap. The three scripts that used it are quarantined in
+`scripts/legacy/`, each carrying a banner saying so; nothing imports or runs them. Do not
+copy their approach. `data/parse_nomad_metadata.py` reads those raw columns legitimately --
+it is what builds the metadata in the first place.
 
 Every steering arm generates from the **same 1,000 test structures**,
 `CrystaLLM/cifs_v1_test_sample1000.pkl.gz` (fingerprint `cccf9b87455ac110`). That shared

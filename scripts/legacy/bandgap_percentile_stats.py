@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""LEGACY -- DO NOT COPY. Computes the band gap as
+(energy_lowest_unoccupied - energy_highest_occupied), which is a corrupt LUMO-HOMO gap
+from raw Joules, NOT a band gap. Ground truth is metadata.parquet:dos_electronic.band_gap.
+Kept only because published numbers came from it. See scripts/legacy/README.md.
+"""
 import numpy as np
 from pathlib import Path
 

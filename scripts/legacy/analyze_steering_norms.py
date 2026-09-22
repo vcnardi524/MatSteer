@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""LEGACY -- DO NOT COPY. Computes the band gap as
+(energy_lowest_unoccupied - energy_highest_occupied), which is a corrupt LUMO-HOMO gap
+from raw Joules, NOT a band gap. Ground truth is metadata.parquet:dos_electronic.band_gap.
+Kept only because published numbers came from it. See scripts/legacy/README.md.
+"""
 """
 Diagnose steering strength at a given layer.
 
@@ -14,10 +19,10 @@ Also quantifies the zero-gap (metal) pile-up that distorts percentile selection.
 Writes a tidy CSV summarizing all findings.
 
 Usage (analysis only, any env with pandas/numpy):
-    python scripts/steering/analyze_steering_norms.py --layer 14 --residual-norm 164
+    python scripts/legacy/analyze_steering_norms.py --layer 14 --residual-norm 164
 
 Usage (also re-measure per-token residual norm; needs crystallm_venv + model):
-    python scripts/steering/analyze_steering_norms.py --layer 14 --with-model \
+    python scripts/legacy/analyze_steering_norms.py --layer 14 --with-model \
         --model CrystaLLM/crystallm_v1_large --pkl CrystaLLM/cifs_v1_test.pkl.gz
 
 Output: analysis/steering_norm_analysis_layer{N}.csv
