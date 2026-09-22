@@ -64,3 +64,9 @@ models/
 # scripts/llamat_prompts.py precisely so this directory can stay untracked.
 llamat/
 CrystaLLM-pi/
+
+# Results data: generations, flags, relaxed CIFs and predictions. Large, regenerable
+# from the configs in experiments_configs/ plus the run record in runs.tsv, and never
+# reviewed as a diff. The DERIVED tables and figures are tracked under analysis/ instead;
+# the two text files that used to live here were moved there and to docs/.
+/steering_results/
