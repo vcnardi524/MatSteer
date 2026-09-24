@@ -48,16 +48,22 @@ PROPS = [("density_atomic", "Volume per atom"),
          ("formation_energy_per_atom", "Formation energy")]
 LAYER_COLOUR = {8: "#0072B2", 12: "#009E73", 24: "#D55E00"}
 FALLBACK = "#CC79A7"
+# The bucket width each property's sweep actually used -- the WIDER, better-conditioned
+# fit of the two available. Named explicitly rather than filtered by pattern: an earlier
+# version excluded "_w0.25_", which never matches "..._k32_w0.25.parquet", so it silently
+# loaded the narrow curve and every arc-step percentage and injection value computed from
+# it was wrong.
+SWEEP_WIDTH = {"band_gap": "w0.5_rc", "density_atomic": "w3",
+               "formation_energy_per_atom": "w0.5"}
 _CURVE = {}
 
 
 def curve(model, prop, layer):
     key = (model, prop, layer)
     if key not in _CURVE:
-        hits = [h for h in glob.glob(str(steering_vectors_dir(model, "manifolds")
-                                        / f"{prop}_layer{layer}_k32_w*.parquet"))
-                if not any(w in h for w in ("_w0.1_", "_w0.25_", "_w1."))]
-        _CURVE[key] = Manifold.load(sorted(hits)[0]) if hits else None
+        w = SWEEP_WIDTH.get(prop)
+        path = steering_vectors_dir(model, "manifolds") / f"{prop}_layer{layer}_k32_{w}.parquet"
+        _CURVE[key] = Manifold.load(path) if w and path.exists() else None
     return _CURVE[key]
 
 
@@ -98,6 +104,18 @@ def enrich(model, prop, d, method):
     return d.dropna(subset=["inj"])
 
 
+def mark_ns(ax, g, xcol, colour, marker):
+    """Hollow the arms that are not distinguishable from the control.
+
+    Without this a panel whose y range is +/-0.08 -- band gap, where every arm has
+    p_holm = 1.00 -- draws lines that look as decisive as density's, which are real.
+    """
+    ns = g[g.p_holm > 0.05]
+    if len(ns):
+        ax.plot(ns[xcol], ns.cohens_d, marker, ms=7, mfc="white", mec=colour,
+                mew=1.8, ls="none", zorder=6)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS))
@@ -121,9 +139,10 @@ def main():
         if lin is not None:
             for layer, g in sorted(lin.groupby("layer")):
                 g = g.sort_values("inj")
-                a_lin.plot(g.inj, g.cohens_d, "-o", lw=2.2, ms=7,
-                           color=LAYER_COLOUR.get(int(layer), FALLBACK),
+                c = LAYER_COLOUR.get(int(layer), FALLBACK)
+                a_lin.plot(g.inj, g.cohens_d, "-o", lw=2.2, ms=7, color=c,
                            label=f"layer {layer}")
+                mark_ns(a_lin, g, "inj", c, "o")
             a_lin.legend(frameon=False, fontsize=8.5, loc="best")
         else:
             a_lin.text(0.5, 0.5, "no linear arms", ha="center", va="center",
@@ -138,10 +157,11 @@ def main():
                 if len(g) < 2:
                     continue
                 g = g.sort_values("inj")
-                a_man.plot(g.inj, g.cohens_d, "--s", lw=1.8, ms=6,
-                           color=LAYER_COLOUR.get(int(layer), FALLBACK),
+                c = LAYER_COLOUR.get(int(layer), FALLBACK)
+                a_man.plot(g.inj, g.cohens_d, "--s", lw=1.8, ms=6, color=c,
                            alpha=min(1.0, 0.55 + 0.45 * (abs(g.arcpct.iloc[0]) / 30.0)),
-                           label=f"L{layer}, arc {g.arcpct.iloc[0]:.0f}%")
+                           label=f"L{layer}, arc {g.arcpct.iloc[0]:+.0f}%")
+                mark_ns(a_man, g, "inj", c, "s")
             a_man.legend(frameon=False, fontsize=7.5, ncol=2, loc="best")
         else:
             a_man.text(0.5, 0.5, "no manifold arms yet", ha="center", va="center",
@@ -158,10 +178,11 @@ def main():
                 if len(g) < 2:
                     continue
                 g = g.sort_values("arcpct")
+                c = LAYER_COLOUR.get(int(layer), FALLBACK)
                 a_arc.plot(g.arcpct, g.cohens_d, marker="s", ms=6, lw=1.8,
-                           ls="-" if mag <= 25 else "--",
-                           color=LAYER_COLOUR.get(int(layer), FALLBACK),
+                           ls="-" if mag <= 25 else "--", color=c,
                            label=f"L{layer} @ {mag:.0f}% |h|")
+                mark_ns(a_arc, g, "arcpct", c, "s")
             a_arc.legend(frameon=False, fontsize=7.5, loc="best")
         else:
             a_arc.text(0.5, 0.5, "no manifold arms yet", ha="center", va="center",
@@ -178,7 +199,8 @@ def main():
 
     fig.suptitle(f"{display_name(args.model)}: steering response, one line per run",
                  fontsize=13)
-    fig.text(0.5, 0.006, "colour = layer.  every line varies ONE hyperparameter; "
+    fig.text(0.5, 0.006, "colour = layer.  hollow markers are NOT distinguishable from "
+             "the control (p_holm > 0.05).  every line varies ONE hyperparameter; "
              "methods are never drawn in the same panel.",
              ha="center", fontsize=8.5, color="#666666")
     fig.tight_layout(rect=[0, 0.018, 1, 0.975])
