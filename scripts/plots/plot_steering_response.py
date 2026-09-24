@@ -184,11 +184,26 @@ def main():
             a.grid(alpha=0.25, lw=0.6); a.set_axisbelow(True)
         a_lin.xaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
 
+    # ONE y scale across every panel. Effects differ by an order of magnitude between
+    # properties -- band gap spans +/-0.08 while formation energy reaches +0.63 -- and a
+    # per-panel scale makes band-gap noise look exactly as decisive as a real effect.
+    # Sharing the axis is what shows that band gap is flat.
+    vals = []
+    for _, (_, lin, man) in data.items():
+        for d in (lin, man):
+            if d is not None:
+                vals += list(d.cohens_d)
+    if vals:
+        lo, hi = min(vals), max(vals)
+        pad = 0.08 * (hi - lo)
+        for a in axes.ravel():
+            a.set_ylim(lo - pad, hi + pad)
+
     fig.suptitle(f"{display_name(args.model)}: steering response, one line per run",
                  fontsize=13)
     fig.text(0.5, 0.006, "colour = layer.  hollow markers are NOT distinguishable from "
              "the control (p_holm > 0.05).  every line varies ONE hyperparameter; "
-             "methods are never drawn in the same panel.",
+             "methods are never drawn in the same panel.  ALL PANELS SHARE ONE y SCALE.",
              ha="center", fontsize=8.5, color="#666666")
     fig.tight_layout(rect=[0, 0.018, 1, 0.975])
     out = args.out or (analysis_dir("v1_all", None, "test", subdir="plots",
