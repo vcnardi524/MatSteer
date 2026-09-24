@@ -33,11 +33,11 @@ import matplotlib.pyplot as plt
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
-from utils import analysis_dir
+from utils import analysis_dir, MODELS, DEFAULT_MODEL
 
-MAG = str(analysis_dir("v1_all", None, "test", subdir="plots") /
-          "density_injection_magnitude.csv")
-OUT = analysis_dir("v1_all", None, "test", subdir="plots")
+# Resolved per --model inside main(); a module-level default would pin both to crystallm.
+MAG = None
+OUT = None
 
 
 def series_for(d, layer, min_points=4, sign="both"):
@@ -144,7 +144,11 @@ def pareto(d, series, layer, path, sign="both"):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mag", default=MAG)
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="picks analysis/<model>/... for both the input CSV and the output")
+    ap.add_argument("--mag", default=None,
+                    help="default: analysis/<model>/v1_all/test/plots/"
+                         "<property>_injection_magnitude.csv")
     ap.add_argument("--property", default="density",
                     help="Names the output files and the axis text. The runs themselves "
                          "come from --mag, so point this at that property's CSV too.")
@@ -158,7 +162,10 @@ def main():
                     help="a ladder needs this many runs to be drawn as a series")
     args = ap.parse_args()
 
-    d = pd.read_csv(args.mag)
+    global OUT
+    OUT = analysis_dir("v1_all", None, "test", subdir="plots", model=args.model)
+    mag = args.mag or str(OUT / f"{args.property}_injection_magnitude.csv")
+    d = pd.read_csv(mag)
     signs = ["pos", "neg"] if args.sign == "both" else [args.sign]
     drawn = 0
     for sign in signs:
