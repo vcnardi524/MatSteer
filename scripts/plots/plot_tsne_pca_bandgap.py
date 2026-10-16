@@ -45,7 +45,7 @@ MODE_DEFAULTS = {
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir
+from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir, display_name
 
 
 def uniform_sample_by_value(values: np.ndarray, n: int, bins: int) -> np.ndarray:
@@ -64,7 +64,8 @@ def uniform_sample_by_value(values: np.ndarray, n: int, bins: int) -> np.ndarray
     return sel
 
 
-def load_joined(layer: int, dataset: str, variant: str, partition: str) -> pd.DataFrame:
+def load_joined(layer: int, dataset: str, model: str, variant: str,
+                partition: str) -> pd.DataFrame:
     """Load clean band gaps + embeddings and inner-join on id."""
     print("Loading metadata (clean band gap) ...")
     meta = pd.read_parquet("metadata.parquet", columns=["id", BG_COL])
@@ -72,8 +73,8 @@ def load_joined(layer: int, dataset: str, variant: str, partition: str) -> pd.Da
     meta["band_gap_ev"] = meta[BG_COL].astype(float)
     print(f"  {len(meta):,} entries with clean band gap")
 
-    emb = load_embeddings(layer, dataset=dataset, variant=variant)
-    emb = filter_partition(emb, partition)
+    emb = load_embeddings(layer, dataset=dataset, variant=variant, model=model)
+    emb = filter_partition(emb, partition, model=model)
     print(f"  Embeddings: {len(emb):,}")
     df = emb.merge(meta[["id", "band_gap_ev"]], on="id", how="inner")
     print(f"  After join: {len(df):,}")
@@ -113,7 +114,7 @@ def run_split(df: pd.DataFrame, args, out_dir: Path):
             ax.set_title(f"{method} - Layer {args.layer}")
             ax.set_xlabel("Component 1")
             ax.set_ylabel("Component 2")
-        plt.suptitle(f"{label} - CrystaLLM Layer {args.layer} (n={len(group):,})", y=1.01)
+        plt.suptitle(f"{label} - {display_name(args.model)} layer {args.layer} (n={len(group):,})", y=1.01)
         plt.tight_layout()
         out = out_dir / f"bandgap_{tag}_layer{args.layer}.png"
         plt.savefig(out, dpi=150, bbox_inches="tight")
@@ -158,7 +159,7 @@ def run_combined(df: pd.DataFrame, args, out_dir: Path):
         plt.colorbar(sc, ax=ax, label=f"Band gap (eV, capped {args.vmax})")
         ax.set_title(f"{title} - Layer {args.layer}")
         ax.set_xlabel(xlab); ax.set_ylabel(ylab)
-    plt.suptitle(f"All materials by clean band gap - CrystaLLM Layer {args.layer} "
+    plt.suptitle(f"All materials by clean band gap - {display_name(args.model)} layer {args.layer} "
                  f"(n={len(g):,})", y=1.00)
     plt.tight_layout()
     out = out_dir / f"bandgap_combined_layer{args.layer}.png"
@@ -178,7 +179,7 @@ def run_combined(df: pd.DataFrame, args, out_dir: Path):
         plt.colorbar(sc, ax=ax, label=f"Band gap (eV, capped {args.vmax})")
         ax.set_title(f"3D t-SNE dim{a+1} vs dim{b+1} - Layer {args.layer}")
         ax.set_xlabel(f"dim {a+1}"); ax.set_ylabel(f"dim {b+1}")
-    plt.suptitle(f"3D t-SNE by clean band gap - CrystaLLM Layer {args.layer} "
+    plt.suptitle(f"3D t-SNE by clean band gap - {display_name(args.model)} layer {args.layer} "
                  f"(n={len(g):,})", y=1.02)
     plt.tight_layout()
     out3 = out_dir / f"bandgap_tsne3d_layer{args.layer}.png"
@@ -205,9 +206,9 @@ def main():
 
     np.random.seed(RANDOM_SEED)
 
-    df = load_joined(args.layer, args.dataset, args.variant, args.partition)
+    df = load_joined(args.layer, args.dataset, args.model, args.variant, args.partition)
     out_dir = analysis_dir(args.dataset, args.variant, args.partition,
-                           subdir=f"plots/layer{args.layer}")
+                           subdir=f"plots/layer{args.layer}", model=args.model)
 
     modes = ["split", "combined"] if args.mode == "both" else [args.mode]
     for mode in modes:

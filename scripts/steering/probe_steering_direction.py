@@ -33,7 +33,7 @@ SEED = 42
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_embeddings
+from utils import DEFAULT_MODEL, MODELS, load_embeddings, analysis_root
 
 
 def main():
@@ -41,13 +41,15 @@ def main():
     ap.add_argument("--layer", type=int, default=14)
     ap.add_argument("--dataset", default="v1_all",
                     help="Embeddings subdir under embeddings/ (v1_all or v1_mp)")
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="which model's hidden states to read (see utils.MODELS)")
     ap.add_argument("--low", type=float, default=0.05)
     ap.add_argument("--high", type=float, default=1.0)
     args = ap.parse_args()
 
     meta = pd.read_parquet("metadata.parquet", columns=["id", BG_COL]).dropna(subset=[BG_COL])
     meta["gap"] = meta[BG_COL].astype(float)
-    emb = load_embeddings(args.layer, dataset=args.dataset)
+    emb = load_embeddings(args.layer, dataset=args.dataset, model=args.model)
     df = emb.merge(meta[["id", "gap"]], on="id", how="inner")
 
     metal = df[df["gap"] <= args.low]
@@ -88,7 +90,7 @@ def main():
     ax.set_title(f"Layer {args.layer}: held-out separation along steering direction\n"
                  f"steering AUC={auc_steer:.3f}  |  best linear probe AUC={auc_probe:.3f}")
     ax.legend()
-    out = Path("analysis"); out.mkdir(exist_ok=True)
+    out = analysis_root(args.model)
     png = out / f"steering_probe_layer{args.layer}.png"
     plt.tight_layout(); plt.savefig(png, dpi=140)
     print(f"\nSaved {png}")

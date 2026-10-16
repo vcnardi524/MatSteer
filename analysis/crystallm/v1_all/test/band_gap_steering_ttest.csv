@@ -1,0 +1,7 @@
+property,method,layer,family,target,strength,source,run,valid_pct,n_prompts,n_paired,unit,control_median,median,mean_diff,frac_of_target_move,cohens_d,p_paired,p_holm,p_wilcoxon,sd_diff,median_diff,t,p_welch,sd_zero,sd_alpha,p_levene
+band_gap,linear,14,nosg,,-16,raw,steered_test_clean_alpha-16.0_layer14_nosg,0.950062,10117,10079,eV,0.00495966,0.00495483,0.00026899,,0.0013116,0.895243,1,0.568266,0.205086,1.98682e-07,0.131677,0.970441,0.512582,0.518029,0.953952
+band_gap,linear,14,nosg,,0,raw,steered_test_clean_alpha0.0_layer14_nosg,0.954404,10125,,eV,0.00495966,0.00495966,,,,,,,,,,,,,
+band_gap,linear,14,nosg,,16,raw,steered_test_clean_alpha16.0_layer14_nosg,0.951993,9539,9506,eV,0.00495966,0.00494764,-0.000220626,,-0.00112692,0.912512,1,0.967803,0.195777,0,-0.109874,0.976196,0.511769,0.507729,0.980577
+band_gap,linear,14,nosg,,25,raw,steered_test_clean_alpha25.0_layer14_nosg,0.954112,10119,10085,eV,0.00495966,0.00492954,0.000517004,,0.00260252,0.793824,1,0.725581,0.198655,0,0.261355,0.94248,0.508835,0.508789,0.929508
+band_gap,linear,14,nosg,,40,raw,steered_test_clean_alpha40.0_layer14_nosg,0.939175,9493,9459,eV,0.00495966,0.00498318,0.000786268,,0.00367189,0.721011,1,0.283668,0.214132,9.93411e-07,0.357118,0.911827,0.489427,0.487181,0.885169
+band_gap,linear,14,nosg,,60,raw,steered_test_clean_alpha60.0_layer14_nosg,0.888036,9740,9707,eV,0.00495966,0.00482653,0.0022856,,0.00954153,0.347205,1,0.297344,0.239542,1.3411e-06,0.940071,0.717885,0.43872,0.442724,0.697762

@@ -21,6 +21,7 @@ import pandas as pd
 import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM"))
+from utils import steering_vectors_dir
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "CrystaLLM", "bin"))
 
 from crystallm import CIFTokenizer
@@ -44,7 +45,8 @@ def build_hook(vec):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="CrystaLLM/crystallm_v1_large")
+    ap.add_argument("--ckpt-dir", default="CrystaLLM/crystallm_v1_large",
+                    help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
     ap.add_argument("--pkl", default="CrystaLLM/cifs_v1_test.pkl.gz")
     ap.add_argument("--n-prompts", type=int, default=3)
     ap.add_argument("--max-new-tokens", type=int, default=200)
@@ -54,11 +56,12 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    model, _ = load_model(args.model, device)
+    model, _ = load_model(args.ckpt_dir, device)
     model.eval()
     tokenizer = CIFTokenizer()
 
-    sv = pd.read_parquet(f"steering_vectors/bandgap_layer{LAYER}.parquet").iloc[0]
+    sv = pd.read_parquet(steering_vectors_dir("crystallm")
+                         / f"bandgap_layer{LAYER}.parquet").iloc[0]
     steer_vec = np.array(sv["steering_vector"], dtype=np.float32)
     vec = torch.tensor(steer_vec * ALPHA, dtype=torch.float32, device=device).view(1, 1, -1)
 

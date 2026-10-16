@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/ -> utils.py
-from utils import DATASETS, PARTITIONS, filter_partition, analysis_dir
+from utils import DATASETS, PARTITIONS, filter_partition, analysis_dir, CORPUS_DIR
 
 COL = "dos_electronic.band_gap"  # identical to electronic.band_gap
 
@@ -25,7 +25,7 @@ _p.add_argument("--dataset", default="v1_all", choices=list(DATASETS))
 _p.add_argument("--partition", required=True, choices=list(PARTITIONS))
 args = _p.parse_args()
 
-out = analysis_dir(args.dataset, None, args.partition)
+out = analysis_dir(args.dataset, None, args.partition, model=CORPUS_DIR)
 df = pd.read_parquet("metadata.parquet", columns=["id", COL])
 df = filter_partition(df, args.partition)
 v = df[COL].dropna().astype(float)

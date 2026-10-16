@@ -53,7 +53,7 @@ ALPHAS AVAILABLE ON DISK (2026-08-17)
 
 OUTPUT
 ------
-analysis/v1_all/test/plots/{prop}_distribution_shift.png
+analysis/<model>/v1_all/test/plots/{prop}_distribution_shift.png
 
 Usage:
     python scripts/plots/plot_steering_distribution_shift.py --property band_gap
@@ -79,7 +79,8 @@ import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-from utils import analysis_dir, postprocess
+from utils import (analysis_dir, postprocess, steering_path, BASELINE_DIR,
+                   MODELS, DEFAULT_MODEL)
 from pymatgen.core import Structure
 
 RANDOM_SEED = 42
@@ -111,6 +112,26 @@ PROPS = {
         label="Volume per atom (A^3/atom)",
         scale="log",
         default_family=None,
+        measure="predictor",
+    ),
+    "formation_energy_per_atom": dict(
+        results_dir="formation_energy_per_atom",
+        col="formation_energy_per_atom",
+        label="Formation energy (eV/atom)",
+        # signed -- runs -5.15 to +8.99, median -1.55 -- so log10 is not available.
+        scale="linear",
+        default_family="nosg",
+        measure="predictor",
+    ),
+    "energy_above_hull": dict(
+        results_dir="energy_above_hull",
+        col="energy_above_hull",
+        label="Energy above hull (eV/atom)",
+        # linear, and not by preference: 22% of MP rows sit at exactly 0 eV/atom
+        # (everything ON the hull is 0 by definition), so log10 is undefined for them.
+        # The guard in analyse() would demote a log setting to linear anyway.
+        scale="linear",
+        default_family="nosg",
         measure="predictor",
     ),
 }
@@ -169,25 +190,220 @@ def alpha_colour(alpha: float, positives: list) -> str:
     return ramp_colours(len(positives))[positives.index(alpha)]
 
 
-def discover_runs(results_dir: str, family: str) -> dict:
-    """{alpha: stem} for the runs that have BOTH predictions and validation."""
-    runs = {}
-    for f in sorted(glob.glob(f"steering_results/{results_dir}/property_predictions/*.parquet")):
+# How a run's steering strength is read out of its filename. The linear runs carry
+# `alpha40.0`; the pca_centroid runs carry `t0.5` and are prefixed `steered_pca_` so the
+# two families never collide in one directory. Both methods use 0 to mean "hook adds
+# nothing", so the alpha=0 run is also the t=0 control and is listed under both.
+STRENGTH_RE = {"linear": re.compile(r"alpha(-?[\d.]+)"),
+               "pca": re.compile(r"_t(-?[\d.]+)_")}
+
+# steered_manifold_<split>_d<delta>[_<variant>][_s<scale>]_k<k>_layer<N>.
+# project_nomu before project so the longer name wins.
+# The scale group must accept a leading minus. It did not, so a negative scale -- which
+# energy_above_hull uses throughout, since steering toward stability means stepping
+# backwards along the curve -- failed the whole match, and sweep_strength silently
+# returned its 1.0 default. All 20 hull manifold arms collapsed onto one strength and
+# deduplicated down to a single row. Negative DELTA already worked, which is why the
+# density d-2 sweep was unaffected and this went unnoticed.
+_MANIFOLD_RE = re.compile(
+    r"^steered_manifold_[a-z]+_d(-?[\d.]+)"
+    r"(?:_(residual|project_nomu|project))?(?:_s(-?[\d.]+))?_k\d+_layer(\d+)")
+
+
+def kind_of(stem: str) -> str:
+    """Which steering method wrote this file, from its prefix.
+
+    Longest prefix first so steered_pcalocal_ is never read as steered_pca_. The
+    manifold variants are separate methods because five of them share delta 15 and
+    would otherwise collide on one (target, strength) key.
+    """
+    if stem.startswith("steered_pcalocal_"):
+        return "pca_local"
+    if stem.startswith("steered_pca_"):
+        return "pca_centroid"
+    if stem.startswith("steered_manifold_"):
+        m = _MANIFOLD_RE.match(stem)
+        variant = (m.group(2) if m and m.group(2) else "residual")
+        return "manifold" if variant == "residual" else f"manifold_{variant}"
+    return "linear"
+
+
+def sweep_target(stem: str, kind: str):
+    """The value identifying one sweep: the property target for pca runs, the arc step
+    `delta` for manifold runs (which have no property target when given --delta)."""
+    if kind.startswith("manifold"):
+        m = _MANIFOLD_RE.match(stem)
+        return float(m.group(1)) if m else None
+    m = re.search(r"_target([\d.]+)_t[\d.]+_k", stem)
+    return float(m.group(1)) if m else None
+
+
+def sweep_strength(stem: str, kind: str):
+    """The knob swept within one sweep. For manifold that is --scale, defaulting to 1.0
+    when the stem carries none."""
+    if kind.startswith("manifold"):
+        m = _MANIFOLD_RE.match(stem)
+        return float(m.group(3)) if m and m.group(3) else 1.0
+    m = STRENGTH_RE["linear" if kind == "linear" else "pca"].search(stem)
+    return float(m.group(1)) if m else None
+
+
+_PROMPT_SET = {}
+
+
+def prompt_ids(path: str) -> frozenset:
+    """The set of prompt ids a run covers, cached. Reads one column."""
+    if path not in _PROMPT_SET:
+        _PROMPT_SET[path] = frozenset(pd.read_parquet(path, columns=["id"])["id"])
+    return _PROMPT_SET[path]
+
+
+def prediction_files(results_dir: str) -> list:
+    """Predictions for one property, from its own tree AND that MODEL's baseline tree.
+
+    `results_dir` is <model>/<property>. Controls live only in <model>/baseline/
+    property_predictions so there is exactly one copy of each. Keyed by stem; the
+    property tree wins if a stem somehow appears in both.
+    """
+    model = _os.path.dirname(results_dir)
+    if not model:
+        raise ValueError(f"results_dir must be <model>/<property>, got {results_dir!r}")
+    own = {_os.path.basename(f): f
+           for f in glob.glob(
+               f"steering_results/{results_dir}/property_predictions/*.parquet")}
+    for f in glob.glob(
+            f"steering_results/{model}/{BASELINE_DIR}/property_predictions/*.parquet"):
+        own.setdefault(_os.path.basename(f), f)
+    return sorted(own.values())
+
+
+def pick_control(candidates: list, arms: list, results_dir: str) -> str:
+    """Choose the control generated from the SAME prompt set as the arms.
+
+    (family, strength) is not enough to identify a control. baseline/ holds several --
+    steered_test_alpha0.0_layer0_nosg over 1,000 density prompts and
+    steered_test_clean_alpha0.0_layer14_nosg over 10,286 bandgap ones -- and both are
+    nosg with strength 0. Keying on that alone let the wrong one win on sort order, and
+    density's nosg arms silently paired against the bandgap control.
+
+    Prompt sets are the real key, so score each candidate by Jaccard overlap with the ids
+    the arms actually cover. An exact prompt set scores 1.0; a superset ten times larger
+    scores ~0.1, so the right control wins in both directions.
+    """
+    if len(candidates) <= 1 or not arms:
+        return candidates[0] if candidates else None
+    want = set()
+    for stem in arms:
+        want |= prompt_ids(steering_path(results_dir, "generated_cifs", stem))
+    best, best_j = None, -1.0
+    for stem in candidates:
+        have = prompt_ids(steering_path(results_dir, "generated_cifs", stem))
+        j = len(want & have) / max(len(want | have), 1)
+        if j > best_j:
+            best, best_j = stem, j
+    return best
+
+
+def discover_sweeps(results_dir: str, method: str) -> list:
+    """The distinct (layer, target) sweeps on disk for a method, ascending.
+
+    A run is identified by (layer, target, strength). Any two of those alone collide:
+    the same target swept at two layers, or two targets swept over the same t, would
+    share a key and silently overwrite each other.
+    """
+    out = set()
+    for f in prediction_files(results_dir):
+        b = _os.path.basename(f)
+        kind = kind_of(b)
+        if kind != method:
+            continue
+        lm = re.search(r"_layer(\d+)", b)
+        if lm:
+            out.add((int(lm.group(1)), sweep_target(b, kind)))
+    return sorted(out, key=lambda p: (p[0], p[1] if p[1] is not None else -1))
+
+
+def discover_targets(results_dir: str, family: str, method: str) -> list:
+    """The distinct target values swept for a pca method, ascending."""
+    tg = set()
+    for f in prediction_files(results_dir):
+        m = re.search(r"_target([\d.]+)_t[\d.]+_k", _os.path.basename(f))
+        b = _os.path.basename(f)
+        kind = kind_of(b)
+        if m and kind == method:
+            tg.add(float(m.group(1)))
+    return sorted(tg)
+
+
+def family_of(stem: str) -> str:
+    """Which PROMPT SET a run used, from its stem.
+
+    Was a boolean -- `stem.endswith("_nosg.parquet")` -- with everything else counted as
+    "sg". That silently swept in llamat2-cif's conditional runs, which end in `_cond`:
+    they are not `_nosg`, so a `family="sg"` query matched them, and with the default
+    `family=None` there is no filter at all. The trees really are shared -- crystallm and
+    llamat2-cif both write to steering_results/formation_energy_per_atom/, and both have
+    layer-8 arms there -- so a default steering_ttest run would have put two models'
+    arms in one table. Prompt sets are a closed set, so name them.
+    """
+    if stem.endswith("_nosg.parquet"):
+        return "nosg"
+    if stem.endswith("_cond.parquet"):
+        return "cond"
+    return "sg"
+
+
+def discover_runs(results_dir: str, family: str, method: str = "linear",
+                  target: float = None, layer: int = None) -> dict:
+    """{strength: stem} for the runs that have BOTH predictions and validation.
+
+    Strength alone identifies a linear run, but a pca run is identified by
+    (target, strength) -- two targets swept over the same t would otherwise collide on
+    one key and silently overwrite each other. Pass `target` to select one sweep; the
+    alpha=0 control has no target and is always included, whatever layer it names.
+    """
+    runs, controls = {}, []
+    for f in prediction_files(results_dir):
         stem = _os.path.basename(f)
         if stem == "testset_baseline.parquet":
             continue
-        m = re.search(r"alpha(-?[\d.]+)", stem)
-        if not m:
+        kind = kind_of(stem)
+        is_control = kind == "linear" and re.search(r"alpha-?0(\.0)?_", stem)
+        # every method's t=0 is the same no-injection run, so the control is shared
+        if kind != method and not (is_control and method != "linear"):
             continue
-        is_nosg = stem.endswith("_nosg.parquet")
-        if family == "nosg" and not is_nosg:
+        strength = sweep_strength(stem, kind)
+        if strength is None:
             continue
-        if family == "sg" and is_nosg:
+        # LAYER applies to every method. It used to sit inside the non-linear branch
+        # below, so a linear run was never filtered by layer: asking for band gap at
+        # layer 4 returned the layer-14 `test_clean` arms too, and where strengths
+        # collided (16, 40) the layer-14 run overwrote the layer-4 one and the whole
+        # table paired against the 10,286-prompt clean control instead of the 1,000-
+        # prompt one. Density never exposed it -- its layer-7 arms are nosg and its
+        # layer-14 arms are sg, so the family filter happened to separate them.
+        if layer is not None and not is_control:
+            lm = re.search(r"_layer(\d+)", stem)
+            if not lm or int(lm.group(1)) != layer:
+                continue
+        # TARGET is a pca/manifold concept only; a linear run has none.
+        if kind != "linear" and not is_control:
+            if target is not None:
+                tgt = sweep_target(stem, kind)
+                if tgt is None or tgt != target:
+                    continue
+        if family not in (None, "any") and family_of(stem) != family:
             continue
-        if not _os.path.exists(f"steering_results/{results_dir}/validation/{stem}"):
+        if not _os.path.exists(steering_path(results_dir, "validation", stem)):
             print(f"  ! {stem}: predictions but no validation -- skipped")
             continue
-        runs[float(m.group(1))] = stem
+        if is_control:
+            controls.append(stem)          # resolved below, once the arms are known
+        else:
+            runs[strength] = stem
+    chosen = pick_control(controls, list(runs.values()), results_dir)
+    if chosen is not None:
+        runs[0.0] = chosen
     return runs
 
 
@@ -195,20 +411,20 @@ def load_alpha(results_dir: str, stem: str, col: str, relaxed: bool,
                agg: str, measure: str) -> pd.DataFrame:
     """[id, value] for one run: valid samples only, one row per prompt if agg='mean'."""
     if measure == "text":
-        gen = pd.read_parquet(f"steering_results/{results_dir}/generated_cifs/{stem}")
+        gen = pd.read_parquet(steering_path(results_dir, "generated_cifs", stem))
         cif_col = "cif_relaxed" if relaxed else "cif_steered"
         if relaxed:
-            gen = pd.read_parquet(f"steering_results/{results_dir}/relaxed/{stem}")
+            gen = pd.read_parquet(steering_path(results_dir, "relaxed", stem))
         value_col = "value"
         pred = gen[["id", "sample"]].copy()
         pred[value_col] = gen[cif_col].map(text_volume_per_atom)
     else:
         value_col = col if relaxed else f"{col}_raw"
         pred = pd.read_parquet(
-            f"steering_results/{results_dir}/property_predictions/{stem}")
+            steering_path(results_dir, "property_predictions", stem))
         if value_col not in pred.columns:
             raise SystemExit(f"{stem}: no column {value_col!r} (have {list(pred.columns)})")
-    valid = pd.read_parquet(f"steering_results/{results_dir}/validation/{stem}",
+    valid = pd.read_parquet(steering_path(results_dir, "validation", stem),
                             columns=["id", "sample", "is_valid"])
 
     df = pred[["id", "sample", value_col]].merge(valid, on=["id", "sample"], how="left")
@@ -218,9 +434,17 @@ def load_alpha(results_dir: str, stem: str, col: str, relaxed: bool,
     frac = len(df) / n_all if n_all else float("nan")
     print(f"    valid+scored samples: {len(df):,}/{n_all:,} ({frac:.1%})  "
           f"prompts surviving: {df['id'].nunique():,}")
+    # How many of the 3 samples each surviving prompt kept. Under agg="max" this is a
+    # confound, not a footnote: max-of-3 beats max-of-1 by construction, and a 95%-valid
+    # control keeps ~3 per prompt while a 10%-valid run keeps ~1. Carried out so the
+    # comparison can be read with that in view.
+    per_prompt = df.groupby("id").size()
     if agg == "mean":
         df = df.groupby("id", as_index=False)["value"].mean()
+    elif agg == "max":
+        df = df.groupby("id", as_index=False)["value"].max()
     df.attrs["valid_frac"] = frac
+    df.attrs["samples_per_prompt"] = float(per_prompt.mean()) if len(per_prompt) else float("nan")
     return df
 
 
@@ -275,6 +499,11 @@ def truth_density_atomic(ids: set) -> pd.DataFrame:
     return df
 
 
+def strength_label(method: str) -> str:
+    """What the steering knob is called for this method, for prints and the legend."""
+    return "alpha" if method == "linear" else "t"
+
+
 def kde_curve(v: np.ndarray, grid: np.ndarray, bw: float):
     """Gaussian KDE evaluated on grid, or None when the sample is degenerate."""
     if len(v) < 2 or np.allclose(v, v[0]):
@@ -289,13 +518,30 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--property", default="band_gap", choices=sorted(PROPS))
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS),
+                    help="Which model's runs to read: steering_results/<model>/<property>. "
+                         "Required because the property trees are shared between models.")
+    ap.add_argument("--method", choices=["linear", "pca_centroid"], default="linear",
+                    help="Which steering family to draw. linear reads alpha runs, "
+                         "pca_centroid reads steered_pca_* runs keyed by t (plus the "
+                         "alpha=0 control, which is the same no-injection run).")
+    ap.add_argument("--no-intersect", action="store_true",
+                    help="Draw every curve over its own surviving prompts, and the "
+                         "ground truth over all of them, instead of restricting all "
+                         "curves to the prompts common to every run. Use it when one "
+                         "strength collapses -- the intersection would otherwise shrink "
+                         "every other curve to that run's few survivors.")
     ap.add_argument("--alphas", type=float, nargs="+", default=None,
                     help="Steering strengths to draw (default: every run on disk)")
-    ap.add_argument("--family", choices=["nosg", "sg"], default=None,
-                    help="band_gap only: prompts without/with a space-group header")
+    ap.add_argument("--family", choices=["nosg", "sg", "cond"], default=None,
+                    help="Which PROMPT SET to read. nosg/sg: crystallm prompts without/"
+                         "with a space-group header. cond: llamat2-cif's conditional "
+                         "prompts. REQUIRED when a property tree holds more than one "
+                         "model's runs, which formation_energy_per_atom and "
+                         "density_atomic now do.")
     ap.add_argument("--relaxed", action="store_true",
                     help="Read the M3GNet-relaxed value instead of the raw generated one")
-    ap.add_argument("--agg", choices=["mean", "all"], default="mean",
+    ap.add_argument("--agg", choices=["mean", "max", "all"], default="mean",
                     help="One point per prompt (mean of its valid samples), or every sample")
     ap.add_argument("--truth", choices=["matched", "dft"], default="matched",
                     help="band_gap only: MEGNet-on-original (matched) or the DFT column")
@@ -309,15 +555,20 @@ def main():
     np.random.seed(RANDOM_SEED)
 
     spec = PROPS[args.property]
+    # <model>/<property>. The property trees are shared between models -- both steer
+    # formation_energy_per_atom, both have layer-8 arms -- so the model level is what
+    # keeps two models' runs out of one results table.
+    results_dir = f"{args.model}/{spec['results_dir']}"
     family = args.family or spec["default_family"]
     print(f"Property: {args.property}  ({spec['label']})")
     print(f"Value source: {'relaxed' if args.relaxed else 'raw generated CIF'}   "
           f"aggregation: {args.agg}   family: {family}")
 
-    runs = discover_runs(spec["results_dir"], family)
+    runs = discover_runs(results_dir, family, args.method)
     if not runs:
-        raise SystemExit(f"No runs found for {args.property} (family={family}).")
-    print(f"Runs on disk: alphas {sorted(runs)}")
+        raise SystemExit(f"No runs found for {args.property} "
+                         f"(family={family}, method={args.method}).")
+    print(f"Runs on disk: strengths {sorted(runs)}")
     if args.alphas is not None:
         missing = [a for a in args.alphas if a not in runs]
         if missing:
@@ -331,13 +582,31 @@ def main():
     print("Loading runs ...")
     per_alpha = {}
     for a in alphas:
-        print(f"  alpha {a:g}  [{runs[a]}]")
-        per_alpha[a] = load_alpha(spec["results_dir"], runs[a], spec["col"],
+        print(f"  {strength_label(args.method)} {a:g}  [{runs[a]}]")
+        per_alpha[a] = load_alpha(results_dir, runs[a], spec["col"],
                                   args.relaxed, args.agg, spec["measure"])
 
-    # Same prompt population in every curve, truth included.
-    common = set.intersection(*(set(d["id"]) for d in per_alpha.values()))
-    print(f"\nPrompts common to all {len(alphas)} alphas: {len(common):,}")
+    # A strength that broke the model entirely has nothing to draw. Drop it loudly
+    # rather than letting an empty array fall through to the axis-range computation.
+    empty = [a for a, d in per_alpha.items() if d.empty]
+    for a in empty:
+        print(f"  ! {strength_label(args.method)} {a:g}: no valid structures at all "
+              f"-- no curve drawn")
+        del per_alpha[a]
+    alphas = [a for a in alphas if a not in empty]
+    if not alphas:
+        raise SystemExit("Every run has zero valid structures.")
+
+    # Same prompt population in every curve, truth included -- unless --no-intersect,
+    # where each curve keeps its own survivors and truth covers the union. One collapsed
+    # strength would otherwise drag every other curve down to its handful of survivors.
+    if args.no_intersect:
+        common = set.union(*(set(d["id"]) for d in per_alpha.values()))
+        print(f"\nNo intersection: each curve keeps its own prompts, truth covers "
+              f"all {len(common):,} used")
+    else:
+        common = set.intersection(*(set(d["id"]) for d in per_alpha.values()))
+        print(f"\nPrompts common to all {len(alphas)} alphas: {len(common):,}")
     if len(common) < 10:
         raise SystemExit("Too few shared prompts to compare.")
 
@@ -369,6 +638,7 @@ def main():
 
     xlabel = spec["label"] + (" [log10]" if scale == "log" else "")
     positives = sorted(a for a in alphas if a > 0)
+    strength_name = strength_label(args.method)
 
     # Two panels over the SAME curves: linear y shows the shape, log y separates the
     # tails. With a distribution this concentrated the alpha lines superimpose on the
@@ -394,7 +664,8 @@ def main():
             else:
                 ax.plot(grid, curve, color=alpha_colour(key, positives), lw=2.0, zorder=3,
                         ls="--" if key == 0 else "-",
-                        label=f"alpha {key:g}" + ("  (control)" if key == 0 else "")
+                        label=f"{strength_name} {key:g}"
+                              + ("  (control)" if key == 0 else "")
                               + f", n={len(v):,}")
         vf = per_alpha[key].attrs.get("valid_frac", float("nan")) if key != "truth" else 1.0
         rows.append(dict(series=key, n=len(v), valid_sample_frac=vf, median=med,
@@ -420,15 +691,19 @@ def main():
 
     src = "relaxed" if args.relaxed else "raw generated"
     fam = f", {family} prompts" if family else ""
+    pop = ("each curve over its own surviving prompts, ground truth over all "
+           f"{len(common):,}" if args.no_intersect else f"n={len(common):,} shared prompts")
     fig.suptitle(
-        f"{args.property}: generated distribution vs ground truth across steering strength\n"
+        f"{args.property} ({args.method}): generated distribution vs ground truth "
+        f"across steering strength\n"
         f"layer 14{fam}, {src} CIFs, one point per prompt = mean of its valid samples, "
-        f"n={len(common):,} shared prompts", fontsize=12.5, y=1.02)
+        f"{pop}", fontsize=12.5, y=1.02)
     fig.tight_layout()
 
-    out_dir = analysis_dir("v1_all", None, "test", subdir="plots")
+    out_dir = analysis_dir("v1_all", None, "test", subdir="plots", model=args.model)
     tag = "_relaxed" if args.relaxed else ""
-    out = out_dir / f"{args.property}_distribution_shift{tag}.png"
+    meth = "" if args.method == "linear" else f"_{args.method}"
+    out = out_dir / f"{args.property}{meth}_distribution_shift{tag}.png"
     fig.savefig(out, dpi=140, bbox_inches="tight")
     plt.close(fig)
 
@@ -436,7 +711,7 @@ def main():
     unit = " [log10]" if scale == "log" else ""
     print(f"\n=== summary{unit} ===")
     print(stats.to_string(index=False))
-    csv = out_dir / f"{args.property}_distribution_shift{tag}.csv"
+    csv = out_dir / f"{args.property}{meth}_distribution_shift{tag}.csv"
     stats.to_csv(csv, index=False)
     print(f"\nSaved {out}\nSaved {csv}")
 

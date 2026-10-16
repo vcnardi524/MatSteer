@@ -63,10 +63,161 @@ class BandGapPredictor(PropertyPredictor):
         return float(self.model.predict_structure(structure=s, state_attr=self.state_attr))
 
 
+class HullLookup:
+    """Materials Project convex hulls, in FORMATION-energy space, cached per system.
+
+    MP entries carry total energies with MP2020 corrections; a formation-energy model
+    predicts something else entirely, and subtracting one from the other is meaningless.
+    So each system's diagram is rebuilt: take MP's corrected entries, read their formation
+    energies off a first PhaseDiagram, and construct a second one from those plus
+    elemental entries pinned at 0 -- which is what "formation energy" means. A query then
+    only needs a composition and an E_form per atom.
+
+    Verified against ground truth: rebuilt this way, all 176 Fe-Li-O materials in
+    metadata_mp reproduce MP's own energy_above_hull to 4e-15 eV/atom.
+
+    One system is one API call, so diagrams are cached; a sweep over 1,000 prompts spans
+    ~989 systems but hits far fewer distinct ones after dedup.
+
+    WHY thermo_types DEFAULTS TO GGA_GGA+U
+    MP serves several DFT schemes and they are NOT interchangeable: GGA/GGA+U, the mixed
+    GGA/GGA+U/R2SCAN, and pure r2SCAN each put energies on their own scale with their own
+    hull. Mixing them silently produces differences of ~0.3 eV/atom that look like model
+    error and are not.
+
+    The hull must match whatever produced the number being placed on it. The energies
+    come from MEGNet-Eform-MP-2018.6.1, trained on the 2018 MP release -- which predates
+    r2SCAN in MP entirely -- so it predicts GGA/GGA+U-style formation energies. A
+    GGA/GGA+U hull is therefore the consistent choice, not merely the simplest.
+
+    This deliberately does NOT apply MaterialsProjectDFTMixingScheme. That scheme exists
+    to combine GGA/GGA+U with r2SCAN, and its corrections are not guaranteed identical
+    for the same entry across different chemical systems. Adopting it would need a
+    formation-energy model trained on the same mixed scheme; MEGNet is not.
+
+    Pass thermo_types explicitly if the energy source ever changes -- and change it in
+    ONE place, since validation and coverage both read it off this instance.
+    """
+
+    def __init__(self, api_key: str = None, key_file: str = "api_keys.json",
+                 thermo_types=("GGA_GGA+U",), max_retries: int = 5,
+                 retry_wait: float = 5.0):
+        self.api_key = api_key or __import__("json").load(open(key_file))["mp_api_key"]
+        self.thermo_types = list(thermo_types)
+        self.max_retries = max_retries
+        self.retry_wait = retry_wait     # seconds; doubles each attempt
+        self._cache = {}          # frozenset(elements) -> PhaseDiagram or None
+        self._mpr = None
+
+    def setup(self) -> None:
+        # MP serialises energy adjustments under pymatgen.analysis.compatibility, which
+        # moved to pymatgen.entries.compatibility. Without the alias every entry fails
+        # to decode with ModuleNotFoundError.
+        import sys
+        import pymatgen.entries.compatibility as _compat
+        sys.modules.setdefault("pymatgen.analysis.compatibility", _compat)
+        from mp_api.client import MPRester
+        self._mpr = MPRester(self.api_key)
+
+    def diagram(self, elements):
+        """PhaseDiagram in formation-energy space for one system, or None if MP has none."""
+        from pymatgen.analysis.phase_diagram import PhaseDiagram, PDEntry
+        from pymatgen.core import Composition
+        key = frozenset(str(e) for e in elements)
+        if key in self._cache:
+            return self._cache[key]
+        # A TRANSIENT API failure must NOT be cached as "MP has no hull for this system".
+        # It was: every exception collapsed to entries=[], which cached None, so one
+        # rate-limited call silently voided that whole chemical system for the rest of the
+        # job. Measured 2026-09-10 across 24 hull arms: 15 ids were missing everywhere
+        # (genuinely absent from MP) but 900 were missing in only some arms -- all of that
+        # was this bug. Retry with backoff, and re-raise so the caller sees a failure
+        # instead of a NaN that looks like real data.
+        import time
+        entries = None
+        for attempt in range(self.max_retries):
+            try:
+                entries = self._mpr.get_entries_in_chemsys(
+                    elements=sorted(key),
+                    additional_criteria={"thermo_types": self.thermo_types})
+                break
+            except Exception as e:
+                if attempt == self.max_retries - 1:
+                    raise RuntimeError(
+                        f"MP query failed for {sorted(key)} after {self.max_retries} "
+                        f"attempts: {type(e).__name__}: {e}") from e
+                time.sleep(self.retry_wait * (2 ** attempt))
+        if not entries:                      # a genuine empty result: cache it
+            self._cache[key] = None
+            return None
+        try:
+            pd_total = PhaseDiagram(entries)
+            form = [PDEntry(e.composition, pd_total.get_form_energy(e)) for e in entries]
+            form += [PDEntry(Composition(el), 0.0) for el in key]
+            self._cache[key] = PhaseDiagram(form)
+        except Exception:
+            self._cache[key] = None
+        return self._cache[key]
+
+    def e_above_hull(self, composition, e_form_per_atom: float) -> float:
+        """eV/atom above the hull, or NaN when MP has no diagram for the system."""
+        from pymatgen.analysis.phase_diagram import PDEntry
+        pd_form = self.diagram(composition.elements)
+        if pd_form is None:
+            return float("nan")
+        try:
+            return float(pd_form.get_e_above_hull(
+                PDEntry(composition, e_form_per_atom * composition.num_atoms)))
+        except Exception:
+            return float("nan")
+
+
+class FormationEnergyPredictor(PropertyPredictor):
+    """MEGNet formation energy per atom, trained on MP."""
+
+    output_base = "formation_energy_per_atom"
+    MODEL_NAME = "MEGNet-Eform-MP-2018.6.1"
+
+    def __init__(self):
+        self.model = None
+
+    def setup(self) -> None:
+        import matgl
+        self.model = matgl.load_model(self.MODEL_NAME)
+
+    def predict(self, s) -> float:
+        return float(self.model.predict_structure(structure=s))
+
+
+class EnergyAboveHullPredictor(PropertyPredictor):
+    """Formation energy from MEGNet, placed on the Materials Project hull.
+
+    The hull arithmetic is exact (see HullLookup); the error is MEGNet's own, roughly
+    0.03-0.05 eV/atom MAE. e_above_hull is a small difference of two such numbers, so
+    absolute values are indicative -- the paired control-vs-steered shift is what carries
+    signal, since both share the model and the prompts.
+    """
+
+    output_base = "energy_above_hull"
+
+    def __init__(self, key_file: str = "api_keys.json"):
+        self.eform = FormationEnergyPredictor()
+        self.hull = HullLookup(key_file=key_file)
+
+    def setup(self) -> None:
+        self.eform.setup()
+        self.hull.setup()
+
+    def predict(self, s) -> float:
+        return self.hull.e_above_hull(s.composition, self.eform.predict(s))
+
+
 # property name -> factory(args) -> PropertyPredictor
 REGISTRY = {
     "density_atomic": lambda args: GeometricPredictor("density_atomic"),
     "density":        lambda args: GeometricPredictor("density"),
     "volume":         lambda args: GeometricPredictor("volume"),
     "band_gap":       lambda args: BandGapPredictor(fidelity=getattr(args, "fidelity", 0)),
+    "formation_energy":  lambda args: FormationEnergyPredictor(),
+    "energy_above_hull": lambda args: EnergyAboveHullPredictor(),
 }

@@ -34,6 +34,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # scripts/
+from utils import analysis_root, steering_vectors_dir
+
 VOL_RE = re.compile(r"_cell_volume\s+([-\d.eE]+)")
 # Single-element formulas have no space, so pymatgen writes them unquoted
 # (`_chemical_formula_sum   Mn4`). Match both forms or elemental structures drop out.
@@ -129,7 +134,7 @@ def main():
     ref = load_reference()
     print(f"  {len(ref):,} reference structures parsed")
 
-    sv = Path("steering_vectors") / args.property / f"layer{args.layer}.parquet"
+    sv = steering_vectors_dir(args.model, args.property) / f"layer{args.layer}.parquet"
     if sv.exists():
         s = pd.read_parquet(sv).drop(columns=["steering_vector"], errors="ignore")
         print(f"Steering vector: {s.to_dict('records')[0]}")
@@ -184,7 +189,7 @@ def main():
     out = pd.DataFrame(summary)
     print("\n=== summary ===")
     print(out.to_string(index=False))
-    dest = Path("analysis") / f"volume_steering_check_{args.property}_layer{args.layer}.csv"
+    dest = analysis_root() / f"volume_steering_check_{args.property}_layer{args.layer}.csv"
     dest.parent.mkdir(exist_ok=True)
     out.to_csv(dest, index=False)
     print(f"\nSaved {dest}")

@@ -1,0 +1,4 @@
+property,method,layer,family,target,strength,source,run,valid_pct,n_prompts,n_paired,unit,control_median,median,mean_diff,frac_of_target_move,cohens_d,p_paired,p_holm,p_wilcoxon,sd_diff,median_diff,t,p_welch,sd_zero,sd_alpha,p_levene
+density_atomic,linear,14,sg,,0,raw,steered_test_alpha0.0_layer14,0.962667,984,,log10_A3_per_atom,1.28462,1.28462,,,,,,,,,,,,,
+density_atomic,linear,14,sg,,40,raw,steered_test_alpha40.0_layer14,0.948667,984,979,log10_A3_per_atom,1.28462,1.28533,0.00181631,,0.127697,6.94008e-05,6.94008e-05,2.33789e-20,0.0142236,0.00136296,3.99551,0.776018,0.141373,0.141073,0.983475
+density_atomic,linear,14,sg,,80,raw,steered_test_alpha80.0_layer14,0.884333,949,946,log10_A3_per_atom,1.28462,1.29096,0.00305624,,0.165167,4.54596e-07,9.09192e-07,1.83204e-19,0.018504,0.00176935,5.08006,0.635867,0.140197,0.140522,0.968058

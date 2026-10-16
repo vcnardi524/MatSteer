@@ -24,7 +24,7 @@ SPLIT_PKLS = {
     "val": "CrystaLLM/cifs_v1_val.pkl.gz",
     "test": "CrystaLLM/cifs_v1_test.pkl.gz",
 }
-OUT_PATH = "splits_v1.parquet"
+OUT_PATH = "crystallm_splits_v1.parquet"
 
 
 def main():

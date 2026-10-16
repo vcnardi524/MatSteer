@@ -1,0 +1,206 @@
+
+##################################################################
+# steering_results/density_atomic   (112 runs with novelty)
+##################################################################
+
+=== Validation + Novelty ===
+                                                config  total  valid valid% sensible%  unique unique%(of valid)  novel novel%(of unique)
+                 steered_manifold_test_d10_k64_layer14   3000   2896  96.5%    100.0%    1149             39.7%   1000             87.0%
+                 steered_manifold_test_d15_k64_layer14   3000   2900  96.7%    100.0%    1142             39.4%    997             87.3%
+         steered_manifold_test_d15_project_k64_layer14    600      0   0.0%    100.0%       0               n/a      0               n/a
+    steered_manifold_test_d15_project_nomu_k64_layer14    600      0   0.0%    100.0%       0               n/a      0               n/a
+    steered_manifold_test_d15_residual_s12_k64_layer14   3000   1503  50.1%     96.2%     727             48.4%    629             86.5%
+     steered_manifold_test_d15_residual_s6_k64_layer14   3000   2826  94.2%    100.0%    1139             40.3%    989             86.8%
+                  steered_manifold_test_d2_k64_layer14   3000   2892  96.4%    100.0%    1133             39.2%    994             87.7%
+                  steered_manifold_test_d5_k64_layer14   3000   2891  96.4%    100.0%    1150             39.8%   1006             87.5%
+         steered_pca_test_target22.5_t0.25_k64_layer14   3000   2888  96.3%    100.0%    1152             39.9%   1008             87.5%
+          steered_pca_test_target22.5_t0.5_k64_layer14   3000   2852  95.1%    100.0%    1159             40.6%   1011             87.2%
+         steered_pca_test_target22.5_t0.75_k64_layer14   3000   2474  82.5%    100.0%    1055             42.6%    922             87.4%
+          steered_pca_test_target22.5_t1.0_k64_layer14   3000    392  13.1%     98.6%     224             57.1%    196             87.5%
+           steered_pca_test_target30_t0.25_k64_layer14   3000   2882  96.1%    100.0%    1187             41.2%   1040             87.6%
+            steered_pca_test_target30_t0.25_k64_layer9   3000   2853  95.1%    100.0%    1163             40.8%   1032             88.7%
+            steered_pca_test_target30_t0.5_k64_layer14   3000   2849  95.0%    100.0%    1163             40.8%   1014             87.2%
+             steered_pca_test_target30_t0.5_k64_layer9   3000   2260  75.3%     99.6%    1071             47.4%    947             88.4%
+            steered_pca_test_target30_t0.75_k64_layer9   3000     22   0.7%     86.9%      20             90.9%     16             80.0%
+            steered_pca_test_target30_t1.0_k64_layer14   3000    374  12.5%     98.6%     219             58.6%    188             85.8%
+             steered_pca_test_target30_t1.0_k64_layer9   3000      0   0.0%     69.9%       0               n/a      0               n/a
+            steered_pca_test_target30_t2.0_k64_layer14   3000      0   0.0%     81.6%       0               n/a      0               n/a
+steered_pcalocal_test_target30_t0.25_k64_nb256_layer14   3000   2881  96.0%    100.0%    1167             40.5%   1023             87.7%
+ steered_pcalocal_test_target30_t0.5_k64_nb256_layer14   3000   2855  95.2%    100.0%    1154             40.4%   1000             86.7%
+steered_pcalocal_test_target30_t0.75_k64_nb256_layer14   3000   2431  81.0%     99.8%    1034             42.5%    903             87.3%
+                        steered_test_alpha40.0_layer14   3000   2846  94.9%    100.0%    1209             42.5%   1056             87.3%
+                        steered_test_alpha80.0_layer14   3000   2653  88.4%     99.9%    1221             46.0%   1074             88.0%
+                   steered_test_alpha-48.0_layer7_nosg   3000   1343  44.8%     99.5%     972             72.4%    626             64.4%
+                   steered_test_alpha-40.0_layer7_nosg   3000   2054  68.5%     99.8%    1426             69.4%    850             59.6%
+                   steered_test_alpha-32.0_layer7_nosg   3000   2577  85.9%    100.0%    1676             65.0%    956             57.0%
+                   steered_test_alpha-16.0_layer7_nosg   3000   2829  94.3%    100.0%    1778             62.8%    986             55.5%
+                    steered_test_alpha-8.0_layer7_nosg   3000   2877  95.9%    100.0%    1788             62.1%    960             53.7%
+    steered_manifold_test_d-2_residual_k64_layer7_nosg   3000   2874  95.8%    100.0%    1819             63.3%    970             53.3%
+steered_manifold_test_d-2_residual_s10_k64_layer7_nosg   3000   2590  86.3%    100.0%    1709             66.0%    964             56.4%
+ steered_manifold_test_d-2_residual_s2_k64_layer7_nosg   3000   2857  95.2%    100.0%    1802             63.1%    957             53.1%
+ steered_manifold_test_d-2_residual_s3_k64_layer7_nosg   3000   2861  95.4%    100.0%    1829             63.9%    979             53.5%
+ steered_manifold_test_d-2_residual_s4_k64_layer7_nosg   3000   2863  95.4%    100.0%    1823             63.7%    986             54.1%
+ steered_manifold_test_d-2_residual_s5_k64_layer7_nosg   3000   2852  95.1%    100.0%    1810             63.5%    980             54.1%
+ steered_manifold_test_d-2_residual_s6_k64_layer7_nosg   3000   2833  94.4%    100.0%    1811             63.9%   1006             55.5%
+ steered_manifold_test_d-2_residual_s7_k64_layer7_nosg   3000   2798  93.3%    100.0%    1786             63.8%    966             54.1%
+ steered_manifold_test_d-2_residual_s8_k64_layer7_nosg   3000   2767  92.2%    100.0%    1795             64.9%    986             54.9%
+ steered_manifold_test_d-2_residual_s9_k64_layer7_nosg   3000   2708  90.3%    100.0%    1768             65.3%    982             55.5%
+    steered_manifold_test_d10_residual_k64_layer7_nosg   3000   2847  94.9%    100.0%    1807             63.5%    978             54.1%
+ steered_manifold_test_d10_residual_s3_k64_layer7_nosg   3000   1831  61.0%     99.9%    1296             70.8%    694             53.5%
+ steered_manifold_test_d10_residual_s6_k64_layer7_nosg   3000    248   8.3%     98.1%     188             75.8%    107             56.9%
+ steered_manifold_test_d10_residual_s7_k64_layer7_nosg   3000    170   5.7%     97.5%     138             81.2%     79             57.2%
+    steered_manifold_test_d11_residual_k64_layer7_nosg   3000   2834  94.5%    100.0%    1803             63.6%    986             54.7%
+ steered_manifold_test_d11_residual_s3_k64_layer7_nosg   3000   1844  61.5%     99.7%    1297             70.3%    714             55.1%
+ steered_manifold_test_d11_residual_s7_k64_layer7_nosg   3000    172   5.7%     97.7%     133             77.3%     71             53.4%
+    steered_manifold_test_d12_residual_k64_layer7_nosg   3000   2835  94.5%    100.0%    1790             63.1%    956             53.4%
+ steered_manifold_test_d12_residual_s3_k64_layer7_nosg   3000   1839  61.3%     99.7%    1294             70.4%    706             54.6%
+ steered_manifold_test_d12_residual_s7_k64_layer7_nosg   3000    165   5.5%     98.3%     128             77.6%     72             56.2%
+    steered_manifold_test_d13_residual_k64_layer7_nosg   3000   2848  94.9%    100.0%    1808             63.5%    991             54.8%
+ steered_manifold_test_d13_residual_s3_k64_layer7_nosg   3000   1845  61.5%     99.6%    1312             71.1%    687             52.4%
+ steered_manifold_test_d13_residual_s7_k64_layer7_nosg   3000    191   6.4%     98.3%     148             77.5%     83             56.1%
+    steered_manifold_test_d14_residual_k64_layer7_nosg   3000   2830  94.3%    100.0%    1819             64.3%    983             54.0%
+ steered_manifold_test_d14_residual_s3_k64_layer7_nosg   3000   1850  61.7%     99.7%    1279             69.1%    693             54.2%
+ steered_manifold_test_d14_residual_s7_k64_layer7_nosg   3000    200   6.7%     98.4%     156             78.0%     91             58.3%
+    steered_manifold_test_d15_residual_k64_layer7_nosg   3000   2850  95.0%    100.0%    1816             63.7%    983             54.1%
+ steered_manifold_test_d15_residual_s2_k64_layer7_nosg   3000   2611  87.0%    100.0%    1713             65.6%    924             53.9%
+ steered_manifold_test_d15_residual_s3_k64_layer7_nosg   3000   1880  62.7%     99.7%    1328             70.6%    689             51.9%
+ steered_manifold_test_d15_residual_s4_k64_layer7_nosg   3000    885  29.5%     99.3%     655             74.0%    347             53.0%
+ steered_manifold_test_d15_residual_s6_k64_layer7_nosg   3000    285   9.5%     98.4%     203             71.2%    109             53.7%
+ steered_manifold_test_d15_residual_s7_k64_layer7_nosg   3000    204   6.8%     98.6%     150             73.5%     89             59.3%
+ steered_manifold_test_d15_residual_s8_k64_layer7_nosg   3000    171   5.7%     98.1%     132             77.2%     75             56.8%
+     steered_manifold_test_d1_residual_k64_layer7_nosg   3000   2866  95.5%    100.0%    1814             63.3%    939             51.8%
+  steered_manifold_test_d1_residual_s3_k64_layer7_nosg   3000   2882  96.1%    100.0%    1808             62.7%    955             52.8%
+  steered_manifold_test_d1_residual_s7_k64_layer7_nosg   3000   2835  94.5%    100.0%    1763             62.2%    941             53.4%
+     steered_manifold_test_d2_residual_k64_layer7_nosg   3000   2874  95.8%    100.0%    1809             62.9%    941             52.0%
+ steered_manifold_test_d2_residual_s10_k64_layer7_nosg   3000   2319  77.3%    100.0%    1576             68.0%    886             56.2%
+  steered_manifold_test_d2_residual_s2_k64_layer7_nosg   3000   2855  95.2%    100.0%    1790             62.7%    930             52.0%
+  steered_manifold_test_d2_residual_s3_k64_layer7_nosg   3000   2858  95.3%    100.0%    1844             64.5%   1009             54.7%
+  steered_manifold_test_d2_residual_s4_k64_layer7_nosg   3000   2845  94.8%    100.0%    1825             64.1%    986             54.0%
+  steered_manifold_test_d2_residual_s5_k64_layer7_nosg   3000   2841  94.7%    100.0%    1835             64.6%    987             53.8%
+  steered_manifold_test_d2_residual_s6_k64_layer7_nosg   3000   2812  93.7%    100.0%    1801             64.0%    987             54.8%
+  steered_manifold_test_d2_residual_s7_k64_layer7_nosg   3000   2740  91.3%    100.0%    1779             64.9%   1011             56.8%
+  steered_manifold_test_d2_residual_s8_k64_layer7_nosg   3000   2650  88.3%    100.0%    1736             65.5%    967             55.7%
+  steered_manifold_test_d2_residual_s9_k64_layer7_nosg   3000   2497  83.2%    100.0%    1690             67.7%    968             57.3%
+     steered_manifold_test_d3_residual_k64_layer7_nosg   3000   2866  95.5%    100.0%    1796             62.7%    965             53.7%
+ steered_manifold_test_d3_residual_s10_k64_layer7_nosg   3000   1155  38.5%     99.8%     865             74.9%    481             55.6%
+  steered_manifold_test_d3_residual_s2_k64_layer7_nosg   3000   2862  95.4%    100.0%    1811             63.3%   1007             55.6%
+  steered_manifold_test_d3_residual_s3_k64_layer7_nosg   3000   2837  94.6%    100.0%    1804             63.6%    996             55.2%
+  steered_manifold_test_d3_residual_s4_k64_layer7_nosg   3000   2809  93.6%    100.0%    1817             64.7%    980             53.9%
+  steered_manifold_test_d3_residual_s5_k64_layer7_nosg   3000   2699  90.0%    100.0%    1774             65.7%    979             55.2%
+  steered_manifold_test_d3_residual_s6_k64_layer7_nosg   3000   2510  83.7%    100.0%    1658             66.1%    925             55.8%
+  steered_manifold_test_d3_residual_s7_k64_layer7_nosg   3000   2153  71.8%     99.9%    1485             69.0%    828             55.8%
+  steered_manifold_test_d3_residual_s8_k64_layer7_nosg   3000   1833  61.1%     99.9%    1294             70.6%    732             56.6%
+  steered_manifold_test_d3_residual_s9_k64_layer7_nosg   3000   1469  49.0%    100.0%    1078             73.4%    628             58.3%
+     steered_manifold_test_d4_residual_k64_layer7_nosg   3000   2885  96.2%    100.0%    1819             63.1%    977             53.7%
+  steered_manifold_test_d4_residual_s3_k64_layer7_nosg   3000   2807  93.6%    100.0%    1796             64.0%    962             53.6%
+  steered_manifold_test_d4_residual_s7_k64_layer7_nosg   3000   1335  44.5%     99.8%     973             72.9%    515             52.9%
+     steered_manifold_test_d5_residual_k64_layer7_nosg   3000   2868  95.6%    100.0%    1829             63.8%    985             53.9%
+  steered_manifold_test_d5_residual_s3_k64_layer7_nosg   3000   2719  90.6%    100.0%    1783             65.6%    981             55.0%
+  steered_manifold_test_d5_residual_s6_k64_layer7_nosg   3000   1196  39.9%     99.8%     871             72.8%    472             54.2%
+  steered_manifold_test_d5_residual_s7_k64_layer7_nosg   3000    775  25.8%     99.6%     593             76.5%    318             53.6%
+     steered_manifold_test_d6_residual_k64_layer7_nosg   3000   2869  95.6%    100.0%    1802             62.8%    986             54.7%
+  steered_manifold_test_d6_residual_s3_k64_layer7_nosg   3000   2526  84.2%    100.0%    1677             66.4%    896             53.4%
+  steered_manifold_test_d6_residual_s7_k64_layer7_nosg   3000    412  13.7%     99.2%     318             77.2%    170             53.5%
+     steered_manifold_test_d7_residual_k64_layer7_nosg   3000   2848  94.9%    100.0%    1790             62.9%    967             54.0%
+  steered_manifold_test_d7_residual_s3_k64_layer7_nosg   3000   2268  75.6%     99.9%    1547             68.2%    826             53.4%
+  steered_manifold_test_d7_residual_s7_k64_layer7_nosg   3000    237   7.9%     98.6%     184             77.6%    105             57.1%
+     steered_manifold_test_d8_residual_k64_layer7_nosg   3000   2839  94.6%    100.0%    1801             63.4%    975             54.1%
+  steered_manifold_test_d8_residual_s3_k64_layer7_nosg   3000   2038  67.9%     99.7%    1421             69.7%    780             54.9%
+  steered_manifold_test_d8_residual_s7_k64_layer7_nosg   3000    203   6.8%     98.4%     157             77.3%     83             52.9%
+     steered_manifold_test_d9_residual_k64_layer7_nosg   3000   2846  94.9%    100.0%    1818             63.9%    972             53.5%
+  steered_manifold_test_d9_residual_s3_k64_layer7_nosg   3000   1898  63.3%     99.7%    1345             70.9%    716             53.2%
+  steered_manifold_test_d9_residual_s7_k64_layer7_nosg   3000    170   5.7%     98.2%     138             81.2%     82             59.4%
+                     steered_test_alpha8.0_layer7_nosg   3000   2855  95.2%    100.0%    1820             63.7%    980             53.8%
+                    steered_test_alpha16.0_layer7_nosg   3000   2800  93.3%    100.0%    1832             65.4%   1021             55.7%
+                    steered_test_alpha32.0_layer7_nosg   3000   2026  67.5%     98.7%    1465             72.3%    883             60.3%
+                    steered_test_alpha40.0_layer7_nosg   3000   1008  33.6%     96.3%     788             78.2%    522             66.2%
+                    steered_test_alpha48.0_layer7_nosg   3000    160   5.3%     90.6%     140             87.5%     98             70.0%
+                    steered_test_alpha64.0_layer7_nosg   3000      0   0.0%     79.7%       0               n/a      0               n/a
+                    steered_test_alpha80.0_layer7_nosg   3000      0   0.0%     93.6%       0               n/a      0               n/a
+
+
+##################################################################
+# steering_results/bandgap   (18 runs with novelty)
+##################################################################
+
+=== Validation + Novelty ===
+                                            config  total  valid valid% sensible%  unique unique%(of valid)  novel novel%(of unique)
+                                  testset_baseline  10286  10024  97.5%    100.0%   10003             99.8%   9595             95.9%
+              steered_test_clean_alpha11.0_layer14    900    849  94.3%    100.0%     347             40.9%    298             85.9%
+              steered_test_clean_alpha16.0_layer14  30858  29498  95.6%    100.0%   11694             39.6%  10141             86.7%
+              steered_test_clean_alpha25.0_layer14    900    844  93.8%    100.0%     350             41.5%    299             85.4%
+              steered_test_clean_alpha40.0_layer14  30858  29116  94.4%    100.0%   11839             40.7%  10272             86.8%
+        steered_test_clean_alpha-16.0_layer14_nosg  30858  29332  95.1%    100.0%   18741             63.9%   9812             52.4%
+steered_pca_test_target0.25_t0.25_k64_layer14_nosg   3000   2868  95.6%    100.0%    1829             63.8%    957             52.3%
+ steered_pca_test_target0.25_t0.5_k64_layer14_nosg   3000   2824  94.1%    100.0%    1771             62.7%    935             52.8%
+steered_pca_test_target0.25_t0.75_k64_layer14_nosg   3000   2535  84.5%     99.8%    1625             64.1%    876             53.9%
+ steered_pca_test_target0.25_t1.0_k64_layer14_nosg   3000    507  16.9%     97.6%     388             76.5%    230             59.3%
+ steered_pca_test_target1.2_t0.25_k64_layer14_nosg   3000   2868  95.6%    100.0%    1818             63.4%    953             52.4%
+  steered_pca_test_target1.2_t0.5_k64_layer14_nosg   3000   2824  94.1%    100.0%    1791             63.4%    941             52.5%
+ steered_pca_test_target1.2_t0.75_k64_layer14_nosg   3000   2578  85.9%     99.9%    1667             64.7%    904             54.2%
+  steered_pca_test_target1.2_t1.0_k64_layer14_nosg   3000    591  19.7%     97.8%     455             77.0%    244             53.6%
+         steered_test_clean_alpha16.0_layer14_nosg  29100  27717  95.2%    100.0%   17644             63.7%   9203             52.2%
+         steered_test_clean_alpha25.0_layer14_nosg  30858  29457  95.5%    100.0%   18723             63.6%   9774             52.2%
+         steered_test_clean_alpha40.0_layer14_nosg  29100  27346  94.0%    100.0%   17321             63.3%   9230             53.3%
+         steered_test_clean_alpha60.0_layer14_nosg  30858  27417  88.8%    100.0%   17014             62.1%   8756             51.5%
+
+
+##################################################################
+# steering_results/baseline   (3 runs with novelty)
+##################################################################
+
+=== Validation + Novelty ===
+                                  config  total  valid valid% sensible%  unique unique%(of valid)  novel novel%(of unique)
+            steered_test_alpha0.0_layer1   3000   2888  96.3%    100.0%    1150             39.8%   1009             87.7%
+       steered_test_alpha0.0_layer1_nosg   3000   2872  95.7%    100.0%    1833             63.8%    999             54.5%
+steered_test_clean_alpha0.0_layer14_nosg  30858  29459  95.5%    100.0%   18735             63.6%   9699             51.8%
+
+
+##################################################################
+# steering_results/energy_above_hull   (2 runs with novelty)
+##################################################################
+
+=== Validation + Novelty ===
+                        config  total  valid valid% sensible%  unique unique%(of valid)  novel novel%(of unique)
+steered_test_alpha40.0_layer14   3000   2789  93.0%    100.0%    1201             43.1%   1049             87.3%
+steered_test_alpha80.0_layer14   3000   2265  75.5%     99.7%    1065             47.0%    944             88.6%
+
+
+##################################################################
+# steering_results/efermi   (2 runs with novelty)
+##################################################################
+
+=== Validation + Novelty ===
+                        config  total  valid valid% sensible%  unique unique%(of valid)  novel novel%(of unique)
+steered_test_alpha40.0_layer14   3000   2828  94.3%    100.0%    1159             41.0%   1013             87.4%
+steered_test_alpha80.0_layer14   3000   2223  74.1%     99.1%    1065             47.9%    927             87.0%
+
+
+##################################################################
+# steering_results/formation_energy_per_atom   (2 runs with novelty)
+##################################################################
+
+=== Validation + Novelty ===
+                        config  total  valid valid% sensible%  unique unique%(of valid)  novel novel%(of unique)
+steered_test_alpha40.0_layer14   3000   2852  95.1%    100.0%    1183             41.5%   1035             87.5%
+steered_test_alpha80.0_layer14   3000   2531  84.4%     99.8%    1176             46.5%   1038             88.3%
+
+
+##################################################################
+# steering_results/total_magnetization   (2 runs with novelty)
+##################################################################
+
+=== Validation + Novelty ===
+                        config  total  valid valid% sensible%  unique unique%(of valid)  novel novel%(of unique)
+steered_test_alpha40.0_layer14   3000   2896  96.5%    100.0%    1068             36.9%    927             86.8%
+steered_test_alpha80.0_layer14   3000   2267  75.6%     99.7%     879             38.8%    764             86.9%
+
+
+##################################################################
+# steering_results/density_atomic_nocache   (1 runs with novelty)
+##################################################################
+
+=== Validation + Novelty ===
+                                              config  total  valid valid% sensible%  unique unique%(of valid)  novel novel%(of unique)
+steered_manifold_test_d2_residual_s9_k64_layer7_nosg   3000   2525  84.2%    100.0%    1689             66.9%    944             55.9%
+

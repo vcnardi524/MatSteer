@@ -1,0 +1,3 @@
+label,n_materials,n_categories,median_size,largest,largest_share_pct,cats_ge_2,rows_ge_2_pct,cats_ge_5,rows_ge_5_pct,cats_ge_10,rows_ge_10_pct,cats_ge_30,rows_ge_30_pct,cats_ge_100,rows_ge_100_pct,cats_ge_1000,rows_ge_1000_pct
+sg_letters,1172517,1826,2,126455,10.78,1138,99.94,692,99.84,475,99.72,295,99.47,183,98.93,94,96.3
+sg_sites,1172517,3728,2,126455,10.78,2074,99.86,1071,99.63,664,99.41,349,98.95,184,98.21,97,95.55

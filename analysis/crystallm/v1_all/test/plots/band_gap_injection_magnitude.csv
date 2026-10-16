@@ -1,0 +1,35 @@
+run,label,method,layer,target,strength,valid_pct,cohens_d,h_norm,injection,pct_of_h,pct_p25,pct_p75
+steered_test_alpha8.0_layer4_nosg,linear a8,linear,4,,8,0.954667,0.00550619,70.2276,8,11.3915,9.15725,12.9024
+steered_test_alpha16.0_layer4_nosg,linear a16,linear,4,,16,0.941333,-0.0434151,70.2276,16,22.7831,18.3145,25.8047
+steered_test_alpha32.0_layer4_nosg,linear a32,linear,4,,32,0.842667,0.0271894,70.2276,32,45.5661,36.629,51.6094
+steered_test_alpha40.0_layer4_nosg,linear a40,linear,4,,40,0.664667,0.0148316,70.2276,40,56.9576,45.7862,64.5118
+steered_test_alpha48.0_layer4_nosg,linear a48,linear,4,,48,0.360667,0.0873129,70.2276,48,68.3492,54.9435,77.4141
+steered_manifold_test_d3_residual_k64_layer4_nosg,manifold d3 s1,manifold,4,3,1,0.958333,0.0469319,70.2276,1.81617,2.59546,2.1292,2.93594
+steered_manifold_test_d2_residual_k64_layer4_nosg,manifold d2 s1,manifold,4,2,1,0.956,-0.00209287,70.2276,1.97016,2.80994,2.25603,3.18163
+steered_manifold_test_d3_residual_s2_k64_layer4_nosg,manifold d3 s2,manifold,4,3,2,0.951667,0.0311214,70.2276,3.63234,5.19091,4.2584,5.87187
+steered_manifold_test_d2_residual_s2_k64_layer4_nosg,manifold d2 s2,manifold,4,2,2,0.955333,0.0157406,70.2276,3.94032,5.61988,4.51207,6.36326
+steered_manifold_test_d3_residual_s3_k64_layer4_nosg,manifold d3 s3,manifold,4,3,3,0.943667,-0.0150707,70.2276,5.44851,7.78637,6.38759,8.80781
+steered_manifold_test_d2_residual_s3_k64_layer4_nosg,manifold d2 s3,manifold,4,2,3,0.947,-0.00341947,70.2276,5.91047,8.42982,6.7681,9.54489
+steered_manifold_test_d3_residual_s4_k64_layer4_nosg,manifold d3 s4,manifold,4,3,4,0.936333,-0.0251394,70.2276,7.26468,10.3818,8.51679,11.7437
+steered_manifold_test_d2_residual_s4_k64_layer4_nosg,manifold d2 s4,manifold,4,2,4,0.94,-0.0162553,70.2276,7.88063,11.2398,9.02414,12.7265
+steered_manifold_test_d3_residual_s5_k64_layer4_nosg,manifold d3 s5,manifold,4,3,5,0.92,-0.0382997,70.2276,9.08085,12.9773,10.646,14.6797
+steered_manifold_test_d2_residual_s5_k64_layer4_nosg,manifold d2 s5,manifold,4,2,5,0.922333,-0.045221,70.2276,9.85079,14.0497,11.2802,15.9081
+steered_manifold_test_d3_residual_s6_k64_layer4_nosg,manifold d3 s6,manifold,4,3,6,0.886333,-0.0650971,70.2276,10.897,15.5727,12.7752,17.6156
+steered_manifold_test_d2_residual_s6_k64_layer4_nosg,manifold d2 s6,manifold,4,2,6,0.872,-0.00814968,70.2276,11.8209,16.8596,13.5362,19.0898
+steered_manifold_test_d3_residual_s7_k64_layer4_nosg,manifold d3 s7,manifold,4,3,7,0.823,-0.03278,70.2276,12.7132,18.1682,14.9044,20.5516
+steered_manifold_test_d2_residual_s7_k64_layer4_nosg,manifold d2 s7,manifold,4,2,7,0.79,-0.0519856,70.2276,13.7911,19.6696,15.7922,22.2714
+steered_manifold_test_d3_residual_s8_k64_layer4_nosg,manifold d3 s8,manifold,4,3,8,0.723667,0.00656588,70.2276,14.5294,20.7637,17.0336,23.4875
+steered_manifold_test_d2_residual_s8_k64_layer4_nosg,manifold d2 s8,manifold,4,2,8,0.680667,-0.0344516,70.2276,15.7613,22.4795,18.0483,25.453
+steered_manifold_test_d3_residual_s9_k64_layer4_nosg,manifold d3 s9,manifold,4,3,9,0.606333,-0.00300472,70.2276,16.3455,23.3591,19.1628,26.4234
+steered_manifold_test_d2_residual_s9_k64_layer4_nosg,manifold d2 s9,manifold,4,2,9,0.545,-0.0357578,70.2276,17.7314,25.2895,20.3043,28.6347
+steered_manifold_test_d3_residual_s10_k64_layer4_nosg,manifold d3 s10,manifold,4,3,10,0.437,-0.0756053,70.2276,18.1617,25.9546,21.292,29.3594
+steered_manifold_test_d2_residual_s10_k64_layer4_nosg,manifold d2 s10,manifold,4,2,10,0.360667,-0.0199642,70.2276,19.7016,28.0994,22.5603,31.8163
+steered_test_clean_alpha11.0_layer14,linear a11,linear,14,,11,0.94,-0.187669,118.444,11,9.28707,7.72872,10.5934
+steered_test_clean_alpha-16.0_layer14_nosg,linear a-16,linear,14,,-16,0.950062,0.0013116,118.444,16,13.5085,11.2418,15.4085
+steered_test_clean_alpha16.0_layer14_nosg,linear a16,linear,14,,16,0.951993,-0.00112692,118.444,16,13.5085,11.2418,15.4085
+steered_test_clean_alpha16.0_layer14,linear a16,linear,14,,16,0.955506,-0.10821,118.444,16,13.5085,11.2418,15.4085
+steered_test_clean_alpha25.0_layer14_nosg,linear a25,linear,14,,25,0.954112,0.00260252,118.444,25,21.107,17.5653,24.0759
+steered_test_clean_alpha25.0_layer14,linear a25,linear,14,,25,0.935556,-0.182913,118.444,25,21.107,17.5653,24.0759
+steered_test_clean_alpha40.0_layer14_nosg,linear a40,linear,14,,40,0.939175,0.00367189,118.444,40,33.7711,28.1044,38.5214
+steered_test_clean_alpha40.0_layer14,linear a40,linear,14,,40,0.943127,-0.0860768,118.444,40,33.7711,28.1044,38.5214
+steered_test_clean_alpha60.0_layer14_nosg,linear a60,linear,14,,60,0.888036,0.00954153,118.444,60,50.6567,42.1566,57.7821

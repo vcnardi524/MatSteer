@@ -96,8 +96,9 @@ def main():
     ids = meta.loc[meta["space_group_symbol"] == args.sg, "id"]
     print(f"  {args.sg} materials: {len(ids):,}")
 
-    emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant)
-    emb = filter_partition(emb, args.partition)
+    emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant,
+                          model=args.model)
+    emb = filter_partition(emb, args.partition, model=args.model)
     df = emb[emb["id"].isin(set(ids))].reset_index(drop=True)
     print(f"  with embeddings: {len(df):,}")
 
@@ -128,7 +129,7 @@ def main():
                   random_state=RANDOM_SEED, n_jobs=-1).fit_transform(X)
 
     out_dir = analysis_dir(args.dataset, args.variant, args.partition,
-                           subdir=f"plots/layer{args.layer}")
+                           subdir=f"plots/layer{args.layer}", model=args.model)
     fig, axes = plt.subplots(1, 2, figsize=(20, 8))
     for ax, coords, method in [(axes[0], X_pca, "PCA"), (axes[1], X_tsne, "t-SNE")]:
         for lbl in ordered:

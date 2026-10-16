@@ -17,6 +17,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 from pathlib import Path
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -24,7 +25,7 @@ from sklearn.manifold import TSNE
 
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))   # scripts/ -> utils.py, predictors.py
-from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir
+from utils import load_embeddings, add_partition_args, filter_partition, analysis_dir, display_name
 
 
 def main():
@@ -37,18 +38,29 @@ def main():
     parser.add_argument("--top-n", type=int, default=20,
                         help="Keep top-N most common labels; rest become 'Other'")
     parser.add_argument("--tsne-perplexity", type=float, default=30)
+    parser.add_argument("--labels", default=None,
+                        help="Parquet with id + the label column. Default: "
+                             "symmetry_v1_mp.parquet for v1_mp, else metadata.parquet")
     args = parser.parse_args()
 
     np.random.seed(RANDOM_SEED)
 
-    print("Loading metadata ...")
-    meta = pd.read_parquet("metadata.parquet", columns=["id", args.property])
+    # metadata.parquet (NOMAD) is the only shipped file carrying symmetry columns and it
+    # does not cover v1_mp -- metadata_mp.parquet has none in any of its 56. For v1_mp the
+    # labels come from symmetry_v1_mp.parquet, derived from the CIF text by
+    # scripts/data/build_symmetry_mp.py, whose id is already MP_-prefixed so it joins
+    # straight onto the embedding ids.
+    labels = args.labels or ("symmetry_v1_mp.parquet" if args.dataset == "v1_mp"
+                             else "metadata.parquet")
+    print(f"Loading labels from {labels} ...")
+    meta = pd.read_parquet(labels, columns=["id", args.property])
     meta = meta[meta[args.property].notna()].reset_index(drop=True)
     print(f"  Entries with {args.property}: {len(meta):,}")
 
-    emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant)
+    emb = load_embeddings(args.layer, dataset=args.dataset, variant=args.variant,
+                          model=args.model)
     print(f"  Embeddings: {len(emb):,}")
-    emb = filter_partition(emb, args.partition)
+    emb = filter_partition(emb, args.partition, model=args.model)
 
     df = emb.merge(meta, on="id", how="inner")
     print(f"  After join: {len(df):,}")
@@ -68,13 +80,23 @@ def main():
     codes = df["label"].map(label2int).values
     n_colors = len(ordered)
 
-    # pick a colormap with enough distinct colors
-    if n_colors <= 20:
-        cmap = plt.get_cmap("tab20", n_colors)
-    else:
-        cmap = plt.get_cmap("gist_ncar", n_colors)
-
-    colors = [cmap(label2int[lbl]) for lbl in df["label"]]
+    # COLOUR x MARKER, not 21 hues. The previous version fell back to gist_ncar -- a
+    # rainbow colormap -- once there were more than 20 categories, which put Pm-3m and
+    # Immm 0.125 apart in RGB and P4/mmm and P6_3/mmc 0.200 apart. Anything under ~0.25
+    # is not reliably distinguishable, so two different labels in two different clusters
+    # looked like one label scattered across the plot, i.e. like the labels were wrong.
+    #
+    # Okabe-Ito is colourblind-safe; 8 hues x 3 markers gives 24 series that stay
+    # distinguishable, and the marker carries the distinction when the hue repeats.
+    OKABE_ITO = ["#E69F00", "#56B4E9", "#009E73", "#F0E442",
+                 "#0072B2", "#D55E00", "#CC79A7", "#000000"]
+    MARKERS = ["o", "^", "s"]
+    if n_colors > len(OKABE_ITO) * len(MARKERS):
+        print(f"  ! {n_colors} categories exceeds the {len(OKABE_ITO)*len(MARKERS)} "
+              f"distinguishable combinations -- lower --top-n")
+    style = {lbl: (OKABE_ITO[i % len(OKABE_ITO)], MARKERS[i // len(OKABE_ITO)])
+             for i, lbl in enumerate(ordered)}
+    style["Other"] = ("#BBBBBB", ".")          # never competes with a real class
 
     X = np.vstack(df["embedding"].values)
     prop_title = args.property.replace("_", " ").title()
@@ -87,7 +109,7 @@ def main():
                   random_state=RANDOM_SEED, n_jobs=-1).fit_transform(X)
 
     out_dir = analysis_dir(args.dataset, args.variant, args.partition,
-                           subdir=f"plots/layer{args.layer}")
+                           subdir=f"plots/layer{args.layer}", model=args.model)
 
     fig, axes = plt.subplots(1, 2, figsize=(20, 8))
     for ax, coords, method in [
@@ -96,9 +118,11 @@ def main():
     ]:
         for lbl in ordered:
             mask = df["label"].values == lbl
-            ax.scatter(coords[mask, 0], coords[mask, 1],
-                       c=[cmap(label2int[lbl])],
-                       s=6, alpha=0.6, linewidths=0, label=lbl)
+            colour, marker = style[lbl]
+            ax.scatter(coords[mask, 0], coords[mask, 1], c=colour, marker=marker,
+                       s=7 if lbl != "Other" else 4,
+                       alpha=0.75 if lbl != "Other" else 0.25,
+                       linewidths=0, label=lbl)
         # perplexity is a t-SNE hyperparameter only; it means nothing for PCA
         detail = f" (perplexity={args.tsne_perplexity:g})" if method == "t-SNE" else ""
         ax.set_title(f"{method} — Layer {args.layer}{detail}")
@@ -106,11 +130,15 @@ def main():
         ax.set_ylabel("Component 2")
 
     # shared legend outside the plots
-    handles = [mpatches.Patch(color=cmap(label2int[lbl]), label=lbl) for lbl in ordered]
+    # Line2D, not Patch: the marker is half the identity now, so the legend has to show it
+    handles = [mlines.Line2D([], [], color=style[lbl][0], marker=style[lbl][1],
+                             linestyle="none", markersize=5, label=lbl)
+               for lbl in ordered]
     fig.legend(handles=handles, loc="center right", bbox_to_anchor=(1.0, 0.5),
                fontsize=7, ncol=1, framealpha=0.8)
 
-    plt.suptitle(f"{prop_title} — CrystaLLM Layer {args.layer} (n={len(df):,})", y=1.01)
+    plt.suptitle(f"{prop_title} — {display_name(args.model)} layer {args.layer} "
+                 f"({args.dataset}/{args.variant}/{args.partition}, n={len(df):,})", y=1.01)
     plt.tight_layout(rect=[0, 0, 0.85, 1])
 
     fname = args.property.replace("_", "")

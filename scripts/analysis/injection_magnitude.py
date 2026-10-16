@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+"""How far does each steering run actually displace the hidden state?
+
+Effect sizes across methods only mean something next to the size of the intervention
+that produced them. "alpha 40" and "scale 6" and "t 0.5" are knobs in different units;
+the comparable quantity is |h_new - h| at the layer the hook runs on, as a fraction of
+|h| itself.
+
+Three of the four methods are data-dependent -- pca_centroid moves a fraction of the way
+to a fixed centroid FROM WHERE THE TOKEN IS, and manifold's step is the curve's own
+geometry -- so this cannot be computed from the config. It has to be measured on real
+per-token states.
+
+Method: run real test CIFs through the model, capture every token's hidden state at each
+layer, then apply each run's ACTUAL hook (imported from steer_generate_cif.py, not
+reimplemented) and measure the displacement. Using the hook builders directly is the
+point: a reimplementation could drift from what generation does.
+
+pca_local is excluded. Its centroid is recomputed per prompt from a neighbour search, so
+it has no single displacement -- it would need the generation loop, not a forward pass.
+
+Usage:
+    python scripts/analysis/injection_magnitude.py --n-cifs 25
+"""
+import argparse
+import importlib.util as _ilu
+import os
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import torch
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.transforms import blended_transform_factory
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))                       # scripts/
+sys.path.insert(0, str(HERE.parent / "steering"))          # its neighbours
+sys.path.insert(0, str(HERE.parent.parent / "CrystaLLM"))
+sys.path.insert(0, str(HERE.parent / "embeddings"))
+from utils import analysis_dir, steering_vectors_dir, DEFAULT_MODEL
+
+from extract_cif_embeddings import load_model, load_cifs   # noqa: E402
+from compute_centroid_target import load_pca               # noqa: E402
+from manifold import Manifold                              # noqa: E402
+from crystallm import CIFTokenizer                         # noqa: E402
+
+# the hooks themselves, so the measured transform is the one generation applies
+_spec = _ilu.spec_from_file_location("sgc", HERE.parent / "steering" / "steer_generate_cif.py")
+_sgc = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_sgc)
+
+CSV = str(analysis_dir("v1_all", None, "test") / "steering_runs.csv")
+OUT = analysis_dir("v1_all", None, "test", subdir="plots")
+
+# Where each property's steering artefacts live. hook_for used to hardcode the density
+# paths, so the script could only ever measure density runs.
+# Relative to steering_vectors/<model>/; the model level is filled in at call time so
+# one registry serves every model.
+PROPERTY_PATHS = {
+    "density_atomic": dict(
+        vector="density_atomic/layer{layer}.parquet",
+        manifold="manifolds/density_atomic_layer{layer}_k64_w1_max40.parquet"),
+    "band_gap": dict(
+        vector="bandgap/layer{layer}.parquet",
+        manifold="manifolds/dos_electronic_band_gap_layer{layer}_k64_w0.05.parquet"),
+    "energy_above_hull": dict(
+        vector="energy_above_hull/layer{layer}.parquet",
+        manifold="manifolds/energy_above_hull_layer{layer}_k64_w0.1_max5.parquet"),
+    "formation_energy_per_atom": dict(
+        vector="formation_energy_per_atom/layer{layer}.parquet",
+        manifold="manifolds/formation_energy_per_atom_layer{layer}_k64_w0.25.parquet"),
+}
+COLOR = {"linear": "#D55E00", "manifold": "#0072B2", "pca_centroid": "#009E73"}
+MARKER = {"linear": "o", "manifold": "s", "pca_centroid": "^"}
+
+
+def capture(model, tokenizer, cifs, layers, device):
+    """{layer: (N, 1024) real per-token hidden states} from a forward pass."""
+    grabbed = {l: [] for l in layers}
+    handles = []
+    for l in layers:
+        def make(l):
+            def hook(module, inp, out):
+                h = out[0] if isinstance(out, tuple) else out
+                grabbed[l].append(h.detach().float().squeeze(0).cpu())
+            return hook
+        handles.append(model.transformer.h[l].register_forward_hook(make(l)))
+    with torch.no_grad():
+        for _, cif in cifs:
+            ids = tokenizer.encode(tokenizer.tokenize_cif(cif))[:1024]
+            model(torch.tensor(ids, device=device).unsqueeze(0))
+    for h in handles:
+        h.remove()
+    return {l: torch.cat(v) for l, v in grabbed.items()}
+
+
+def hook_for(row, device, prop="density_atomic", model=DEFAULT_MODEL):
+    """The real hook for one table row, or None if this method is not measurable here."""
+    m, layer = row.method, int(row.layer)
+    root = steering_vectors_dir(model)          # PROPERTY_PATHS is relative to this
+    paths = PROPERTY_PATHS[prop]
+    if m == "linear":
+        sv = root / paths["vector"].format(layer=layer)
+        vec = np.asarray(pd.read_parquet(sv).iloc[0]["steering_vector"], np.float32)
+        return _sgc.linear_hook(vec, float(row.strength), device)
+    mean, comps = load_pca(layer, 64, model)
+    if m == "pca_centroid":
+        cen = (root / "pca_centroid" / "density_atomic"
+               / f"layer{layer}_k64_target{row.target:g}.parquet")
+        if not cen.exists():
+            return None
+        c = np.asarray(pd.read_parquet(cen).iloc[0]["centroid_pca"], np.float32)
+        return _sgc.pca_centroid_hook(mean, comps, c, float(row.strength), device)
+    if m == "manifold":
+        man = root / paths["manifold"].format(layer=layer)
+        if not man.exists():
+            return None
+        return _sgc.manifold_hook(mean, comps, Manifold.load(str(man)),
+                                  float(row.target), device, float(row.strength),
+                                  "residual")
+    return None
+
+
+def label(r):
+    if r.method == "linear":
+        return f"linear a{r.strength:g}"
+    if r.method == "manifold":
+        return f"manifold d{r.target:g} s{r.strength:g}"
+    return f"pca_cent {r.target:g}/t{r.strength:g}"
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--ckpt-dir", default="CrystaLLM/crystallm_v1_large",
+                    help="Path to the checkpoint directory holding the weights. Distinct from --model, which names the model in the embeddings tree.")
+    ap.add_argument("--pkl", default="CrystaLLM/cifs_v1_test_sample1000.pkl.gz")
+    ap.add_argument("--n-cifs", type=int, default=25)
+    ap.add_argument("--csv", default=CSV)
+    ap.add_argument("--property", default="density_atomic",
+                    choices=sorted(PROPERTY_PATHS),
+                    help="Which property's runs to measure. Each has its own steering "
+                         "vector and manifold, so the paths differ.")
+    ap.add_argument("--out-stem", default=None,
+                    help="Output stem (default: <property>_injection_magnitude)")
+    args = ap.parse_args()
+    stem = args.out_stem or f"{args.property}_injection_magnitude"
+
+    runs = pd.read_csv(args.csv)
+    runs = runs[(runs.property == args.property) & (runs["agg"] == "mean")
+                & (runs.source == "raw") & (runs.strength != 0)
+                & (runs.method != "pca_local")].drop_duplicates("run")
+    layers = sorted(runs.layer.unique())
+    print(f"{len(runs)} runs across layers {layers}")
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model, _ = load_model(args.ckpt_dir, device)
+    tokenizer = CIFTokenizer()
+    cifs = load_cifs(args.pkl)[:args.n_cifs]
+    states = capture(model, tokenizer, cifs, layers, device)
+    for l in layers:
+        print(f"  layer {l}: {states[l].shape[0]:,} token states, "
+              f"median |h| = {states[l].norm(dim=1).median():.2f}")
+
+    rows = []
+    for _, r in runs.iterrows():
+        hook = hook_for(r, device, args.property, args.model)
+        if hook is None:
+            print(f"  ! {r.run}: no artifact, skipped")
+            continue
+        h = states[int(r.layer)].to(device)
+        with torch.no_grad():
+            inj = (hook(None, None, h.unsqueeze(0)).squeeze(0) - h).norm(dim=1)
+        hn = h.norm(dim=1)
+        rows.append(dict(run=r.run, label=label(r), method=r.method, layer=int(r.layer),
+                         target=r.target, strength=r.strength,
+                         valid_pct=r.valid_pct, cohens_d=r.cohens_d,
+                         h_norm=float(hn.median()),
+                         injection=float(inj.median()),
+                         pct_of_h=float((inj / hn).median() * 100),
+                         # linear adds one fixed vector to every token, so its spread is
+                         # ~0; the other two are token-dependent. Same median can mean a
+                         # very different intervention.
+                         pct_p25=float((inj / hn).quantile(0.25) * 100),
+                         pct_p75=float((inj / hn).quantile(0.75) * 100)))
+    d = pd.DataFrame(rows).sort_values(["layer", "method", "injection"])
+    OUT.mkdir(parents=True, exist_ok=True)
+    d.to_csv(OUT / f"{stem}.csv", index=False, float_format="%.6g")
+    print("\n" + d[["label", "layer", "injection", "pct_of_h", "valid_pct",
+                    "cohens_d"]].to_string(index=False))
+
+    fig, axes = plt.subplots(1, len(layers), figsize=(6.4 * len(layers), 6.4),
+                             squeeze=False)
+    for ax, lay in zip(axes[0], layers):
+        # ordered by effect size, so the question the plot answers is "what did each
+        # arm cost to achieve what it achieved" read top to bottom
+        s = d[d.layer == lay].sort_values("cohens_d")
+        ax.barh(range(len(s)), s.pct_of_h,
+                color=[COLOR[m] for m in s.method], height=0.72,
+                xerr=[s.pct_of_h - s.pct_p25, s.pct_p75 - s.pct_of_h],
+                error_kw=dict(ecolor="#333", capsize=3, lw=1.1))
+        ax.set_yticks(range(len(s)))
+        ax.set_yticklabels(s.label, fontsize=9)
+        # labels in fixed columns (axes fraction in x, data in y) so they line up and
+        # cannot collide with a long whisker
+        tr = blended_transform_factory(ax.transAxes, ax.transData)
+        for i, (v, cd) in enumerate(zip(s.valid_pct, s.cohens_d)):
+            ax.text(0.74, i, f"$d$ {cd:+.3f}", transform=tr, va="center", fontsize=9.5,
+                    fontweight="bold", color="#222" if cd > 0 else "#b3261e")
+            ax.text(0.93, i, f"{v*100:.0f}% valid", transform=tr, va="center",
+                    fontsize=8.5, color="#777")
+        ax.set_xlabel("injection as % of $|h|$")
+        ax.set_title(f"layer {lay}   (median $|h|$ = {s.h_norm.iloc[0]:.1f})")
+        ax.grid(axis="x", alpha=0.25, lw=0.6)
+        ax.set_xlim(0, max(d.pct_p75) / 0.68)
+        for sp in ("top", "right", "left"):
+            ax.spines[sp].set_visible(False)
+    fig.suptitle(f"What each {args.property} intervention cost, and what it bought\n"
+                 "bars ordered by effect size (largest at top); "
+                 f"median |h_new - h| over {states[layers[0]].shape[0]:,} real per-token "
+                 "states, as a share of the state's own norm; whiskers = "
+                 "inter-quartile range across tokens\n"
+                 "linear's |injection| is constant across tokens -- its whisker is only "
+                 "|h| varying; the other two vary in both\n"
+                 "all three inject almost entirely inside the same top-64 PCA subspace "
+                 "(linear: 96-98% of its vector), so the bars are comparable",
+                 fontsize=12)
+    fig.tight_layout()
+    fig.savefig(OUT / f"{stem}.png", dpi=150,
+                bbox_inches="tight", facecolor="white")
+    print(f"\nSaved {OUT / (stem + '.png')}")
+
+
+if __name__ == "__main__":
+    main()

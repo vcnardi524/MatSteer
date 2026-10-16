@@ -53,6 +53,37 @@ def parse_cif(cif: str):
         return None
 
 
+def save_merging(pred, out_path, owned):
+    """Write this run's columns, re-reading the file so a concurrent run's survive.
+
+    This script is a read-modify-write on a file SHARED by every property computed for
+    one stem: it loads the existing predictions, fills in its own column, and writes the
+    whole frame back. Two properties running CONCURRENTLY on the same stem therefore both
+    read the same starting state, and whoever finishes last silently drops the other's
+    column. That is not hypothetical -- band_gap and formation_energy were submitted for
+    the same 13 stems at once and every file came back with one of the two, never both.
+
+    Re-reading at write time fixes it, because the columns are disjoint: this run owns
+    `owned` and takes everything else from whatever is on disk at that moment. The window
+    is now the write itself rather than the whole prediction run. Still, prefer not to run
+    two properties on one stem at the same time.
+    """
+    out = pred
+    if out_path.exists():
+        try:
+            disk = pd.read_parquet(out_path)
+        except Exception:
+            disk = None
+        if disk is not None and {"id", "sample"}.issubset(disk.columns):
+            theirs = [c for c in disk.columns
+                      if c not in owned and c not in ("id", "sample")]
+            if theirs:
+                out = pred.drop(columns=[c for c in theirs if c in pred.columns])
+                out = out.merge(disk[["id", "sample"] + theirs],
+                                on=["id", "sample"], how="left")
+    out.to_parquet(out_path, index=False)
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--property", required=True, choices=sorted(REGISTRY),
@@ -116,7 +147,16 @@ def main():
     for c in pred_cols:
         if c not in pred.columns:
             pred[c] = None
-    pred = pred[["id", "sample"] + pred_cols].reset_index(drop=True)
+    # Keep columns this run does not own. pred_cols is only the CURRENT property's pair,
+    # so subsetting to it would delete every other property already computed for this
+    # stem -- which is how raw/relaxed accumulate safely but a second property would not.
+    # Preserving them lets one file hold several properties for the same structures,
+    # which is what the shared baseline/ tree needs.
+    other = [c for c in pred.columns if c not in ("id", "sample") and c not in pred_cols]
+    if other:
+        print(f"  preserving {len(other)} column(s) from other properties: "
+              f"{', '.join(other)}")
+    pred = pred[["id", "sample"] + pred_cols + other].reset_index(drop=True)
 
     pos = {k: i for i, k in enumerate(zip(pred["id"], pred["sample"]))}
     cif_map = dict(zip(zip(src["id"], src["sample"]), src[src_col]))
@@ -142,9 +182,9 @@ def main():
                 print(f"  COMPUTE FAIL id={k[0]}: {type(e).__name__}: {e}", flush=True)
             nf += 1
         if ns % CHECKPOINT_EVERY == 0 and ns > 0:
-            pred.to_parquet(out_path, index=False)
+            save_merging(pred, out_path, pred_cols)
 
-    pred.to_parquet(out_path, index=False)
+    save_merging(pred, out_path, pred_cols)
     print(f"\nSaved {len(pred):,} rows -> {out_path}")
     print(f"Success: {ns:,}  Parse fails: {npf:,}  Other fails: {nf:,}")
     if _parse_errors:

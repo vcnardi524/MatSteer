@@ -1,0 +1,3 @@
+layer,variant,property,width,n_structures,n_buckets,e1_mean_same,e1_mean_diff,e1_ratio,e1_delta,e1_null_delta,e1_null_ratio,e1_same_pairs,e1_diff_pairs,cc_n_structures,e2_mean_same,e2_mean_diff,e2_ratio,e2_delta,e2_null_delta,e2_null_ratio,e2_same_pairs,e2_diff_pairs
+7,raw,formation_energy_per_atom,100,5745,2,0.975556,0.970857,1.00484,0.00469987,0.000290526,1.0003,1.44909e+07,2.00875e+06,137,0.99022,0.995188,0.995007,-0.00496862,-0.00496862,0.995007,72,1
+7,centered,formation_energy_per_atom,100,5745,2,0.00565093,-0.00707062,-0.799214,0.0127216,0.000508935,1.13924,1.44909e+07,2.00875e+06,137,0.511403,0.844493,0.605574,-0.33309,-0.33309,0.605574,72,1

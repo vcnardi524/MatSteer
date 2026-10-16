@@ -26,8 +26,10 @@ source CrystaLLM/crystallm_venv/bin/activate
 #   sbatch --export=ALL,VARIANT=nosym slurms/consolidate_embeddings.slurm
 VARIANT=${VARIANT:-full}
 DATASET=${DATASET:-v1_all}
-echo "Consolidating dataset=$DATASET variant=$VARIANT"
+MODEL=${MODEL:-crystallm}
+echo "Consolidating dataset=$DATASET model=$MODEL variant=$VARIANT"
 
 python scripts/embeddings/consolidate_embeddings.py \
     --dataset "$DATASET" \
+    --model "$MODEL" \
     --variant "$VARIANT"

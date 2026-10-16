@@ -18,14 +18,32 @@ Steps:
   5. For each unique structure, check against training set -> novel set
   6. Save results parquet + print summary
 
-Output: steering_results/validation/novelty_<input_stem>.parquet
+Output: <results-dir>/validation/novelty_<input_stem>.parquet
   columns: id, sample, ...(validation flag cols)..., is_unique, is_novel
   (flags only — CIF strings are never written here)
 
+PASS MANY INPUTS AT ONCE. Step 1 loads all ~2.3M training CIFs and holds their strings
+indexed by reduced formula; it costs minutes and several GB, and it does not depend on
+the input at all. One process per run would repeat that work once per run. --input takes
+a list and the index is built once and reused, so 134 runs cost one index, not 134.
+
+Each input's results dir is read off its own path (<results-dir>/validation/<stem>
+.parquet), so a single job can span steering_results/bandgap and .../density_atomic
+together; --results-dir is only the fallback for a path of another shape.
+
+Inputs whose novelty_<stem>.parquet already exists are skipped, before the index is
+built, so a resumed run with nothing to do costs seconds. --overwrite forces them.
+A failure on one input is reported and the rest continue.
+
+CPU only -- StructureMatcher and pymatgen parsing, no model, no GPU.
+
 Usage:
     python scripts/eval/novelty_steered_cifs.py \\
-        --input steering_results/validation/steered_test_clean_alpha16.0_layer14.parquet \\
-        --base CrystaLLM/cifs_v1_train.pkl.gz
+        --input steering_results/bandgap/validation/steered_test_clean_alpha16.0_layer14.parquet
+
+    # everything not yet done, one index build for all of it
+    python scripts/eval/novelty_steered_cifs.py \\
+        --input $(ls steering_results/*/validation/*.parquet | grep -v /novelty_)
 """
 import argparse
 import gzip
@@ -89,28 +107,18 @@ def parse_structure(cif: str) -> Structure | None:
         return None
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True,
-                        help="Validation parquet (output of validate_steered_cifs.py)")
-    parser.add_argument("--base", default="CrystaLLM/cifs_v1_train.pkl.gz",
-                        help="Training CIFs pkl.gz for novelty check")
-    parser.add_argument("--cif-source", default=None,
-                        help="Parquet with cif_steered (default: "
-                             "steering_results/generated_cifs/<input_stem>.parquet)")
-    parser.add_argument("--out", default=None,
-                        help="Output parquet path "
-                             "(default: steering_results/validation/novelty_<input_stem>.parquet)")
-    parser.add_argument("--ltol",       type=float, default=0.2)
-    parser.add_argument("--stol",       type=float, default=0.3)
-    parser.add_argument("--angle-tol",  type=float, default=5.0)
-    parser.add_argument("--results-dir", default="steering_results",
-                        help="Base results dir; <results-dir>/{validation,generated_cifs}")
-    args = parser.parse_args()
+def process(in_path, base_index, args) -> None:
+    """Uniqueness + novelty for ONE validation parquet."""
 
-    in_path  = Path(args.input)
-    out_dir  = Path(args.results_dir) / "validation"
-    out_dir.mkdir(exist_ok=True)
+    in_path  = Path(in_path)
+    # A validation parquet lives at <results-dir>/validation/<stem>.parquet, so the
+    # results dir is readable off the path itself. That is what lets one job span
+    # several properties -- steering_results/bandgap and .../density_atomic each keep
+    # their own tree, and --results-dir can only name one of them.
+    base_dir = (in_path.parent.parent if in_path.parent.name == "validation"
+                else Path(args.results_dir))
+    out_dir  = base_dir / "validation"
+    out_dir.mkdir(parents=True, exist_ok=True)
     out_path = Path(args.out) if args.out else out_dir / f"novelty_{in_path.stem}.parquet"
 
     # --- load validation flags, then join raw CIFs from generated_cifs ---
@@ -119,7 +127,7 @@ def main():
     df = df.drop(columns=[c for c in ("cif_steered", "cif_relaxed", "cif_original")
                           if c in df.columns])
     cif_path = Path(args.cif_source) if args.cif_source else \
-        Path(args.results_dir) / "generated_cifs" / f"{in_path.stem}.parquet"
+        base_dir / "generated_cifs" / f"{in_path.stem}.parquet"
     print(f"Loading CIFs from {cif_path} ...")
     cifs = pd.read_parquet(cif_path, columns=["id", "sample", "cif_steered"])
     df = df.merge(cifs, on=["id", "sample"], how="left")
@@ -135,9 +143,6 @@ def main():
         print("No valid CIFs — nothing to check.")
         df.drop(columns=["cif_steered"]).to_parquet(out_path, index=False)
         return
-
-    # --- build training index ---
-    base_index = build_base_index(args.base)
 
     matcher = StructureMatcher(ltol=args.ltol, stol=args.stol, angle_tol=args.angle_tol)
 
@@ -219,6 +224,56 @@ def main():
     print(f"Valid:         {n_valid:>8,}  ({n_valid/n:.1%})")
     print(f"Unique:        {n_unique:>8,}  ({n_unique/n_valid:.1%} of valid)")
     print(f"Novel:         {n_novel:>8,}  ({n_novel/n_unique:.1%} of unique)  [{novel_by_composition} by composition alone]")
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True, nargs="+",
+                        help="One or more validation parquets (output of "
+                             "validate_steered_cifs.py). Several are worth passing "
+                             "together: the training index costs minutes to build and "
+                             "is reused across all of them.")
+    parser.add_argument("--overwrite", action="store_true",
+                        help="Redo inputs whose novelty_<stem>.parquet already exists "
+                             "(skipped by default, so a bulk run is resumable)")
+    parser.add_argument("--base", default="CrystaLLM/cifs_v1_train.pkl.gz",
+                        help="Training CIFs pkl.gz for novelty check")
+    parser.add_argument("--cif-source", default=None,
+                        help="Parquet with cif_steered (default: "
+                             "steering_results/generated_cifs/<input_stem>.parquet)")
+    parser.add_argument("--out", default=None,
+                        help="Output parquet path "
+                             "(default: steering_results/validation/novelty_<input_stem>.parquet)")
+    parser.add_argument("--ltol",       type=float, default=0.2)
+    parser.add_argument("--stol",       type=float, default=0.3)
+    parser.add_argument("--angle-tol",  type=float, default=5.0)
+    parser.add_argument("--results-dir", default="steering_results",
+                        help="Base results dir; <results-dir>/{validation,generated_cifs}")
+    args = parser.parse_args()
+
+    # Skip what is already done BEFORE paying for the index -- a resumed bulk run with
+    # nothing left to do should cost seconds, not the full base load.
+    todo = []
+    for f in args.input:
+        f = Path(f)
+        base_dir = f.parent.parent if f.parent.name == "validation" else Path(args.results_dir)
+        if not args.overwrite and (base_dir / "validation" / f"novelty_{f.stem}.parquet").exists():
+            print(f"skip (done): {f}")
+            continue
+        todo.append(f)
+    print(f"\n{len(todo):,} of {len(args.input):,} inputs to process")
+    if not todo:
+        return
+
+    base_index = build_base_index(args.base)
+
+    for i, f in enumerate(todo, 1):
+        print(f"\n{'#'*70}\n# [{i}/{len(todo)}] {f}\n{'#'*70}", flush=True)
+        try:
+            process(f, base_index, args)
+        except Exception as e:
+            # one bad run must not sink the other 133
+            print(f"  FAILED {f}: {type(e).__name__}: {e}", flush=True)
 
 
 if __name__ == "__main__":
